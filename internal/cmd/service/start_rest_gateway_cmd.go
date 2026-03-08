@@ -210,6 +210,22 @@ func (c *startRestGatewayCommandRunner) run(cmd *cobra.Command, argv []string) e
 	if err != nil {
 		return err
 	}
+	err = privatev1.RegisterNetworkClassesHandler(ctx, gatewayMux, c.grpcClient)
+	if err != nil {
+		return err
+	}
+	err = privatev1.RegisterVirtualNetworksHandler(ctx, gatewayMux, c.grpcClient)
+	if err != nil {
+		return err
+	}
+	err = privatev1.RegisterSubnetsHandler(ctx, gatewayMux, c.grpcClient)
+	if err != nil {
+		return err
+	}
+	err = privatev1.RegisterSecurityGroupsHandler(ctx, gatewayMux, c.grpcClient)
+	if err != nil {
+		return err
+	}
 
 	// Add the health endpoint:
 	c.logger.InfoContext(ctx, "Adding health endpoint")

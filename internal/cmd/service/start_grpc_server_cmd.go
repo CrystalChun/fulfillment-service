@@ -596,6 +596,45 @@ func (c *startGrpcServerCommandRunner) run(cmd *cobra.Command, argv []string) er
 	}
 	privatev1.RegisterHubsServer(grpcServer, privateHubsServer)
 
+	// Create the private virtual networks server:
+	c.logger.InfoContext(ctx, "Creating private virtual networks server")
+	privateVirtualNetworksServer, err := servers.NewPrivateVirtualNetworksServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(privateAttributionLogic).
+		SetTenancyLogic(privateTenancyLogic).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create private virtual networks server: %w", err)
+	}
+	privatev1.RegisterVirtualNetworksServer(grpcServer, privateVirtualNetworksServer)
+
+	// Create the private subnets server:
+	c.logger.InfoContext(ctx, "Creating private subnets server")
+	privateSubnetsServer, err := servers.NewPrivateSubnetsServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(privateAttributionLogic).
+		SetTenancyLogic(privateTenancyLogic).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create private subnets server: %w", err)
+	}
+	privatev1.RegisterSubnetsServer(grpcServer, privateSubnetsServer)
+
+	// Create the private network classes server:
+	c.logger.InfoContext(ctx, "Creating private network classes server")
+	privateNetworkClassesServer, err := servers.NewPrivateNetworkClassesServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(privateAttributionLogic).
+		SetTenancyLogic(privateTenancyLogic).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create private network classes server: %w", err)
+	}
+	privatev1.RegisterNetworkClassesServer(grpcServer, privateNetworkClassesServer)
+
 	// Create the events server:
 	c.logger.InfoContext(ctx, "Creating events server")
 	eventsServer, err := servers.NewEventsServer().
