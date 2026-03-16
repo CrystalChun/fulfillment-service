@@ -777,16 +777,21 @@ var _ = Describe("Private subnets server", func() {
 		})
 
 		Context("CIDR overlap validation", func() {
-			// Helper to create a subnet directly in the database
-			createSubnetInDB := func(ctx context.Context, name, ipv4Cidr, ipv6Cidr, virtualNetworkID string) {
-				subnetDao, err := dao.NewGenericDAO[*privatev1.Subnet]().
+			var subnetDao *dao.GenericDAO[*privatev1.Subnet]
+
+			BeforeEach(func() {
+				var err error
+				subnetDao, err = dao.NewGenericDAO[*privatev1.Subnet]().
 					SetLogger(logger).
 					SetTable("subnets").
 					SetAttributionLogic(attribution).
 					SetTenancyLogic(tenancy).
 					Build()
 				Expect(err).ToNot(HaveOccurred())
+			})
 
+			// Helper to create a subnet directly in the database
+			createSubnetInDB := func(ctx context.Context, name, ipv4Cidr, ipv6Cidr, virtualNetworkID string) {
 				builder := privatev1.SubnetSpec_builder{
 					VirtualNetwork: virtualNetworkID,
 				}
@@ -804,7 +809,7 @@ var _ = Describe("Private subnets server", func() {
 					Spec: builder.Build(),
 				}.Build()
 
-				_, err = subnetDao.Create().
+				_, err := subnetDao.Create().
 					SetObject(subnet).
 					Do(ctx)
 				Expect(err).ToNot(HaveOccurred())
