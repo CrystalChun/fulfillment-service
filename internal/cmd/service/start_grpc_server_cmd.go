@@ -649,6 +649,32 @@ func (c *startGrpcServerCommandRunner) run(cmd *cobra.Command, argv []string) er
 	}
 	privatev1.RegisterSubnetsServer(grpcServer, privateSubnetsServer)
 
+	// Create the security groups server:
+	c.logger.InfoContext(ctx, "Creating security groups server")
+	securityGroupsServer, err := servers.NewSecurityGroupsServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(publicAttributionLogic).
+		SetTenancyLogic(publicTenancyLogic).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create security groups server: %w", err)
+	}
+	publicv1.RegisterSecurityGroupsServer(grpcServer, securityGroupsServer)
+
+	// Create the private security groups server:
+	c.logger.InfoContext(ctx, "Creating private security groups server")
+	privateSecurityGroupsServer, err := servers.NewPrivateSecurityGroupsServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(privateAttributionLogic).
+		SetTenancyLogic(privateTenancyLogic).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create private security groups server: %w", err)
+	}
+	privatev1.RegisterSecurityGroupsServer(grpcServer, privateSecurityGroupsServer)
+
 	// Create the network classes server:
 	c.logger.InfoContext(ctx, "Creating network classes server")
 	networkClassesServer, err := servers.NewNetworkClassesServer().
