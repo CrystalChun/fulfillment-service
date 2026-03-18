@@ -1,0 +1,325 @@
+/*
+Copyright (c) 2025 Red Hat Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific
+language governing permissions and limitations under the License.
+*/
+
+package servers
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"google.golang.org/protobuf/proto"
+
+	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
+	publicv1 "github.com/osac-project/fulfillment-service/internal/api/osac/public/v1"
+	"github.com/osac-project/fulfillment-service/internal/database"
+	"github.com/osac-project/fulfillment-service/internal/database/dao"
+)
+
+var _ = Describe("Virtual networks server", func() {
+	var (
+		ctx context.Context
+		tx  database.Tx
+	)
+
+	BeforeEach(func() {
+		var err error
+
+		// Create a context:
+		ctx = context.Background()
+
+		// Prepare the database pool:
+		db := server.MakeDatabase()
+		DeferCleanup(db.Close)
+		pool, err := pgxpool.New(ctx, db.MakeURL())
+		Expect(err).ToNot(HaveOccurred())
+		DeferCleanup(pool.Close)
+
+		// Create the transaction manager:
+		tm, err := database.NewTxManager().
+			SetLogger(logger).
+			SetPool(pool).
+			Build()
+		Expect(err).ToNot(HaveOccurred())
+
+		// Start a transaction and add it to the context:
+		tx, err = tm.Begin(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		DeferCleanup(func() {
+			err := tm.End(ctx, tx)
+			Expect(err).ToNot(HaveOccurred())
+		})
+		ctx = database.TxIntoContext(ctx, tx)
+
+		// Create the tables:
+		err = dao.CreateTables(ctx, "virtual_networks", "network_classes")
+		Expect(err).ToNot(HaveOccurred())
+
+		// Create a default NetworkClass for tests:
+		ncDao, err := dao.NewGenericDAO[*privatev1.NetworkClass]().
+			SetLogger(logger).
+			SetTable("network_classes").
+			SetAttributionLogic(attribution).
+			SetTenancyLogic(tenancy).
+			Build()
+		Expect(err).ToNot(HaveOccurred())
+
+		nc := privatev1.NetworkClass_builder{
+			Id:                     "default",
+			ImplementationStrategy: "ovn-kubernetes",
+			Capabilities: privatev1.NetworkClassCapabilities_builder{
+				SupportsIpv4:      true,
+				SupportsIpv6:      true,
+				SupportsDualStack: true,
+			}.Build(),
+			Status: privatev1.NetworkClassStatus_builder{
+				State: privatev1.NetworkClassState_NETWORK_CLASS_STATE_READY,
+			}.Build(),
+		}.Build()
+
+		createResponse, err := ncDao.Create().
+			SetObject(nc).
+			Do(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(createResponse.GetObject().GetId()).To(Equal("default"))
+	})
+
+	Describe("Creation", func() {
+		It("Can be built if all the required parameters are set", func() {
+			server, err := NewVirtualNetworksServer().
+				SetLogger(logger).
+				SetAttributionLogic(attribution).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(server).ToNot(BeNil())
+		})
+
+		It("Fails if logger is not set", func() {
+			server, err := NewVirtualNetworksServer().
+				SetAttributionLogic(attribution).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).To(MatchError("logger is mandatory"))
+			Expect(server).To(BeNil())
+		})
+
+		It("Fails if attribution logic is not set", func() {
+			server, err := NewVirtualNetworksServer().
+				SetLogger(logger).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("attribution logic is mandatory"))
+			Expect(server).To(BeNil())
+		})
+
+		It("Fails if tenancy logic is not set", func() {
+			server, err := NewVirtualNetworksServer().
+				SetLogger(logger).
+				SetAttributionLogic(attribution).
+				Build()
+			Expect(err).To(MatchError("tenancy logic is mandatory"))
+			Expect(server).To(BeNil())
+		})
+	})
+
+	Describe("Behaviour", func() {
+		var (
+			publicServer  *VirtualNetworksServer
+			privateServer *PrivateVirtualNetworksServer
+		)
+
+		BeforeEach(func() {
+			var err error
+
+			// Create the public server:
+			publicServer, err = NewVirtualNetworksServer().
+				SetLogger(logger).
+				SetAttributionLogic(attribution).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create a private server for test data setup (private API requires
+			// region which is not exposed in public API):
+			privateServer, err = NewPrivateVirtualNetworksServer().
+				SetLogger(logger).
+				SetAttributionLogic(attribution).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		// createVirtualNetwork creates a VirtualNetwork via the private server (which accepts
+		// region) and returns the created object.
+		createVirtualNetwork := func() *privatev1.VirtualNetwork {
+			response, err := privateServer.Create(ctx, privatev1.VirtualNetworksCreateRequest_builder{
+				Object: privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:                 "us-east-1",
+						NetworkClass:           "default",
+						ImplementationStrategy: "ovn-kubernetes",
+						Ipv4Cidr:               proto.String("10.0.0.0/16"),
+						Capabilities: privatev1.VirtualNetworkCapabilities_builder{
+							EnableIpv4: true,
+						}.Build(),
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			return response.GetObject()
+		}
+
+		It("List objects", func() {
+			// Create a few objects via the private server:
+			const count = 10
+			for range count {
+				createVirtualNetwork()
+			}
+
+			// List the objects via public server:
+			response, err := publicServer.List(ctx, publicv1.VirtualNetworksListRequest_builder{}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(response).ToNot(BeNil())
+			items := response.GetItems()
+			Expect(items).To(HaveLen(count))
+		})
+
+		It("List objects with limit", func() {
+			// Create a few objects via the private server:
+			const count = 10
+			for range count {
+				createVirtualNetwork()
+			}
+
+			// List the objects via public server:
+			response, err := publicServer.List(ctx, publicv1.VirtualNetworksListRequest_builder{
+				Limit: proto.Int32(1),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(response.GetSize()).To(BeNumerically("==", 1))
+		})
+
+		It("List objects with offset", func() {
+			// Create a few objects via the private server:
+			const count = 10
+			for range count {
+				createVirtualNetwork()
+			}
+
+			// List the objects via public server:
+			response, err := publicServer.List(ctx, publicv1.VirtualNetworksListRequest_builder{
+				Offset: proto.Int32(1),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(response.GetSize()).To(BeNumerically("==", count-1))
+		})
+
+		It("List objects with filter", func() {
+			// Create a few objects via the private server:
+			const count = 10
+			var ids []string
+			for range count {
+				obj := createVirtualNetwork()
+				ids = append(ids, obj.GetId())
+			}
+
+			// List the objects via public server:
+			for _, id := range ids {
+				response, err := publicServer.List(ctx, publicv1.VirtualNetworksListRequest_builder{
+					Filter: proto.String(fmt.Sprintf("this.id == '%s'", id)),
+				}.Build())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(response.GetSize()).To(BeNumerically("==", 1))
+				Expect(response.GetItems()[0].GetId()).To(Equal(id))
+			}
+		})
+
+		It("Get object", func() {
+			// Create the object via the private server:
+			privateObj := createVirtualNetwork()
+
+			// Get it via public server:
+			getResponse, err := publicServer.Get(ctx, publicv1.VirtualNetworksGetRequest_builder{
+				Id: privateObj.GetId(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			publicObj := getResponse.GetObject()
+			Expect(publicObj.GetId()).To(Equal(privateObj.GetId()))
+			Expect(publicObj.GetSpec().GetNetworkClass()).To(Equal("default"))
+		})
+
+		It("Update object", func() {
+			// Create the object via the private server:
+			privateObj := createVirtualNetwork()
+
+			// Update the object via public server:
+			updateResponse, err := publicServer.Update(ctx, publicv1.VirtualNetworksUpdateRequest_builder{
+				Object: publicv1.VirtualNetwork_builder{
+					Id: privateObj.GetId(),
+					Metadata: publicv1.Metadata_builder{
+						Name: "updated-name",
+					}.Build(),
+					Spec: publicv1.VirtualNetworkSpec_builder{
+						NetworkClass: "default",
+						Ipv4Cidr:     proto.String("10.0.0.0/16"),
+						Capabilities: publicv1.VirtualNetworkCapabilities_builder{
+							EnableIpv4: true,
+						}.Build(),
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateResponse.GetObject().GetMetadata().GetName()).To(Equal("updated-name"))
+
+			// Get and verify via public server:
+			getResponse, err := publicServer.Get(ctx, publicv1.VirtualNetworksGetRequest_builder{
+				Id: privateObj.GetId(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(getResponse.GetObject().GetMetadata().GetName()).To(Equal("updated-name"))
+		})
+
+		It("Delete object", func() {
+			// Create the object via the private server:
+			privateObj := createVirtualNetwork()
+
+			// Add a finalizer, as otherwise the object will be immediatelly deleted and archived and it
+			// won't be possible to verify the deletion timestamp. This can't be done using the server
+			// because this is a public object, and public objects don't have the finalizers field.
+			_, err := tx.Exec(
+				ctx,
+				`update virtual_networks set finalizers = '{"a"}' where id = $1`,
+				privateObj.GetId(),
+			)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Delete the object via public server:
+			_, err = publicServer.Delete(ctx, publicv1.VirtualNetworksDeleteRequest_builder{
+				Id: privateObj.GetId(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+
+			// Get and verify via public server:
+			getResponse, err := publicServer.Get(ctx, publicv1.VirtualNetworksGetRequest_builder{
+				Id: privateObj.GetId(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			object := getResponse.GetObject()
+			Expect(object.GetMetadata().GetDeletionTimestamp()).ToNot(BeNil())
+		})
+	})
+})
