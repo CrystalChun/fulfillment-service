@@ -180,6 +180,10 @@ func (c *startRestGatewayCommandRunner) run(cmd *cobra.Command, argv []string) e
 	if err != nil {
 		return err
 	}
+	err = publicv1.RegisterSubnetsHandler(ctx, gatewayMux, c.grpcClient)
+	if err != nil {
+		return err
+	}
 
 	// Register the private API service handlers:
 	err = privatev1.RegisterClusterTemplatesHandler(ctx, gatewayMux, c.grpcClient)

@@ -623,6 +623,19 @@ func (c *startGrpcServerCommandRunner) run(cmd *cobra.Command, argv []string) er
 	}
 	privatev1.RegisterVirtualNetworksServer(grpcServer, privateVirtualNetworksServer)
 
+	// Create the subnets server:
+	c.logger.InfoContext(ctx, "Creating subnets server")
+	subnetsServer, err := servers.NewSubnetsServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(publicAttributionLogic).
+		SetTenancyLogic(publicTenancyLogic).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create subnets server: %w", err)
+	}
+	publicv1.RegisterSubnetsServer(grpcServer, subnetsServer)
+
 	// Create the private subnets server:
 	c.logger.InfoContext(ctx, "Creating private subnets server")
 	privateSubnetsServer, err := servers.NewPrivateSubnetsServer().
