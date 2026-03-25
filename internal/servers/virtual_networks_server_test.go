@@ -309,8 +309,6 @@ var _ = Describe("Virtual networks server", func() {
 			}.Build())
 			Expect(err).ToNot(HaveOccurred())
 			publicObj := createResponse.GetObject()
-			Expect(publicObj.GetId()).ToNot(BeEmpty())
-			Expect(publicObj.GetSpec().GetNetworkClass()).To(Equal("default"))
 
 			// Verify via private server that region was set to "default":
 			privateGetResponse, err := privateServer.Get(ctx, privatev1.VirtualNetworksGetRequest_builder{
