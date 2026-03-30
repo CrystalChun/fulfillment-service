@@ -700,6 +700,32 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 	}
 	privatev1.RegisterNetworkClassesServer(grpcServer, privateNetworkClassesServer)
 
+	// Create the organizations server:
+	c.logger.InfoContext(ctx, "Creating organizations server")
+	organizationsServer, err := servers.NewOrganizationsServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(publicAttributionLogic).
+		SetTenancyLogic(publicTenancyLogic).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create organizations server: %w", err)
+	}
+	publicv1.RegisterOrganizationsServer(grpcServer, organizationsServer)
+
+	// Create the private organizations server:
+	c.logger.InfoContext(ctx, "Creating private organizations server")
+	privateOrganizationsServer, err := servers.NewPrivateOrganizationsServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(privateAttributionLogic).
+		SetTenancyLogic(privateTenancyLogic).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create private organizations server: %w", err)
+	}
+	privatev1.RegisterOrganizationsServer(grpcServer, privateOrganizationsServer)
+
 	// Create the console manager and server:
 	c.logger.InfoContext(ctx, "Creating console server")
 	hubConfigProvider := console.HubConfigProviderFromKubeconfigs(
