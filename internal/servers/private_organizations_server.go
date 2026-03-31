@@ -17,6 +17,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
+
+	grpccodes "google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
 	"github.com/osac-project/fulfillment-service/internal/auth"
@@ -29,14 +33,16 @@ type PrivateOrganizationsServerBuilder struct {
 	notifier         *database.Notifier
 	attributionLogic auth.AttributionLogic
 	tenancyLogic     auth.TenancyLogic
+	keycloakAdmin    *auth.KeycloakAdminClient
 }
 
 var _ privatev1.OrganizationsServer = (*PrivateOrganizationsServer)(nil)
 
 type PrivateOrganizationsServer struct {
 	privatev1.UnimplementedOrganizationsServer
-	logger  *slog.Logger
-	generic *GenericServer[*privatev1.Organization]
+	logger        *slog.Logger
+	generic       *GenericServer[*privatev1.Organization]
+	keycloakAdmin *auth.KeycloakAdminClient
 }
 
 func NewPrivateOrganizationsServer() *PrivateOrganizationsServerBuilder {
@@ -63,6 +69,13 @@ func (b *PrivateOrganizationsServerBuilder) SetTenancyLogic(value auth.TenancyLo
 	return b
 }
 
+// SetKeycloakAdminClient sets an optional Keycloak Admin API client used to create a realm per organization on Create.
+// When nil, no realm is provisioned (useful when Keycloak admin integration is not configured).
+func (b *PrivateOrganizationsServerBuilder) SetKeycloakAdminClient(value *auth.KeycloakAdminClient) *PrivateOrganizationsServerBuilder {
+	b.keycloakAdmin = value
+	return b
+}
+
 func (b *PrivateOrganizationsServerBuilder) Build() (result *PrivateOrganizationsServer, err error) {
 	if b.logger == nil {
 		err = errors.New("logger is mandatory")
@@ -85,8 +98,9 @@ func (b *PrivateOrganizationsServerBuilder) Build() (result *PrivateOrganization
 	}
 
 	result = &PrivateOrganizationsServer{
-		logger:  b.logger,
-		generic: generic,
+		logger:        b.logger,
+		generic:       generic,
+		keycloakAdmin: b.keycloakAdmin,
 	}
 	return
 }
@@ -108,8 +122,44 @@ func (s *PrivateOrganizationsServer) Create(ctx context.Context,
 	if request.GetObject() != nil {
 		alignOrganizationTenant(request.GetObject())
 	}
+	// Provision the IdP realm before persisting the organization so we never commit without a matching realm
+	// when Keycloak integration is enabled (fail fast on IdP errors; no DB rollback needed).
+	if s.keycloakAdmin != nil && request.GetObject() != nil {
+		err = s.createKeycloakRealm(ctx, request.GetObject())
+		if err != nil {
+			return nil, err
+		}
+	}
 	err = s.generic.Create(ctx, request, &response)
 	return
+}
+
+func (s *PrivateOrganizationsServer) createKeycloakRealm(ctx context.Context, org *privatev1.Organization) error {
+	id := org.GetId()
+	if id == "" {
+		return grpcstatus.Errorf(grpccodes.Internal, "organization identifier is empty")
+	}
+	enabled := true
+	rep := &auth.KeycloakRealmRepresentation{
+		Realm:   &id,
+		Enabled: &enabled,
+	}
+	if meta := org.GetMetadata(); meta != nil {
+		if name := strings.TrimSpace(meta.GetName()); name != "" {
+			rep.DisplayName = &name
+		}
+	}
+	err := s.keycloakAdmin.CreateRealm(ctx, rep)
+	if err != nil {
+		s.logger.ErrorContext(
+			ctx,
+			"Failed to create Keycloak realm for organization",
+			slog.String("organizationId", id),
+			slog.Any("error", err),
+		)
+		return grpcstatus.Errorf(grpccodes.Unavailable, "failed to create identity realm: %v", err)
+	}
+	return nil
 }
 
 func (s *PrivateOrganizationsServer) Update(ctx context.Context,

@@ -32,6 +32,7 @@ type OrganizationsServerBuilder struct {
 	notifier         *database.Notifier
 	attributionLogic auth.AttributionLogic
 	tenancyLogic     auth.TenancyLogic
+	keycloakAdmin    *auth.KeycloakAdminClient
 }
 
 var _ publicv1.OrganizationsServer = (*OrganizationsServer)(nil)
@@ -69,6 +70,11 @@ func (b *OrganizationsServerBuilder) SetTenancyLogic(value auth.TenancyLogic) *O
 	return b
 }
 
+func (b *OrganizationsServerBuilder) SetKeycloakAdminClient(value *auth.KeycloakAdminClient) *OrganizationsServerBuilder {
+	b.keycloakAdmin = value
+	return b
+}
+
 func (b *OrganizationsServerBuilder) Build() (result *OrganizationsServer, err error) {
 	if b.logger == nil {
 		err = errors.New("logger is mandatory")
@@ -99,6 +105,7 @@ func (b *OrganizationsServerBuilder) Build() (result *OrganizationsServer, err e
 		SetNotifier(b.notifier).
 		SetAttributionLogic(b.attributionLogic).
 		SetTenancyLogic(b.tenancyLogic).
+		SetKeycloakAdminClient(b.keycloakAdmin).
 		Build()
 	if err != nil {
 		return

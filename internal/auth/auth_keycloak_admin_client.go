@@ -204,6 +204,10 @@ func (c *KeycloakAdminClient) CreateRealm(ctx context.Context, realm *KeycloakRe
 	if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusNoContent {
 		return nil
 	}
+	// Idempotent create: realm already exists (e.g. retry after a partial failure).
+	if resp.StatusCode == http.StatusConflict {
+		return nil
+	}
 
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	return fmt.Errorf("Keycloak admin returned %s: %s", resp.Status, strings.TrimSpace(string(respBody)))

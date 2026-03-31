@@ -744,6 +744,7 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 		SetNotifier(notifier).
 		SetAttributionLogic(publicAttributionLogic).
 		SetTenancyLogic(publicTenancyLogic).
+		SetKeycloakAdminClient(c.keycloakAdminClient).
 		Build()
 	if err != nil {
 		return fmt.Errorf("failed to create organizations server: %w", err)
@@ -757,6 +758,7 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 		SetNotifier(notifier).
 		SetAttributionLogic(privateAttributionLogic).
 		SetTenancyLogic(privateTenancyLogic).
+		SetKeycloakAdminClient(c.keycloakAdminClient).
 		Build()
 	if err != nil {
 		return fmt.Errorf("failed to create private organizations server: %w", err)
