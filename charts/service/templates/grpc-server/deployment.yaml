@@ -80,6 +80,15 @@ spec:
         - --grpc-authn-type=external
         - --grpc-authn-external-address=authorino-authorino-authorization:50051
         - --tenancy-logic=default
+        {{- if .Values.keycloakAdmin.baseUrl }}
+        - --keycloak-admin-base-url={{ .Values.keycloakAdmin.baseUrl }}
+        - --keycloak-admin-token-issuer={{ .Values.keycloakAdmin.tokenIssuer }}
+        - --keycloak-admin-client-id={{ .Values.keycloakAdmin.clientId }}
+        - --keycloak-admin-client-secret={{ .Values.keycloakAdmin.clientSecret }}
+        {{- if .Values.keycloakAdmin.insecureTls }}
+        - --keycloak-admin-insecure-tls=true
+        {{- end }}
+        {{- end }}
         - --metrics-listener-address=0.0.0.0:8002
         ports:
         - name: grpc

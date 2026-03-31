@@ -40,6 +40,7 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/database"
 	"github.com/osac-project/fulfillment-service/internal/logging"
 	"github.com/osac-project/fulfillment-service/internal/metrics"
+	"github.com/osac-project/fulfillment-service/internal/oauth"
 	"github.com/osac-project/fulfillment-service/internal/network"
 	"github.com/osac-project/fulfillment-service/internal/recovery"
 	"github.com/osac-project/fulfillment-service/internal/servers"
@@ -60,6 +61,7 @@ func Cmd() *cobra.Command {
 	network.AddListenerFlags(flags, network.GrpcListenerName, network.DefaultGrpcAddress)
 	network.AddListenerFlags(flags, network.MetricsListenerName, network.DefaultMetricsAddress)
 	database.AddFlags(flags)
+	auth.AddKeycloakAdminFlags(flags)
 	flags.StringVar(
 		&runner.args.authType,
 		"grpc-authn-type",
@@ -102,7 +104,9 @@ func Cmd() *cobra.Command {
 type runnerContext struct {
 	logger *slog.Logger
 	flags  *pflag.FlagSet
-	args   struct {
+	// keycloakAdminClient is set when Keycloak Admin REST API settings are fully configured (optional integration).
+	keycloakAdminClient *auth.KeycloakAdminClient
+	args          struct {
 		caFiles             []string
 		authType            string
 		externalAuthAddress string
@@ -145,6 +149,39 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 		Build()
 	if err != nil {
 		return fmt.Errorf("failed to load trusted CA certificates: %w", err)
+	}
+
+	keycloakCfg, err := auth.KeycloakAdminConfigFromFlags(c.flags)
+	if err != nil {
+		return fmt.Errorf("failed to read Keycloak admin configuration: %w", err)
+	}
+	if keycloakCfg.PartiallyConfigured() && !keycloakCfg.FullyConfigured() {
+		return fmt.Errorf(
+			"incomplete Keycloak admin configuration: provide all of --%s, --%s, --%s, and --%s "+
+				"(or environment variables %s, %s, %s, and %s)",
+			auth.FlagKeycloakAdminBaseURL,
+			auth.FlagKeycloakAdminTokenIssuer,
+			auth.FlagKeycloakAdminClientID,
+			auth.FlagKeycloakAdminClientSecret,
+			auth.EnvKeycloakAdminBaseURL,
+			auth.EnvKeycloakAdminTokenIssuer,
+			auth.EnvKeycloakAdminClientID,
+			auth.EnvKeycloakAdminClientSecret,
+		)
+	}
+	if keycloakCfg.FullyConfigured() {
+		c.logger.InfoContext(ctx, "Creating Keycloak admin client")
+		userAgent := fmt.Sprintf("%s/%s", grpcServerUserAgent, version.Get())
+		c.keycloakAdminClient, err = oauth.NewKeycloakAdminClientFromConfig(
+			c.logger,
+			keycloakCfg,
+			caPool,
+			userAgent,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create Keycloak admin client: %w", err)
+		}
+		c.logger.InfoContext(ctx, "Keycloak Admin API client ready")
 	}
 
 	// Wait till the database is available:

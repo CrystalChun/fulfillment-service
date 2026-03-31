@@ -72,3 +72,12 @@ images:
 # Database configuration:
 database:
   storageSize: 10Gi
+
+# Optional Keycloak Admin REST API integration (realms, clients, users, etc.). Leave baseUrl empty to disable.
+# You can also set KEYCLOAK_ADMIN_* environment variables (see fulfillment-service grpc-server flags).
+keycloakAdmin:
+  baseUrl: ""
+  tokenIssuer: ""
+  clientId: ""
+  clientSecret: ""
+  insecureTls: false
