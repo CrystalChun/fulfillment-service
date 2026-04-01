@@ -15,6 +15,7 @@ package grpcserver
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -39,6 +40,8 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/auth"
 	"github.com/osac-project/fulfillment-service/internal/console"
 	"github.com/osac-project/fulfillment-service/internal/database"
+	"github.com/osac-project/fulfillment-service/internal/idp"
+	"github.com/osac-project/fulfillment-service/internal/idp/keycloak"
 	"github.com/osac-project/fulfillment-service/internal/logging"
 	"github.com/osac-project/fulfillment-service/internal/metrics"
 	"github.com/osac-project/fulfillment-service/internal/network"
@@ -783,6 +786,21 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 	}()
 	privatev1.RegisterEventsServer(grpcServer, privateEventsServer)
 
+	// Register identity provider-related servers (organizations, users, etc.) if configured:
+	err = c.setupIdentityProviderServices(
+		ctx,
+		grpcServer,
+		notifier,
+		metricsRegisterer,
+		publicAttributionLogic,
+		publicTenancyLogic,
+		privateAttributionLogic,
+		privateTenancyLogic,
+	)
+	if err != nil {
+		return err
+	}
+
 	// Create the metrics listener:
 	c.logger.InfoContext(ctx, "Creating metrics listener")
 	metricsListener, err := network.NewListener().
@@ -835,6 +853,136 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 	// Keep running till the shutdown sequence finishes:
 	c.logger.InfoContext(ctx, "Waiting for shutdown to sequence to complete")
 	return shutdown.Wait()
+}
+
+// setupIdentityProviderServices configures and registers identity provider-related services
+// (organizations, users, roles, etc.) if an identity provider is configured via environment variables.
+func (c *runnerContext) setupIdentityProviderServices(
+	ctx context.Context,
+	grpcServer *grpc.Server,
+	notifier *database.Notifier,
+	metricsRegisterer prometheus.Registerer,
+	publicAttributionLogic auth.AttributionLogic,
+	publicTenancyLogic auth.TenancyLogic,
+	privateAttributionLogic auth.AttributionLogic,
+	privateTenancyLogic auth.TenancyLogic,
+) error {
+	// Load configuration from environment
+	cfg, err := idp.LoadConfigFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load identity provider configuration: %w", err)
+	}
+	if cfg == nil {
+		c.logger.InfoContext(ctx, "Identity provider not configured, skipping IDP-related service registration")
+		return nil
+	}
+
+	c.logger.InfoContext(
+		ctx,
+		"Setting up identity provider services",
+		slog.String("type", cfg.Type),
+		slog.String("auth_flow", cfg.AuthFlow),
+	)
+
+	// Load CA certificates
+	caPool, err := c.loadCACertPool(cfg.CAFile)
+	if err != nil {
+		return fmt.Errorf("failed to load CA certificates: %w", err)
+	}
+
+	// Create IDP client based on provider type
+	var idpClient idp.Client
+	switch strings.ToLower(cfg.Type) {
+	case "keycloak":
+		idpClient, err = keycloak.NewClientFromConfig(ctx, c.logger, cfg, caPool)
+		if err != nil {
+			return fmt.Errorf("failed to create Keycloak client: %w", err)
+		}
+	default:
+		return fmt.Errorf("unsupported identity provider type '%s'", cfg.Type)
+	}
+
+	// Create organization manager
+	orgManager, err := idp.NewOrganizationManager().
+		SetLogger(c.logger).
+		SetClient(idpClient).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create organization manager: %w", err)
+	}
+
+	// Register organization servers
+	if err := c.registerOrganizationServers(
+		ctx,
+		grpcServer,
+		notifier,
+		metricsRegisterer,
+		orgManager,
+		publicAttributionLogic,
+		publicTenancyLogic,
+		privateAttributionLogic,
+		privateTenancyLogic,
+	); err != nil {
+		return err
+	}
+
+	// TODO: Register users, roles, and other IDP-related servers here as they are implemented
+
+	return nil
+}
+
+// loadCACertPool loads CA certificates from a file, if specified.
+func (c *runnerContext) loadCACertPool(caFile string) (*x509.CertPool, error) {
+	builder := network.NewCertPool().SetLogger(c.logger)
+	if caFile != "" {
+		builder.AddFiles(caFile)
+	}
+	return builder.Build()
+}
+
+// registerOrganizationServers creates and registers public and private organization servers.
+func (c *runnerContext) registerOrganizationServers(
+	ctx context.Context,
+	grpcServer *grpc.Server,
+	notifier *database.Notifier,
+	metricsRegisterer prometheus.Registerer,
+	orgManager *idp.OrganizationManager,
+	publicAttributionLogic auth.AttributionLogic,
+	publicTenancyLogic auth.TenancyLogic,
+	privateAttributionLogic auth.AttributionLogic,
+	privateTenancyLogic auth.TenancyLogic,
+) error {
+	// Private organizations server
+	c.logger.InfoContext(ctx, "Registering private organizations server")
+	privateServer, err := servers.NewPrivateOrganizationsServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(privateAttributionLogic).
+		SetTenancyLogic(privateTenancyLogic).
+		SetOrganizationManager(orgManager).
+		SetMetricsRegisterer(metricsRegisterer).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create private organizations server: %w", err)
+	}
+	privatev1.RegisterOrganizationsServer(grpcServer, privateServer)
+
+	// Public organizations server
+	c.logger.InfoContext(ctx, "Registering public organizations server")
+	publicServer, err := servers.NewOrganizationsServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(publicAttributionLogic).
+		SetTenancyLogic(publicTenancyLogic).
+		SetOrganizationManager(orgManager).
+		SetMetricsRegisterer(metricsRegisterer).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create public organizations server: %w", err)
+	}
+	publicv1.RegisterOrganizationsServer(grpcServer, publicServer)
+
+	return nil
 }
 
 // publicMethodRegex is regular expression for the methods that are considered public, including the capabilities, and

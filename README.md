@@ -153,6 +153,49 @@ To verify that the REST gateway is working use `curl`. For example, to get the l
       ]
 }
 
+## Identity Provider Integration (Optional)
+
+The fulfillment service can optionally integrate with an external Identity Provider (IDP) to manage organizations, users, and roles. This is separate from authentication - it allows the service to **create and manage** organizations in the IDP.
+
+### Quick Setup with Keycloak
+
+To enable IDP integration, set the following environment variables when running the gRPC server:
+
+```bash
+# Required: IDP connection details
+export IDP_URL="https://keycloak.example.com:8000"
+export IDP_TYPE="keycloak"  # Currently only Keycloak is supported
+
+# Service account authentication using OAuth2 client credentials flow
+export IDP_AUTH_FLOW="credentials"
+export IDP_CLIENT_ID="fulfillment-service"
+export IDP_CLIENT_SECRET="your-client-secret"
+
+# Optional: Realm and TLS settings
+export IDP_REALM="master"  # Defaults to "master"
+export IDP_CA_FILE="/path/to/ca-bundle.pem"  # For custom CA certificates
+```
+
+Then start the gRPC server normally - it will automatically register the Organizations service if IDP is configured.
+
+### Keycloak Service Account Setup
+
+1. **Create a client in Keycloak**:
+   - Client ID: `fulfillment-service`
+   - Client authentication: ON (confidential client)
+   - Service accounts roles: ON
+
+2. **Assign admin roles to the service account**:
+   - Go to: Client → Service account roles
+   - Filter by client: `realm-management`
+   - Assign: `manage-realm`, `manage-users`, `view-realm`, `view-users`
+
+3. **Get the client secret**:
+   - Go to: Client → Credentials tab
+   - Copy the client secret value
+
+For detailed setup instructions, security considerations, and troubleshooting, see [docs/AUTH.md](docs/AUTH.md#fulfillment-service-idp-integration-organizations-management).
+
 ## Building the container image
 
 Select your image name, for example `quay.io/myuser/fulfillment-service:latest`, then build and tag the image with a

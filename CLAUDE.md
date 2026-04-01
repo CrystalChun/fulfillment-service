@@ -63,6 +63,25 @@ Requires `/etc/hosts` entries:
 
 See [README.md](README.md) for instructions on running the service locally, including PostgreSQL setup and starting the gRPC server and REST gateway.
 
+### Identity Provider Configuration
+
+The service supports integration with external identity providers (e.g., Keycloak) for managing organizations and users. Configuration is done via environment variables:
+
+**Required:**
+- `IDP_URL` - Base URL of the identity provider (e.g., `https://keycloak.example.com`)
+- `IDP_TYPE` - Type of identity provider (default: `keycloak`)
+
+**Authentication (OAuth2 Client Credentials Flow):**
+- `IDP_AUTH_FLOW=credentials` (default)
+- `IDP_CLIENT_ID` - Client ID with service account enabled
+- `IDP_CLIENT_SECRET` - Client secret
+
+**Optional:**
+- `IDP_REALM` - Realm for authentication (default: `master`)
+- `IDP_CA_FILE` - Path to CA bundle for TLS verification
+
+**Note:** The service account needs appropriate admin roles assigned (e.g., `realm-management` client roles for Keycloak: `manage-realm`, `manage-users`, `view-realm`, `view-users`).
+
 ## Architecture
 
 ### Code Organization

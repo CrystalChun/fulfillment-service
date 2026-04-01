@@ -776,6 +776,303 @@ To add roles in Keycloak:
    - Set **Token Claim Name**: `roles`
    - Enable **Add to access token`
 
+## Fulfillment Service IDP Integration (Organizations Management)
+
+The fulfillment service can optionally integrate with an external Identity Provider (IDP) to manage organizations, users, and roles. This integration allows the fulfillment service to create and manage organizations directly in the IDP.
+
+### Overview
+
+When IDP integration is enabled, the fulfillment service acts as an **IDP admin client** to:
+- Create and manage organizations (Keycloak realms)
+- Create and manage users within organizations
+- Assign roles and permissions to users
+- Manage organization-level settings
+
+This is separate from the authentication configuration described earlier in this document:
+- **Authentication** (above): How users authenticate to use the fulfillment API
+- **IDP Integration** (this section): How the fulfillment service manages organizations in the IDP
+
+### Keycloak Service Account Setup
+
+The recommended approach is to use OAuth2 **client credentials flow** with a Keycloak service account:
+
+#### 1. Create a Service Account Client
+
+1. **Access the Keycloak Admin Console** (see [Accessing Keycloak Admin Console](#accessing-keycloak-admin-console))
+
+2. **Navigate to Clients**:
+   - Go to **Clients** → **Create client**
+
+3. **Configure Basic Settings**:
+   - **Client type**: `OpenID Connect`
+   - **Client ID**: `fulfillment-service` (or your preferred name)
+   - Click **Next**
+
+4. **Configure Capability**:
+   - **Client authentication**: `ON` (this creates a confidential client)
+   - **Service accounts roles**: `ON` (this enables the service account)
+   - **Standard flow**: `OFF` (not needed for machine-to-machine)
+   - **Direct access grants**: `OFF` (not needed for machine-to-machine)
+   - Click **Next** and **Save**
+
+5. **Get the Client Secret**:
+   - Go to the **Credentials** tab
+   - Copy the **Client Secret** value
+   - Store this securely - you'll need it for the fulfillment service configuration
+
+#### 2. Assign Admin Roles to the Service Account
+
+The service account needs administrative permissions to manage organizations (realms), users, and roles.
+
+1. **Navigate to Service Account Roles**:
+   - Select your client (`fulfillment-service`)
+   - Go to the **Service account roles** tab
+
+2. **Assign Realm Management Roles**:
+   - Click **Assign role**
+   - Filter by clients: Select **realm-management**
+   - Assign the following roles:
+     - `manage-realm` - Required to create and configure realms (organizations)
+     - `manage-users` - Required to create and manage users
+     - `manage-clients` - Required to configure client roles
+     - `view-realm` - Required to read realm information
+     - `view-users` - Required to read user information
+   - Click **Assign**
+
+**Note**: For production environments, you should carefully review which roles are required for your specific use case and follow the principle of least privilege.
+
+#### 3. Test the Service Account
+
+You can test that the service account is configured correctly:
+
+```bash
+# Get a token using client credentials
+TOKEN=$(curl -k -X POST \
+  https://keycloak.keycloak.svc.cluster.local:8000/realms/master/protocol/openid-connect/token \
+  -d "client_id=fulfillment-service" \
+  -d "client_secret=<YOUR_CLIENT_SECRET>" \
+  -d "grant_type=client_credentials" | jq -r '.access_token')
+
+# Verify the token works by listing realms
+curl -k -H "Authorization: Bearer ${TOKEN}" \
+  https://keycloak.keycloak.svc.cluster.local:8000/admin/realms
+```
+
+### Fulfillment Service Configuration
+
+Configure the fulfillment service to use the IDP integration by setting the following environment variables:
+
+#### Required Environment Variables
+
+```bash
+# IDP connection details
+export IDP_URL="https://keycloak.keycloak.svc.cluster.local:8000"
+export IDP_TYPE="keycloak"  # Currently only keycloak is supported
+
+# Service account authentication using OAuth2 client credentials flow
+export IDP_AUTH_FLOW="credentials"
+export IDP_CLIENT_ID="fulfillment-service"
+export IDP_CLIENT_SECRET="<your-client-secret>"
+
+# Optional: Realm for authentication (defaults to "master")
+export IDP_REALM="master"
+
+# Optional: CA certificate for TLS verification
+export IDP_CA_FILE="/path/to/ca-bundle.pem"
+```
+
+**Why client credentials flow:**
+- ✅ **Standard**: OAuth2 specification for service-to-service authentication
+- ✅ **Secure**: No user credentials stored or transmitted
+- ✅ **Auditable**: Service account actions clearly visible in audit logs
+- ✅ **Scoped**: Precise permission control via role assignments
+- ✅ **Rotatable**: Client secrets are easier to rotate than user passwords
+
+### Kubernetes/Helm Configuration
+
+When deploying via Helm or Kubernetes manifests, you can configure IDP integration using Secrets and environment variables.
+
+#### Example: Using Kubernetes Secrets
+
+1. **Create a Secret with IDP credentials**:
+
+```bash
+kubectl create secret generic fulfillment-idp-credentials \
+  --namespace osac \
+  --from-literal=client-id=fulfillment-service \
+  --from-literal=client-secret=<your-client-secret>
+```
+
+2. **Mount the Secret in the deployment**:
+
+```yaml
+# In your deployment or Helm values
+env:
+- name: IDP_URL
+  value: "https://keycloak.keycloak.svc.cluster.local:8000"
+- name: IDP_TYPE
+  value: "keycloak"
+- name: IDP_AUTH_FLOW
+  value: "credentials"
+- name: IDP_CLIENT_ID
+  valueFrom:
+    secretKeyRef:
+      name: fulfillment-idp-credentials
+      key: client-id
+- name: IDP_CLIENT_SECRET
+  valueFrom:
+    secretKeyRef:
+      name: fulfillment-idp-credentials
+      key: client-secret
+```
+
+#### Example: Helm Values
+
+```yaml
+# values.yaml
+idp:
+  enabled: true
+  url: "https://keycloak.keycloak.svc.cluster.local:8000"
+  type: "keycloak"
+  authFlow: "credentials"
+  credentials:
+    secretName: "fulfillment-idp-credentials"
+    clientIdKey: "client-id"
+    clientSecretKey: "client-secret"
+```
+
+### TLS Configuration
+
+If your Keycloak instance uses a custom CA or self-signed certificate:
+
+1. **Create a ConfigMap or Secret with the CA bundle**:
+
+```bash
+kubectl create configmap keycloak-ca-bundle \
+  --namespace osac \
+  --from-file=ca.crt=/path/to/ca-bundle.pem
+```
+
+2. **Mount and configure in the deployment**:
+
+```yaml
+volumeMounts:
+- name: keycloak-ca
+  mountPath: /etc/keycloak/ca
+  readOnly: true
+
+volumes:
+- name: keycloak-ca
+  configMap:
+    name: keycloak-ca-bundle
+
+env:
+- name: IDP_CA_FILE
+  value: "/etc/keycloak/ca/ca.crt"
+```
+
+### Verifying IDP Integration
+
+After configuring the IDP integration:
+
+1. **Check the service logs** for successful IDP connection:
+
+```bash
+kubectl logs -n osac deployment/fulfillment-grpc-server | grep -i "identity provider"
+```
+
+You should see:
+```
+Setting up identity provider services type=keycloak auth_flow=credentials
+```
+
+2. **Test organization management** via the API:
+
+```bash
+# Get a user token (see earlier sections)
+TOKEN="<your-jwt-token>"
+
+# Create an organization
+curl -k -X POST \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"organization": {"name": "test-org", "display_name": "Test Organization"}}' \
+  https://fulfillment-api.osac.svc.cluster.local/api/fulfillment/v1/organizations
+```
+
+3. **Verify in Keycloak** that the organization (realm) was created:
+   - Access the Keycloak Admin Console
+   - Check for a new realm named `test-org`
+
+### Security Considerations
+
+1. **Client Secret Protection**:
+   - Store client secrets in Kubernetes Secrets
+   - Never commit secrets to version control
+   - Rotate secrets regularly
+   - Use RBAC to restrict access to the Secret
+
+2. **Service Account Permissions**:
+   - Only assign the minimum required roles
+   - For most use cases: `manage-realm`, `manage-users`, `view-realm`, `view-users`
+   - Avoid assigning `realm-admin` unless absolutely necessary
+
+3. **Network Security**:
+   - Use TLS for all IDP connections
+   - Verify TLS certificates (use `IDP_CA_FILE` with proper CA bundle)
+   - Consider network policies to restrict IDP access
+
+4. **Audit Logging**:
+   - Enable Keycloak audit logging to track service account actions
+   - Monitor for suspicious organization/user creation patterns
+
+### Troubleshooting IDP Integration
+
+#### Service account authentication fails
+
+```
+Error: failed to create identity provider client: failed to create token source: ...
+```
+
+**Solutions:**
+- Verify `IDP_CLIENT_ID` matches the client name in Keycloak
+- Verify `IDP_CLIENT_SECRET` is correct
+- Check that service account roles are enabled on the client
+- Verify network connectivity to Keycloak
+
+#### Permission denied when creating organizations
+
+```
+Error: 403 Forbidden
+```
+
+**Solutions:**
+- Verify the service account has `manage-realm` role assigned
+- Check that roles are assigned in the correct realm (`master` realm for creating new realms)
+- Review Keycloak server logs for permission errors
+
+#### TLS certificate verification fails
+
+```
+Error: x509: certificate signed by unknown authority
+```
+
+**Solutions:**
+- Set `IDP_CA_FILE` to the path of your CA bundle
+- Verify the CA bundle contains the correct certificate chain
+- For development only: check that certificates are properly mounted
+
+#### Organizations service not registered
+
+```
+Identity provider not configured, skipping IDP-related service registration
+```
+
+**Solutions:**
+- Verify `IDP_URL` environment variable is set
+- Check service logs for configuration errors
+- Ensure all required environment variables are present
+
 ## Verification
 
 ### 1. Verify Keycloak is Running

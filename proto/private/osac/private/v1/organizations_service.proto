@@ -17,6 +17,7 @@ package osac.private.v1;
 
 import "google/api/annotations.proto";
 import "google/protobuf/field_mask.proto";
+import "osac/private/v1/identity_type.proto";
 import "osac/private/v1/organization_type.proto";
 
 message OrganizationsListRequest {
@@ -45,6 +46,11 @@ message OrganizationsCreateRequest {
 
 message OrganizationsCreateResponse {
   Organization object = 1;
+
+  // Break-glass account credentials.
+  // Only populated on successful creation. These credentials provide administrative
+  // access to the organization's identity provider and must be stored securely.
+  BreakGlassCredentials break_glass_credentials = 2;
 }
 
 message OrganizationsDeleteRequest {
@@ -87,7 +93,6 @@ service Organizations {
     option (google.api.http) = {
       post: "/api/private/v1/organizations"
       body: "object"
-      response_body: "object"
     };
   }
   rpc Delete(OrganizationsDeleteRequest) returns (OrganizationsDeleteResponse) {

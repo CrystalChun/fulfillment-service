@@ -21,6 +21,8 @@ import (
 	"log/slog"
 	"math/big"
 	"time"
+
+	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
 )
 
 // OrganizationManager handles the lifecycle of IdP realms for organizations.
@@ -92,34 +94,10 @@ type OrganizationConfig struct {
 	BreakGlassPassword string
 }
 
-// BreakGlassCredentials contains the credentials for the break-glass account.
-//
-// SECURITY NOTES:
-//   - Password is plaintext and MUST be handled securely
-//   - DO NOT log the password
-//   - Store in a secrets manager (Vault, Kubernetes Secrets, AWS Secrets Manager)
-//   - Transmit only over TLS
-//   - Clear from memory immediately after use
-//   - Password is temporary and must be changed on first login
-type BreakGlassCredentials struct {
-	// UserID is the unique identifier for the break-glass user in the IdP
-	UserID string
-
-	// Username is the username for the break-glass account
-	Username string
-
-	// Email is the email address for the break-glass account
-	Email string
-
-	// Password is the temporary password that must be changed on first login.
-	// This field is intentionally excluded from JSON marshaling to prevent
-	// accidental logging or exposure.
-	Password string `json:"-"`
-}
-
 // CreateOrganization creates a complete IdP organization setup with a break-glass account.
 // Returns the break-glass account credentials and error.
-func (m *OrganizationManager) CreateOrganization(ctx context.Context, config *OrganizationConfig) (*BreakGlassCredentials, error) {
+// The returned credentials use the proto-generated type as the single source of truth.
+func (m *OrganizationManager) CreateOrganization(ctx context.Context, config *OrganizationConfig) (*privatev1.BreakGlassCredentials, error) {
 	if config == nil {
 		return nil, errors.New("OrganizationConfig is mandatory")
 	}
@@ -131,7 +109,7 @@ func (m *OrganizationManager) CreateOrganization(ctx context.Context, config *Or
 	var (
 		// Track if the organization was created in case of error and rollback is needed
 		organizationCreated bool
-		credentials         *BreakGlassCredentials
+		credentials         *privatev1.BreakGlassCredentials
 		err                 error
 	)
 
@@ -164,7 +142,7 @@ func (m *OrganizationManager) CreateOrganization(ctx context.Context, config *Or
 	}
 
 	// Step 3: Assign IdP manager permissions to break-glass account
-	err = m.assignIdpManagerPermissions(ctx, createdOrg.Name, credentials.UserID)
+	err = m.assignIdpManagerPermissions(ctx, createdOrg.Name, credentials.UserId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to assign IdP manager permissions: %w", err)
 	}
@@ -208,7 +186,7 @@ func (m *OrganizationManager) rollback(ctx context.Context, organizationName str
 // Returns the break-glass credentials and error.
 // The break-glass account is a built-in OSAC user with limited privileges (idp-manager role)
 // that can manage IdP configuration and roles.
-func (m *OrganizationManager) createBreakGlassAccount(ctx context.Context, config *OrganizationConfig) (*BreakGlassCredentials, error) {
+func (m *OrganizationManager) createBreakGlassAccount(ctx context.Context, config *OrganizationConfig) (*privatev1.BreakGlassCredentials, error) {
 	// Set defaults if not provided
 	username := config.BreakGlassUsername
 	if username == "" {
@@ -260,11 +238,11 @@ func (m *OrganizationManager) createBreakGlassAccount(ctx context.Context, confi
 		return nil, err
 	}
 
-	credentials := &BreakGlassCredentials{
-		UserID:   createdUser.ID,
-		Username: username,
-		Email:    email,
-		Password: password,
+	credentials := &privatev1.BreakGlassCredentials{
+		UserId:            createdUser.ID,
+		Username:          username,
+		Email:             email,
+		TemporaryPassword: password,
 	}
 
 	m.logger.InfoContext(ctx, "Break-glass account created for organization",

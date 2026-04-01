@@ -305,7 +305,7 @@ func RegisterOrganizationsHandlerServer(ctx context.Context, mux *runtime.ServeM
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_Organizations_Create_0(annotatedContext, mux, outboundMarshaler, w, req, response_Organizations_Create_0{resp.(*OrganizationsCreateResponse)}, mux.GetForwardResponseOptions()...)
+		forward_Organizations_Create_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPatch, pattern_Organizations_Update_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -436,7 +436,7 @@ func RegisterOrganizationsHandlerClient(ctx context.Context, mux *runtime.ServeM
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_Organizations_Create_0(annotatedContext, mux, outboundMarshaler, w, req, response_Organizations_Create_0{resp.(*OrganizationsCreateResponse)}, mux.GetForwardResponseOptions()...)
+		forward_Organizations_Create_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPatch, pattern_Organizations_Update_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -480,14 +480,6 @@ type response_Organizations_Get_0 struct {
 }
 
 func (m response_Organizations_Get_0) XXX_ResponseBody() interface{} {
-	return m.Object
-}
-
-type response_Organizations_Create_0 struct {
-	*OrganizationsCreateResponse
-}
-
-func (m response_Organizations_Create_0) XXX_ResponseBody() interface{} {
 	return m.Object
 }
 
