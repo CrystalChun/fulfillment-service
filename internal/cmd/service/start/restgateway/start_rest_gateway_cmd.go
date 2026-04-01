@@ -188,6 +188,10 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 	if err != nil {
 		return err
 	}
+	err = publicv1.RegisterOrganizationsHandler(ctx, gatewayMux, c.grpcClient)
+	if err != nil {
+		return err
+	}
 
 	// Register the private API service handlers:
 	err = privatev1.RegisterClusterTemplatesHandler(ctx, gatewayMux, c.grpcClient)
@@ -239,6 +243,10 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 		return err
 	}
 	err = privatev1.RegisterSecurityGroupsHandler(ctx, gatewayMux, c.grpcClient)
+	if err != nil {
+		return err
+	}
+	err = privatev1.RegisterOrganizationsHandler(ctx, gatewayMux, c.grpcClient)
 	if err != nil {
 		return err
 	}

@@ -11,20 +11,15 @@
 # specific language governing permissions and limitations under the License.
 #
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-labels:
-- includeSelectors: true
-  pairs:
-    component: grpc-server
-
-resources:
-- authconfig.yaml
-- certificate.yaml
-- deployment.yaml
-- service.yaml
-- keycloak-configmap.yaml
-- keycloak-secret.yaml
-
-patches:
-- path: keycloak-patch.yaml
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: fulfillment-api
+spec:
+  to:
+    kind: Service
+    name: fulfillment-api
+  port:
+    targetPort: api
+  tls:
+    termination: passthrough

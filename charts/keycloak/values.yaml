@@ -36,6 +36,20 @@ images:
 # should be created before installing this chart.
 database:
 
+  # Default connection parameters. If set, the chart will create a ConfigMap named 'keycloak-database-config' with
+  # these values. This is a convenience for simple deployments. For more complex scenarios, create your own ConfigMap
+  # and reference it via the 'connection' list below.
+  #
+  # Example:
+  #   defaultConnection:
+  #     host: postgres.default.svc.cluster.local
+  #     port: "5432"
+  #     dbname: keycloak
+  #     user: keycloak
+  #     password: keycloak
+  #     sslmode: disable
+  defaultConnection: {}
+
   # List of sources for database connection parameters. Each entry maps keys from a ConfigMap or Secret to named
   # database connection parameters. Each item has a 'key' field that indicates the name of the key in the ConfigMap or
   # Secret) and a 'param' field indicating the name of the connection parameter.

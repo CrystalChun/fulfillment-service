@@ -38,9 +38,12 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/auth"
 	"github.com/osac-project/fulfillment-service/internal/console"
 	"github.com/osac-project/fulfillment-service/internal/database"
+	"github.com/osac-project/fulfillment-service/internal/idp"
+	"github.com/osac-project/fulfillment-service/internal/idp/keycloak"
 	"github.com/osac-project/fulfillment-service/internal/logging"
 	"github.com/osac-project/fulfillment-service/internal/metrics"
 	"github.com/osac-project/fulfillment-service/internal/network"
+	"github.com/osac-project/fulfillment-service/internal/oauth"
 	"github.com/osac-project/fulfillment-service/internal/recovery"
 	"github.com/osac-project/fulfillment-service/internal/servers"
 	shtdwn "github.com/osac-project/fulfillment-service/internal/shutdown"
@@ -95,6 +98,31 @@ func Cmd() *cobra.Command {
 		"default",
 		"Type of tenancy logic to use. Valid values are 'guest', 'default' and 'serviceaccount'.",
 	)
+	flags.StringVar(
+		&runner.args.keycloakURL,
+		"keycloak-url",
+		"",
+		"Base URL of the Keycloak server for organization management. "+
+			"If not provided, Organizations service will not be registered.",
+	)
+	flags.StringVar(
+		&runner.args.keycloakUsername,
+		"keycloak-username",
+		"",
+		"Username for Keycloak admin authentication.",
+	)
+	flags.StringVar(
+		&runner.args.keycloakPassword,
+		"keycloak-password",
+		"",
+		"Password for Keycloak admin authentication.",
+	)
+	flags.StringVar(
+		&runner.args.keycloakRealm,
+		"keycloak-realm",
+		"master",
+		"Keycloak realm for admin authentication.",
+	)
 	return command
 }
 
@@ -108,6 +136,10 @@ type runnerContext struct {
 		externalAuthAddress string
 		trustedTokenIssuers []string
 		tenancyLogic        string
+		keycloakURL         string
+		keycloakUsername    string
+		keycloakPassword    string
+		keycloakRealm       string
 	}
 }
 
@@ -793,6 +825,86 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 		}
 	}()
 	privatev1.RegisterEventsServer(grpcServer, privateEventsServer)
+
+	// Create the organizations server (if Keycloak is configured):
+	if c.args.keycloakURL != "" {
+		c.logger.InfoContext(ctx, "Creating Keycloak client for organizations")
+
+		// Create an in-memory token store for Keycloak tokens
+		keycloakTokenStore, err := auth.NewMemoryTokenStore().
+			SetLogger(c.logger).
+			Build()
+		if err != nil {
+			return fmt.Errorf("failed to create Keycloak token store: %w", err)
+		}
+
+		// Create a token source for Keycloak authentication using password flow
+		keycloakIssuer := fmt.Sprintf("%s/realms/%s", c.args.keycloakURL, c.args.keycloakRealm)
+		keycloakTokenSource, err := oauth.NewTokenSource().
+			SetLogger(c.logger).
+			SetFlow(oauth.PasswordFlow).
+			SetIssuer(keycloakIssuer).
+			SetClientId("admin-cli").
+			SetUsername(c.args.keycloakUsername).
+			SetPassword(c.args.keycloakPassword).
+			SetStore(keycloakTokenStore).
+			SetCaPool(caPool).
+			SetInteractive(false).
+			Build()
+		if err != nil {
+			return fmt.Errorf("failed to create Keycloak token source: %w", err)
+		}
+
+		// Create the Keycloak client
+		keycloakClient, err := keycloak.NewClient().
+			SetLogger(c.logger).
+			SetBaseURL(c.args.keycloakURL).
+			SetTokenSource(keycloakTokenSource).
+			SetCaPool(caPool).
+			Build()
+		if err != nil {
+			return fmt.Errorf("failed to create Keycloak client: %w", err)
+		}
+
+		// Create the organization manager
+		orgManager, err := idp.NewOrganizationManager().
+			SetLogger(c.logger).
+			SetClient(keycloakClient).
+			Build()
+		if err != nil {
+			return fmt.Errorf("failed to create organization manager: %w", err)
+		}
+
+		// Create the private organizations server
+		c.logger.InfoContext(ctx, "Creating private organizations server")
+		privateOrganizationsServer, err := servers.NewPrivateOrganizationsServer().
+			SetLogger(c.logger).
+			SetNotifier(notifier).
+			SetAttributionLogic(privateAttributionLogic).
+			SetTenancyLogic(privateTenancyLogic).
+			SetOrganizationManager(orgManager).
+			Build()
+		if err != nil {
+			return fmt.Errorf("failed to create private organizations server: %w", err)
+		}
+		privatev1.RegisterOrganizationsServer(grpcServer, privateOrganizationsServer)
+
+		// Create the public organizations server
+		c.logger.InfoContext(ctx, "Creating organizations server")
+		organizationsServer, err := servers.NewOrganizationsServer().
+			SetLogger(c.logger).
+			SetNotifier(notifier).
+			SetAttributionLogic(publicAttributionLogic).
+			SetTenancyLogic(publicTenancyLogic).
+			SetOrganizationManager(orgManager).
+			Build()
+		if err != nil {
+			return fmt.Errorf("failed to create organizations server: %w", err)
+		}
+		publicv1.RegisterOrganizationsServer(grpcServer, organizationsServer)
+	} else {
+		c.logger.InfoContext(ctx, "Keycloak not configured, skipping Organizations service registration")
+	}
 
 	// Create the metrics listener:
 	c.logger.InfoContext(ctx, "Creating metrics listener")

@@ -1,0 +1,22 @@
+# PostgreSQL Helm values for shared database (Keycloak + Fulfillment Service)
+variant: openshift
+
+certs:
+  issuerRef:
+    kind: ClusterIssuer
+    name: default-ca
+  caBundle:
+    configMap: ca-bundle
+
+storage:
+  size: 20Gi
+
+# Create databases for both Keycloak and Fulfillment Service
+databases:
+- name: keycloak
+  user: keycloak
+  # Certificate-only auth for Keycloak
+
+- name: service
+  user: service
+  # Certificate-only auth for Fulfillment Service

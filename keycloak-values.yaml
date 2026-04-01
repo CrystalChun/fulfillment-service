@@ -1,0 +1,59 @@
+# Keycloak Helm values for OpenShift deployment
+variant: openshift
+
+# Keycloak will be accessible at this hostname
+hostname: keycloak.keycloak.svc.cluster.local
+
+certs:
+  issuerRef:
+    kind: ClusterIssuer
+    name: default-ca
+
+# Connect to the fulfillment-database PostgreSQL in the osac namespace
+database:
+  # Default connection parameters - the chart will create a ConfigMap with these values
+  defaultConnection:
+    host: fulfillment-database.osac.svc.cluster.local
+    port: "5432"
+    dbname: keycloak
+    user: keycloak
+    sslmode: verify-full
+
+  # Connection sources that will be mounted into the Keycloak pod
+  # Note: user and password are not needed here since we use certificate authentication
+  connection:
+  - configMap:
+      name: keycloak-database-config
+      items:
+      - key: host
+        param: host
+      - key: port
+        param: port
+      - key: dbname
+        param: dbname
+      - key: user
+        param: user
+      - key: sslmode
+        param: sslmode
+  - secret:
+      name: fulfillment-database-keycloak-client-cert
+      items:
+      - key: tls.crt
+        param: sslcert
+      - key: key.der
+        param: sslkey
+      - key: ca.crt
+        param: sslrootcert
+
+# Optional: Add test users
+users:
+- username: testuser
+  enabled: true
+  emailVerified: true
+  credentials:
+  - type: password
+    value: testpass123
+    temporary: false
+  firstName: Test
+  lastName: User
+  email: testuser@example.com

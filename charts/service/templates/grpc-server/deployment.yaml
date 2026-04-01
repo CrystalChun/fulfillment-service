@@ -73,6 +73,29 @@ spec:
           readOnly: true
         - name: tls
           mountPath: /etc/fulfillment-grpc-server/tls
+        {{ if .Values.keycloak.enabled }}
+        env:
+        - name: KEYCLOAK_URL
+          valueFrom:
+            configMapKeyRef:
+              name: keycloak-connection
+              key: url
+        - name: KEYCLOAK_REALM
+          valueFrom:
+            configMapKeyRef:
+              name: keycloak-connection
+              key: realm
+        - name: KEYCLOAK_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: keycloak-admin-credentials
+              key: username
+        - name: KEYCLOAK_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: keycloak-admin-credentials
+              key: password
+        {{ end }}
         command:
         {{ if .Values.debug }}
         - dlv
@@ -101,6 +124,12 @@ spec:
         - --grpc-authn-type=external
         - --grpc-authn-external-address=authorino-authorino-authorization:50051
         - --tenancy-logic=default
+        {{ if .Values.keycloak.enabled }}
+        - --keycloak-url=$(KEYCLOAK_URL)
+        - --keycloak-username=$(KEYCLOAK_USERNAME)
+        - --keycloak-password=$(KEYCLOAK_PASSWORD)
+        - --keycloak-realm=$(KEYCLOAK_REALM)
+        {{ end }}
         - --metrics-listener-address=0.0.0.0:8002
         ports:
         - name: grpc

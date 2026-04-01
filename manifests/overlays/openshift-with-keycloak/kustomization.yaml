@@ -13,18 +13,12 @@
 
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-labels:
-- includeSelectors: true
-  pairs:
-    component: grpc-server
+namespace: osac
 
 resources:
-- authconfig.yaml
-- certificate.yaml
-- deployment.yaml
-- service.yaml
-- keycloak-configmap.yaml
-- keycloak-secret.yaml
+- ../../base
+- route.yaml
 
-patches:
-- path: keycloak-patch.yaml
+# Include Keycloak database support
+components:
+- ../../components/keycloak-database

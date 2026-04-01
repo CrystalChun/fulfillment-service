@@ -106,3 +106,36 @@ database:
   # The keys of the ConfigMap and secret don't need to match the parameter names. In the above example the URL is in a
   # `uri` key but the connection parameter name is `url`.
   connection: []
+
+# Keycloak connection configuration for organization management. If not provided, Organizations service will not be
+# registered.
+keycloak:
+
+  # Enable Keycloak integration for organization management
+  enabled: false
+
+  # List of sources for Keycloak connection parameters. Each entry maps keys from a ConfigMap or Secret to named
+  # connection parameters. Each item has a 'key' field that indicates the name of the key in the ConfigMap (or Secret)
+  # and a 'param' field indicating the name of the connection parameter.
+  #
+  # Supported parameters:
+  # - `url`      - The complete Keycloak base URL (e.g., https://keycloak.namespace.svc.cluster.local:8000)
+  # - `username` - The Keycloak admin username
+  # - `password` - The Keycloak admin password
+  # - `realm`    - The Keycloak realm for admin authentication (default: master)
+  #
+  # Example:
+  #   connection:
+  #   - configMap:
+  #       name: keycloak-config
+  #       items:
+  #       - key: url
+  #         param: url
+  #   - secret:
+  #       name: keycloak-credentials
+  #       items:
+  #       - key: username
+  #         param: username
+  #       - key: password
+  #         param: password
+  connection: []
