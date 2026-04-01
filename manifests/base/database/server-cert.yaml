@@ -21,4 +21,5 @@ spec:
     name: default-ca
   dnsNames:
   - fulfillment-database
+  - fulfillment-database.osac.svc.cluster.local
   secretName: fulfillment-database-server-cert

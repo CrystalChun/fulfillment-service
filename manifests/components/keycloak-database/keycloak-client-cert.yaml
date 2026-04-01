@@ -11,20 +11,18 @@
 # specific language governing permissions and limitations under the License.
 #
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-labels:
-- includeSelectors: true
-  pairs:
-    component: grpc-server
-
-resources:
-- authconfig.yaml
-- certificate.yaml
-- deployment.yaml
-- service.yaml
-- keycloak-configmap.yaml
-- keycloak-secret.yaml
-
-patches:
-- path: keycloak-patch.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: fulfillment-database-keycloak-client
+spec:
+  issuerRef:
+    kind: ClusterIssuer
+    name: default-ca
+  usages:
+  - client auth
+  commonName: keycloak
+  secretName: fulfillment-database-keycloak-client-cert
+  # Generate DER format for Keycloak (Java JDBC)
+  additionalOutputFormats:
+  - type: DER

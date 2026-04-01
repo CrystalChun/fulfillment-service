@@ -11,20 +11,21 @@
 # specific language governing permissions and limitations under the License.
 #
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-labels:
-- includeSelectors: true
-  pairs:
-    component: grpc-server
-
-resources:
-- authconfig.yaml
-- certificate.yaml
-- deployment.yaml
-- service.yaml
-- keycloak-configmap.yaml
-- keycloak-secret.yaml
-
-patches:
-- path: keycloak-patch.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: fulfillment-database
+spec:
+  template:
+    spec:
+      volumes:
+      - name: keycloak-init
+        configMap:
+          name: fulfillment-database-keycloak-init
+          defaultMode: 0755
+      containers:
+      - name: server
+        volumeMounts:
+        - name: keycloak-init
+          mountPath: /usr/share/container-scripts/postgresql/start/init-keycloak.sh
+          subPath: init-keycloak.sql

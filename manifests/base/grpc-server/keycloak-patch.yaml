@@ -1,0 +1,68 @@
+#
+# Copyright (c) 2025 Red Hat Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+# the License. You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations under the License.
+#
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fulfillment-grpc-server
+spec:
+  template:
+    spec:
+      containers:
+      - name: grpc-server
+        env:
+        - name: KEYCLOAK_URL
+          valueFrom:
+            configMapKeyRef:
+              name: keycloak-connection
+              key: url
+        - name: KEYCLOAK_REALM
+          valueFrom:
+            configMapKeyRef:
+              name: keycloak-connection
+              key: realm
+        - name: KEYCLOAK_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: keycloak-admin-credentials
+              key: username
+        - name: KEYCLOAK_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: keycloak-admin-credentials
+              key: password
+        command:
+        - /usr/local/bin/fulfillment-service
+        - start
+        - grpc-server
+        - --log-level=info
+        - --log-headers=false
+        - --log-bodies=false
+        - --ca-file=/etc/fulfillment-grpc-server/tls/cas
+        - "--db-url=postgres://client@fulfillment-database:5432/service?\
+          sslmode=verify-full&\
+          sslcert=/secrets/cert/tls.crt&\
+          sslkey=/secrets/cert/tls.key&\
+          sslrootcert=/secrets/cert/ca.crt"
+        - --grpc-listener-address=0.0.0.0:8000
+        - --grpc-listener-tls-crt=/etc/fulfillment-grpc-server/tls/tls.crt
+        - --grpc-listener-tls-key=/etc/fulfillment-grpc-server/tls/tls.key
+        - --grpc-authn-trusted-token-issuers=https://keycloak.keycloak.svc.cluster.local:8000/realms/osac
+        - --grpc-authn-type=external
+        - --grpc-authn-external-address=authorino-authorino-authorization:50051
+        - --tenancy-logic=default
+        - --keycloak-url=$(KEYCLOAK_URL)
+        - --keycloak-username=$(KEYCLOAK_USERNAME)
+        - --keycloak-password=$(KEYCLOAK_PASSWORD)
+        - --keycloak-realm=$(KEYCLOAK_REALM)
+        - --metrics-listener-address=0.0.0.0:8002
