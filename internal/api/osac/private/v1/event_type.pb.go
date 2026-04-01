@@ -22,10 +22,11 @@
 package privatev1
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -120,6 +121,7 @@ type Event struct {
 	//	*Event_VirtualNetwork
 	//	*Event_SecurityGroup
 	//	*Event_Lease
+	//	*Event_Organization
 	Payload       isEvent_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -270,6 +272,15 @@ func (x *Event) GetLease() *Lease {
 	return nil
 }
 
+func (x *Event) GetOrganization() *Organization {
+	if x != nil {
+		if x, ok := x.Payload.(*Event_Organization); ok {
+			return x.Organization
+		}
+	}
+	return nil
+}
+
 func (x *Event) SetId(v string) {
 	x.Id = v
 }
@@ -364,6 +375,13 @@ func (x *Event) SetLease(v *Lease) {
 		return
 	}
 	x.Payload = &Event_Lease{v}
+}
+func (x *Event) SetOrganization(v *Organization) {
+	if v == nil {
+		x.Payload = nil
+		return
+	}
+	x.Payload = &Event_Organization{v}
 }
 
 func (x *Event) HasPayload() bool {
@@ -461,6 +479,14 @@ func (x *Event) HasLease() bool {
 	return ok
 }
 
+func (x *Event) HasOrganization() bool {
+	if x == nil {
+		return false
+	}
+	_, ok := x.Payload.(*Event_Organization)
+	return ok
+}
+
 func (x *Event) ClearPayload() {
 	x.Payload = nil
 }
@@ -531,6 +557,12 @@ func (x *Event) ClearLease() {
 	}
 }
 
+func (x *Event) ClearOrganization() {
+	if _, ok := x.Payload.(*Event_Organization); ok {
+		x.Payload = nil
+	}
+}
+
 const Event_Payload_not_set_case case_Event_Payload = 0
 const Event_Cluster_case case_Event_Payload = 3
 const Event_ClusterTemplate_case case_Event_Payload = 4
@@ -543,6 +575,7 @@ const Event_Subnet_case case_Event_Payload = 12
 const Event_VirtualNetwork_case case_Event_Payload = 13
 const Event_SecurityGroup_case case_Event_Payload = 14
 const Event_Lease_case case_Event_Payload = 15
+const Event_Organization_case case_Event_Payload = 16
 
 func (x *Event) WhichPayload() case_Event_Payload {
 	if x == nil {
@@ -571,6 +604,8 @@ func (x *Event) WhichPayload() case_Event_Payload {
 		return Event_SecurityGroup_case
 	case *Event_Lease:
 		return Event_Lease_case
+	case *Event_Organization:
+		return Event_Organization_case
 	default:
 		return Event_Payload_not_set_case
 	}
@@ -597,6 +632,7 @@ type Event_builder struct {
 	VirtualNetwork          *VirtualNetwork
 	SecurityGroup           *SecurityGroup
 	Lease                   *Lease
+	Organization            *Organization
 	// -- end of Payload
 }
 
@@ -638,6 +674,9 @@ func (b0 Event_builder) Build() *Event {
 	}
 	if b.Lease != nil {
 		x.Payload = &Event_Lease{b.Lease}
+	}
+	if b.Organization != nil {
+		x.Payload = &Event_Organization{b.Organization}
 	}
 	return m0
 }
@@ -700,6 +739,10 @@ type Event_Lease struct {
 	Lease *Lease `protobuf:"bytes,15,opt,name=lease,proto3,oneof"`
 }
 
+type Event_Organization struct {
+	Organization *Organization `protobuf:"bytes,16,opt,name=organization,proto3,oneof"`
+}
+
 func (*Event_Cluster) isEvent_Payload() {}
 
 func (*Event_ClusterTemplate) isEvent_Payload() {}
@@ -720,7 +763,8 @@ func (*Event_VirtualNetwork) isEvent_Payload() {}
 
 func (*Event_SecurityGroup) isEvent_Payload() {}
 
-func (*Event_Lease) isEvent_Payload() {}
+func (*Event_Lease) isEvent_Payload()        {}
+func (*Event_Organization) isEvent_Payload() {}
 
 var File_osac_private_v1_event_type_proto protoreflect.FileDescriptor
 
@@ -851,6 +895,7 @@ var file_osac_private_v1_event_type_proto_goTypes = []any{
 	(*VirtualNetwork)(nil),          // 10: osac.private.v1.VirtualNetwork
 	(*SecurityGroup)(nil),           // 11: osac.private.v1.SecurityGroup
 	(*Lease)(nil),                   // 12: osac.private.v1.Lease
+	(*Organization)(nil),            // 13: osac.private.v1.Organization
 }
 var file_osac_private_v1_event_type_proto_depIdxs = []int32{
 	0,  // 0: osac.private.v1.Event.type:type_name -> osac.private.v1.EventType
@@ -870,6 +915,12 @@ var file_osac_private_v1_event_type_proto_depIdxs = []int32{
 	12, // [12:12] is the sub-list for extension type_name
 	12, // [12:12] is the sub-list for extension extendee
 	0,  // [0:12] is the sub-list for field type_name
+	13, // 13: osac.private.v1.Event.organization:type_name -> osac.private.v1.Organization
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_osac_private_v1_event_type_proto_init() }
@@ -885,6 +936,7 @@ func file_osac_private_v1_event_type_proto_init() {
 	file_osac_private_v1_hub_type_proto_init()
 	file_osac_private_v1_lease_type_proto_init()
 	file_osac_private_v1_network_class_type_proto_init()
+	file_osac_private_v1_organization_type_proto_init()
 	file_osac_private_v1_security_group_type_proto_init()
 	file_osac_private_v1_subnet_type_proto_init()
 	file_osac_private_v1_virtual_network_type_proto_init()
@@ -900,6 +952,7 @@ func file_osac_private_v1_event_type_proto_init() {
 		(*Event_VirtualNetwork)(nil),
 		(*Event_SecurityGroup)(nil),
 		(*Event_Lease)(nil),
+		(*Event_Organization)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
