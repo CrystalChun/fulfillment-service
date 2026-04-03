@@ -18,8 +18,6 @@ import (
 
 	"github.com/osac-project/fulfillment-service/internal/cmd/cli/describe/cluster"
 	"github.com/osac-project/fulfillment-service/internal/cmd/cli/describe/computeinstance"
-	"github.com/osac-project/fulfillment-service/internal/cmd/cli/describe/host"
-	"github.com/osac-project/fulfillment-service/internal/cmd/cli/describe/hostpool"
 )
 
 func Cmd() *cobra.Command {
@@ -29,7 +27,5 @@ func Cmd() *cobra.Command {
 	}
 	result.AddCommand(cluster.Cmd())
 	result.AddCommand(computeinstance.Cmd())
-	result.AddCommand(host.Cmd())
-	result.AddCommand(hostpool.Cmd())
 	return result
 }

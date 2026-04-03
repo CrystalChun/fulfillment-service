@@ -38,8 +38,6 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/controllers"
 	"github.com/osac-project/fulfillment-service/internal/controllers/cluster"
 	"github.com/osac-project/fulfillment-service/internal/controllers/computeinstance"
-	"github.com/osac-project/fulfillment-service/internal/controllers/host"
-	"github.com/osac-project/fulfillment-service/internal/controllers/hostpool"
 	"github.com/osac-project/fulfillment-service/internal/controllers/securitygroup"
 	"github.com/osac-project/fulfillment-service/internal/controllers/subnet"
 	"github.com/osac-project/fulfillment-service/internal/controllers/virtualnetwork"
@@ -290,80 +288,6 @@ func (r *runnerContext) run(cmd *cobra.Command, argv []string) error {
 			r.logger.InfoContext(
 				ctx,
 				"Compute instance reconciler failed",
-				slog.Any("error", err),
-			)
-		}
-	}()
-
-	// Create the host reconciler:
-	r.logger.InfoContext(ctx, "Creating host reconciler")
-	hostReconcilerFunction, err := host.NewFunction().
-		SetLogger(r.logger).
-		SetConnection(r.client).
-		SetHubCache(hubCache).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to create host reconciler function: %w", err)
-	}
-	hostReconciler, err := controllers.NewReconciler[*privatev1.Host]().
-		SetLogger(r.logger).
-		SetName("host").
-		SetClient(r.client).
-		SetFunction(hostReconcilerFunction).
-		SetEventFilter("has(event.host) || (has(event.hub) && event.type == EVENT_TYPE_OBJECT_CREATED)").
-		SetHealthReporter(healthAggregator).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to create host reconciler: %w", err)
-	}
-
-	// Start the host reconciler:
-	r.logger.InfoContext(ctx, "Starting host reconciler")
-	go func() {
-		err := hostReconciler.Start(ctx)
-		if err == nil || errors.Is(err, context.Canceled) {
-			r.logger.InfoContext(ctx, "Host reconciler finished")
-		} else {
-			r.logger.InfoContext(
-				ctx,
-				"Host reconciler failed",
-				slog.Any("error", err),
-			)
-		}
-	}()
-
-	// Create the host pool reconciler:
-	r.logger.InfoContext(ctx, "Creating host pool reconciler")
-	hostPoolReconcilerFunction, err := hostpool.NewFunction().
-		SetLogger(r.logger).
-		SetConnection(r.client).
-		SetHubCache(hubCache).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to create host pool reconciler function: %w", err)
-	}
-	hostPoolReconciler, err := controllers.NewReconciler[*privatev1.HostPool]().
-		SetLogger(r.logger).
-		SetName("host_pool").
-		SetClient(r.client).
-		SetFunction(hostPoolReconcilerFunction).
-		SetEventFilter("has(event.host_pool) || (has(event.hub) && event.type == EVENT_TYPE_OBJECT_CREATED)").
-		SetHealthReporter(healthAggregator).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to create host pool reconciler: %w", err)
-	}
-
-	// Start the host pool reconciler:
-	r.logger.InfoContext(ctx, "Starting host pool reconciler")
-	go func() {
-		err := hostPoolReconciler.Start(ctx)
-		if err == nil || errors.Is(err, context.Canceled) {
-			r.logger.InfoContext(ctx, "Host pool reconciler finished")
-		} else {
-			r.logger.InfoContext(
-				ctx,
-				"Host pool reconciler failed",
 				slog.Any("error", err),
 			)
 		}

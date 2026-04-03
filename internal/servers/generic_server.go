@@ -697,10 +697,6 @@ func (s *GenericServer[O]) setPayload(event *privatev1.Event, object proto.Messa
 		event.SetCluster(object)
 	case *privatev1.HostClass:
 		event.SetHostClass(object)
-	case *privatev1.Host:
-		event.SetHost(object)
-	case *privatev1.HostPool:
-		event.SetHostPool(object)
 	case *privatev1.Hub:
 		// TODO: We need to remove the Kubeconfig from the payload of the notification because that usually
 		// exceeds the default limit of 8000 bytes of the PostgreSQL notification mechanism. A better way to

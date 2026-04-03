@@ -39,22 +39,6 @@ var ComputeInstance = schema.GroupVersionKind{
 
 var ComputeInstanceList = listGVK(ComputeInstance)
 
-var Host = schema.GroupVersionKind{
-	Group:   "osac.openshift.io",
-	Version: "v1alpha1",
-	Kind:    "Host",
-}
-
-var HostList = listGVK(Host)
-
-var HostPool = schema.GroupVersionKind{
-	Group:   "osac.openshift.io",
-	Version: "v1alpha1",
-	Kind:    "HostPool",
-}
-
-var HostPoolList = listGVK(HostPool)
-
 var Secret = schema.GroupVersionKind{
 	Version: "v1",
 	Kind:    "Secret",

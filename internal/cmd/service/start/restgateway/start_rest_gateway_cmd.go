@@ -156,14 +156,6 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 	if err != nil {
 		return err
 	}
-	err = publicv1.RegisterHostsHandler(ctx, gatewayMux, c.grpcClient)
-	if err != nil {
-		return err
-	}
-	err = publicv1.RegisterHostPoolsHandler(ctx, gatewayMux, c.grpcClient)
-	if err != nil {
-		return err
-	}
 	err = publicv1.RegisterComputeInstanceTemplatesHandler(ctx, gatewayMux, c.grpcClient)
 	if err != nil {
 		return err
@@ -203,14 +195,6 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 		return err
 	}
 	err = privatev1.RegisterHostClassesHandler(ctx, gatewayMux, c.grpcClient)
-	if err != nil {
-		return err
-	}
-	err = privatev1.RegisterHostPoolsHandler(ctx, gatewayMux, c.grpcClient)
-	if err != nil {
-		return err
-	}
-	err = privatev1.RegisterHostsHandler(ctx, gatewayMux, c.grpcClient)
 	if err != nil {
 		return err
 	}

@@ -30,7 +30,6 @@ import (
 
 	"github.com/osac-project/fulfillment-service/internal/cmd/cli/create/cluster"
 	"github.com/osac-project/fulfillment-service/internal/cmd/cli/create/computeinstance"
-	"github.com/osac-project/fulfillment-service/internal/cmd/cli/create/hostpool"
 	"github.com/osac-project/fulfillment-service/internal/cmd/cli/create/hub"
 	"github.com/osac-project/fulfillment-service/internal/config"
 	"github.com/osac-project/fulfillment-service/internal/logging"
@@ -47,7 +46,6 @@ func Cmd() *cobra.Command {
 	}
 	result.AddCommand(cluster.Cmd())
 	result.AddCommand(computeinstance.Cmd())
-	result.AddCommand(hostpool.Cmd())
 	result.AddCommand(hub.Cmd())
 	flags := result.Flags()
 	flags.StringVarP(

@@ -24,7 +24,6 @@ import (
 	publicv1 "github.com/osac-project/fulfillment-service/internal/api/osac/public/v1"
 	"github.com/osac-project/fulfillment-service/internal/cmd/cli/create/cluster"
 	"github.com/osac-project/fulfillment-service/internal/cmd/cli/create/computeinstance"
-	"github.com/osac-project/fulfillment-service/internal/cmd/cli/create/hostpool"
 	"github.com/osac-project/fulfillment-service/internal/cmd/cli/create/hub"
 )
 
@@ -37,7 +36,6 @@ var _ = Describe("Create command", func() {
 		},
 		Entry("cluster", cluster.Cmd, (*publicv1.Cluster)(nil)),
 		Entry("computeinstance", computeinstance.Cmd, (*publicv1.ComputeInstance)(nil)),
-		Entry("hostpool", hostpool.Cmd, (*publicv1.HostPool)(nil)),
 		Entry("hub", hub.Cmd, (*privatev1.Hub)(nil)),
 	)
 
@@ -51,7 +49,7 @@ var _ = Describe("Create command", func() {
 				subcommandNames = append(subcommandNames, subcmd.Name())
 			}
 
-			Expect(subcommandNames).To(ContainElements("cluster", "computeinstance", "hostpool", "hub"))
+			Expect(subcommandNames).To(ContainElements("cluster", "computeinstance", "hub"))
 		})
 	})
 })

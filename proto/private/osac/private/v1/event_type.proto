@@ -20,8 +20,6 @@ import "osac/private/v1/cluster_type.proto";
 import "osac/private/v1/compute_instance_template_type.proto";
 import "osac/private/v1/compute_instance_type.proto";
 import "osac/private/v1/host_class_type.proto";
-import "osac/private/v1/host_pool_type.proto";
-import "osac/private/v1/host_type.proto";
 import "osac/private/v1/hub_type.proto";
 import "osac/private/v1/network_class_type.proto";
 import "osac/private/v1/security_group_type.proto";
@@ -44,8 +42,6 @@ message Event {
     Hub hub = 6;
     ComputeInstanceTemplate compute_instance_template = 7;
     ComputeInstance compute_instance = 8;
-    Host host = 9;
-    HostPool host_pool = 10;
     NetworkClass network_class = 11;
     Subnet subnet = 12;
     VirtualNetwork virtual_network = 13;

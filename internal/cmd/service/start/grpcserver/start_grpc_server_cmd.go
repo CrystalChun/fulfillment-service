@@ -479,58 +479,6 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 	}
 	privatev1.RegisterHostClassesServer(grpcServer, privateHostClassesServer)
 
-	// Create the hosts server:
-	c.logger.InfoContext(ctx, "Creating hosts server")
-	hostsServer, err := servers.NewHostsServer().
-		SetLogger(c.logger).
-		SetNotifier(notifier).
-		SetAttributionLogic(publicAttributionLogic).
-		SetTenancyLogic(publicTenancyLogic).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to create hosts server: %w", err)
-	}
-	publicv1.RegisterHostsServer(grpcServer, hostsServer)
-
-	// Create the private hosts server:
-	c.logger.InfoContext(ctx, "Creating private hosts server")
-	privateHostsServer, err := servers.NewPrivateHostsServer().
-		SetLogger(c.logger).
-		SetNotifier(notifier).
-		SetAttributionLogic(privateAttributionLogic).
-		SetTenancyLogic(privateTenancyLogic).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to create private hosts server: %w", err)
-	}
-	privatev1.RegisterHostsServer(grpcServer, privateHostsServer)
-
-	// Create the host pools server:
-	c.logger.InfoContext(ctx, "Creating host pools server")
-	hostPoolsServer, err := servers.NewHostPoolsServer().
-		SetLogger(c.logger).
-		SetNotifier(notifier).
-		SetAttributionLogic(publicAttributionLogic).
-		SetTenancyLogic(publicTenancyLogic).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to create host pools server: %w", err)
-	}
-	publicv1.RegisterHostPoolsServer(grpcServer, hostPoolsServer)
-
-	// Create the private host pools server:
-	c.logger.InfoContext(ctx, "Creating private host pools server")
-	privateHostPoolsServer, err := servers.NewPrivateHostPoolsServer().
-		SetLogger(c.logger).
-		SetNotifier(notifier).
-		SetAttributionLogic(privateAttributionLogic).
-		SetTenancyLogic(privateTenancyLogic).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to create private host pools server: %w", err)
-	}
-	privatev1.RegisterHostPoolsServer(grpcServer, privateHostPoolsServer)
-
 	// Create the compute instance templates server:
 	c.logger.InfoContext(ctx, "Creating compute instance templates server")
 	computeInstanceTemplatesServer, err := servers.NewComputeInstanceTemplatesServer().

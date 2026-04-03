@@ -53,7 +53,6 @@ var _ = Describe("Multitenancy authentication error handling", Label("multitenan
 		},
 		Entry("clusters", fmt.Sprintf("https://%s/api/fulfillment/v1/clusters", serviceAddr)),
 		Entry("cluster templates", fmt.Sprintf("https://%s/api/fulfillment/v1/cluster_templates", serviceAddr)),
-		Entry("host pools", fmt.Sprintf("https://%s/api/fulfillment/v1/host_pools", serviceAddr)),
 		Entry("host classes", fmt.Sprintf("https://%s/api/fulfillment/v1/host_classes", serviceAddr)),
 	)
 
@@ -110,7 +109,6 @@ var _ = Describe("Multitenancy authentication error handling", Label("multitenan
 		},
 		Entry("clusters", fmt.Sprintf("https://%s/api/fulfillment/v1/clusters", serviceAddr)),
 		Entry("cluster templates", fmt.Sprintf("https://%s/api/fulfillment/v1/cluster_templates", serviceAddr)),
-		Entry("host pools", fmt.Sprintf("https://%s/api/fulfillment/v1/host_pools", serviceAddr)),
 		Entry("host classes", fmt.Sprintf("https://%s/api/fulfillment/v1/host_classes", serviceAddr)),
 	)
 })
@@ -315,155 +313,6 @@ var _ = Describe("Multitenancy basic tenant isolation", Ordered, Label("multiten
 			)
 		})
 
-		Describe("host pool resources", func() {
-			var (
-				tenantHostPoolMapping map[string][]string
-			)
-
-			BeforeAll(func() {
-				// Create map to track which host pools belong to which tenants
-				tenantHostPoolMapping = make(map[string][]string)
-
-				// Create a host pool for each user
-				for user, tenant := range ServiceAccountTenants {
-					tokenSource, err := tool.makeKubernetesTokenSource(ctx, user, tenant)
-					Expect(err).ToNot(HaveOccurred())
-					conn, err := tool.makeGrpcConn(tokenSource)
-					Expect(err).ToNot(HaveOccurred())
-
-					hostPoolsClient := publicv1.NewHostPoolsClient(conn)
-					createResponse, err := hostPoolsClient.Create(ctx, publicv1.HostPoolsCreateRequest_builder{
-						Object: publicv1.HostPool_builder{
-							Spec: publicv1.HostPoolSpec_builder{
-								HostSets: map[string]*publicv1.HostPoolHostSet{
-									"my-host-set": publicv1.HostPoolHostSet_builder{
-										HostClass: "blah",
-										Size:      3,
-									}.Build(),
-								},
-							}.Build(),
-						}.Build(),
-					}.Build())
-					Expect(err).ToNot(HaveOccurred())
-					hostPoolObject := createResponse.GetObject()
-					DeferCleanup(func() { deleteHostPool(ctx, hostPoolObject.GetId()) })
-
-					// Populate map to track which host pools belong to which tenants
-					tenantHostPoolMapping[tenant] = append(tenantHostPoolMapping[tenant], hostPoolObject.GetId())
-				}
-			})
-
-			It("shared within the same tenant", func() {
-				// List host pools for each user
-				for user, tenant := range ServiceAccountTenants {
-					tokenSource, err := tool.makeKubernetesTokenSource(ctx, user, tenant)
-					Expect(err).ToNot(HaveOccurred())
-					conn, err := tool.makeGrpcConn(tokenSource)
-					Expect(err).ToNot(HaveOccurred())
-
-					response := listHostPools(ctx, conn)
-					Expect(response).ToNot(BeNil())
-					Expect(len(response.Items)).To(Equal(len(tenantUserMapping[tenant])))
-
-					// Check that each host pool appears under expected tenant
-					for _, hostPool := range response.GetItems() {
-						Expect(tenantHostPoolMapping[tenant]).To(ContainElement(hostPool.GetId()))
-					}
-				}
-			})
-
-			It("isolated between tenants", func() {
-				// List host pools for each user
-				for user, tenant := range ServiceAccountTenants {
-					tokenSource, err := tool.makeKubernetesTokenSource(ctx, user, tenant)
-					Expect(err).ToNot(HaveOccurred())
-					conn, err := tool.makeGrpcConn(tokenSource)
-					Expect(err).ToNot(HaveOccurred())
-
-					response := listHostPools(ctx, conn)
-					Expect(response).ToNot(BeNil())
-					Expect(len(response.Items)).To(Equal(len(tenantUserMapping[tenant])))
-
-					// Check that each host pool is isolated between tenants
-					for _, hostPool := range response.GetItems() {
-						for _, otherTenant := range ServiceAccountTenants {
-							if otherTenant != tenant {
-								Expect(tenantHostPoolMapping[otherTenant]).ToNot(ContainElement(hostPool.GetId()))
-							}
-						}
-					}
-				}
-			})
-
-			It("assigned the correct tenant after creation", func() {
-				for tenant, hostPools := range tenantHostPoolMapping {
-					for _, hostPool := range hostPools {
-						hostPoolsClient := privatev1.NewHostPoolsClient(tool.AdminConn())
-
-						hostPoolResponse, err := hostPoolsClient.Get(ctx, privatev1.HostPoolsGetRequest_builder{
-							Id: hostPool,
-						}.Build())
-						Expect(err).ToNot(HaveOccurred())
-						Expect(len(hostPoolResponse.GetObject().Metadata.Tenants)).To(Equal(1))
-						Expect(hostPoolResponse.GetObject().Metadata.Tenants[0]).To(Equal(tenant))
-					}
-				}
-			})
-
-			DescribeTable(
-				"cross-tenant",
-				func(operation func(client publicv1.HostPoolsClient, hostPoolID string) error) {
-					for hostPoolTenant, hostPools := range tenantHostPoolMapping {
-						for user, userTenant := range ServiceAccountTenants {
-							// Skip if host pool is owned by the same tenant
-							if hostPoolTenant == userTenant {
-								continue
-							}
-
-							tokenSource, err := tool.makeKubernetesTokenSource(ctx, user, userTenant)
-							Expect(err).ToNot(HaveOccurred())
-							conn, err := tool.makeGrpcConn(tokenSource)
-							Expect(err).ToNot(HaveOccurred())
-
-							hostPoolsClient := publicv1.NewHostPoolsClient(conn)
-
-							for _, hostPool := range hostPools {
-								err := operation(hostPoolsClient, hostPool)
-								Expect(err).To(HaveOccurred())
-								status, ok := grpcstatus.FromError(err)
-								Expect(ok).To(BeTrue())
-								Expect(status.Code()).To(Equal(grpccodes.NotFound))
-							}
-						}
-					}
-
-				},
-				Entry("deletion is not allowed", func(client publicv1.HostPoolsClient, hostPoolID string) error {
-					_, err := client.Delete(ctx, publicv1.HostPoolsDeleteRequest_builder{
-						Id: hostPoolID,
-					}.Build())
-
-					return err
-				}),
-				Entry("update is not allowed", func(client publicv1.HostPoolsClient, hostPoolID string) error {
-					_, err := client.Update(ctx, publicv1.HostPoolsUpdateRequest_builder{
-						Object: publicv1.HostPool_builder{
-							Id: hostPoolID,
-							Spec: publicv1.HostPoolSpec_builder{
-								HostSets: map[string]*publicv1.HostPoolHostSet{
-									"my-host-set": publicv1.HostPoolHostSet_builder{
-										HostClass: "cross-tenant-update-host-class",
-										Size:      3,
-									}.Build(),
-								},
-							}.Build(),
-						}.Build(),
-					}.Build())
-
-					return err
-				}),
-			)
-		})
 	})
 
 	Describe("OIDC tenants", func() {
@@ -618,101 +467,6 @@ var _ = Describe("Multitenancy basic tenant isolation", Ordered, Label("multiten
 			})
 		})
 
-		Describe("host pool resources", func() {
-			var (
-				tenantHostPoolMapping map[string][]string
-				hostPoolTenantMapping map[string][]string
-			)
-
-			BeforeAll(func() {
-				// Create map to track which host pools belong to which tenants
-				tenantHostPoolMapping = make(map[string][]string)
-
-				// Create map to track which host pools can be seen by which tenants
-				hostPoolTenantMapping = make(map[string][]string)
-
-				// Create a host pool for each user
-				for user, tenants := range OIDCTenants {
-					tokenSource, err := tool.makeKeycloakTokenSource(ctx, user, usersPassword)
-					Expect(err).ToNot(HaveOccurred())
-					conn, err := tool.makeGrpcConn(tokenSource)
-					Expect(err).ToNot(HaveOccurred())
-
-					hostPoolsClient := publicv1.NewHostPoolsClient(conn)
-					createResponse, err := hostPoolsClient.Create(ctx, publicv1.HostPoolsCreateRequest_builder{
-						Object: publicv1.HostPool_builder{
-							Spec: publicv1.HostPoolSpec_builder{
-								HostSets: map[string]*publicv1.HostPoolHostSet{
-									"my-host-set": publicv1.HostPoolHostSet_builder{
-										HostClass: "blah",
-										Size:      3,
-									}.Build(),
-								},
-							}.Build(),
-						}.Build(),
-					}.Build())
-					Expect(err).ToNot(HaveOccurred())
-					hostPoolObject := createResponse.GetObject()
-					DeferCleanup(func() { deleteHostPool(ctx, hostPoolObject.GetId()) })
-
-					// Populate map to track which host pools belong to which tenants
-					for _, tenant := range tenants {
-						tenantHostPoolMapping[tenant] = append(tenantHostPoolMapping[tenant], hostPoolObject.GetId())
-						hostPoolTenantMapping[hostPoolObject.GetId()] = append(hostPoolTenantMapping[hostPoolObject.GetId()], tenant)
-					}
-				}
-			})
-			It("shared within the same tenant", func() {
-				// List host pools for each user
-				for user, tenants := range OIDCTenants {
-					tokenSource, err := tool.makeKeycloakTokenSource(ctx, user, usersPassword)
-					Expect(err).ToNot(HaveOccurred())
-					conn, err := tool.makeGrpcConn(tokenSource)
-					Expect(err).ToNot(HaveOccurred())
-
-					response := listHostPools(ctx, conn)
-					Expect(response).ToNot(BeNil())
-
-					Expect(len(response.Items)).To(Equal(calculateResponseSize(tenantUserMapping, tenants)))
-
-					// Check that each host pool appears under expected tenant
-					for _, hostPool := range response.GetItems() {
-						Expect(checkTenantMembership(tenantHostPoolMapping, tenants, hostPool.GetId())).To(BeTrue())
-					}
-				}
-			})
-
-			It("isolated between tenants", func() {
-				// List host pools for each user
-				for user, tenants := range OIDCTenants {
-					tokenSource, err := tool.makeKeycloakTokenSource(ctx, user, usersPassword)
-					Expect(err).ToNot(HaveOccurred())
-					conn, err := tool.makeGrpcConn(tokenSource)
-					Expect(err).ToNot(HaveOccurred())
-
-					response := listHostPools(ctx, conn)
-					Expect(response).ToNot(BeNil())
-					Expect(len(response.Items)).To(Equal(calculateResponseSize(tenantUserMapping, tenants)))
-
-					// Check that each host pool is isolated between tenants
-					for _, hostPool := range response.GetItems() {
-						hostPoolId := hostPool.GetId()
-						expectedTenants := hostPoolTenantMapping[hostPoolId]
-
-						// For each tenant, verify correct isolation
-						for tenant, tenantHostPools := range tenantHostPoolMapping {
-							if slices.Contains(expectedTenants, tenant) {
-								// Tenant should have access - verify host pool is in their list
-								Expect(tenantHostPools).To(ContainElement(hostPoolId))
-							} else {
-								// Tenant should NOT have access - verify host pool is isolated
-								Expect(tenantHostPools).ToNot(ContainElement(hostPoolId))
-							}
-						}
-					}
-				}
-			})
-		})
 	})
 })
 
@@ -724,26 +478,10 @@ func listClusters(ctx context.Context, conn *grpc.ClientConn) *publicv1.Clusters
 	return response
 }
 
-func listHostPools(ctx context.Context, conn *grpc.ClientConn) *publicv1.HostPoolsListResponse {
-	hostPoolsClient := publicv1.NewHostPoolsClient(conn)
-	response, err := hostPoolsClient.List(ctx, publicv1.HostPoolsListRequest_builder{}.Build())
-	Expect(err).ToNot(HaveOccurred(), "error listing host pools")
-
-	return response
-}
-
 func deleteCluster(ctx context.Context, clusterId string) error {
 	clusterClient := privatev1.NewClustersClient(tool.AdminConn())
 	_, err := clusterClient.Delete(ctx, privatev1.ClustersDeleteRequest_builder{
 		Id: clusterId,
-	}.Build())
-	return err
-}
-
-func deleteHostPool(ctx context.Context, hostPoolId string) error {
-	hostPoolClient := privatev1.NewHostPoolsClient(tool.AdminConn())
-	_, err := hostPoolClient.Delete(ctx, privatev1.HostPoolsDeleteRequest_builder{
-		Id: hostPoolId,
 	}.Build())
 	return err
 }

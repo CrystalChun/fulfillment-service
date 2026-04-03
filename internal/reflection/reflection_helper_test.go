@@ -137,9 +137,7 @@ var _ = Describe("Reflection helper", func() {
 				"clustertemplate",
 				"computeinstance",
 				"computeinstancetemplate",
-				"host",
 				"hostclass",
-				"hostpool",
 				"networkclass",
 				"organization",
 				"securitygroup",
@@ -155,8 +153,6 @@ var _ = Describe("Reflection helper", func() {
 				"computeinstances",
 				"computeinstancetemplates",
 				"hostclasses",
-				"hostpools",
-				"hosts",
 				"networkclasses",
 				"organizations",
 				"securitygroups",
@@ -191,26 +187,6 @@ var _ = Describe("Reflection helper", func() {
 				"Host class in plural",
 				"hostclasses",
 				"osac.public.v1.HostClass",
-			),
-			Entry(
-				"Host in singular",
-				"host",
-				"osac.public.v1.Host",
-			),
-			Entry(
-				"Host in plural",
-				"hosts",
-				"osac.public.v1.Host",
-			),
-			Entry(
-				"Host pool in singular",
-				"hostpool",
-				"osac.public.v1.HostPool",
-			),
-			Entry(
-				"Host pool in plural",
-				"hostpools",
-				"osac.public.v1.HostPool",
 			),
 		)
 
@@ -248,16 +224,6 @@ var _ = Describe("Reflection helper", func() {
 				"computeinstance",
 				"osac.public.v1.ComputeInstance",
 			),
-			Entry(
-				"Host",
-				"host",
-				"osac.public.v1.Host",
-			),
-			Entry(
-				"Host pool",
-				"hostpool",
-				"osac.public.v1.HostPool",
-			),
 		)
 
 		DescribeTable(
@@ -282,16 +248,6 @@ var _ = Describe("Reflection helper", func() {
 				"Host class",
 				"hostclass",
 				&publicv1.HostClass{},
-			),
-			Entry(
-				"Host",
-				"host",
-				&publicv1.Host{},
-			),
-			Entry(
-				"Host pool",
-				"hostpool",
-				&publicv1.HostPool{},
 			),
 		)
 
@@ -531,120 +487,6 @@ var _ = Describe("Reflection helper", func() {
 			objectHelper := helper.Lookup("cluster")
 			Expect(objectHelper).ToNot(BeNil())
 			err := objectHelper.Delete(ctx, "123")
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("Invokes hosts get method", func() {
-			// Register a hosts server that responds to the get request:
-			publicv1.RegisterHostsServer(server.Registrar(), &testing.HostsServerFuncs{
-				GetFunc: func(ctx context.Context, request *publicv1.HostsGetRequest,
-				) (response *publicv1.HostsGetResponse, err error) {
-					defer GinkgoRecover()
-					Expect(request.GetId()).To(Equal("host-123"))
-					response = publicv1.HostsGetResponse_builder{
-						Object: publicv1.Host_builder{
-							Id: "host-123",
-							Status: publicv1.HostStatus_builder{
-								PowerState: publicv1.HostPowerState_HOST_POWER_STATE_ON,
-							}.Build(),
-						}.Build(),
-					}.Build()
-					return
-				},
-			})
-
-			// Start the server:
-			server.Start()
-
-			// Use the helper to send the request, and verify the response:
-			objectHelper := helper.Lookup("host")
-			Expect(objectHelper).ToNot(BeNil())
-			object, err := objectHelper.Get(ctx, "host-123")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(proto.Equal(object, publicv1.Host_builder{
-				Id: "host-123",
-				Status: publicv1.HostStatus_builder{
-					PowerState: publicv1.HostPowerState_HOST_POWER_STATE_ON,
-				}.Build(),
-			}.Build())).To(BeTrue())
-		})
-
-		It("Invokes hosts delete method", func() {
-			// Register a hosts server that responds to the delete request:
-			publicv1.RegisterHostsServer(server.Registrar(), &testing.HostsServerFuncs{
-				DeleteFunc: func(ctx context.Context, request *publicv1.HostsDeleteRequest,
-				) (response *publicv1.HostsDeleteResponse, err error) {
-					defer GinkgoRecover()
-					Expect(request.GetId()).To(Equal("host-123"))
-					response = publicv1.HostsDeleteResponse_builder{}.Build()
-					return
-				},
-			})
-
-			// Start the server:
-			server.Start()
-
-			// Use the helper to send the request, and verify the response:
-			objectHelper := helper.Lookup("host")
-			Expect(objectHelper).ToNot(BeNil())
-			err := objectHelper.Delete(ctx, "host-123")
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("Invokes host pools get method", func() {
-			// Register a host pools server that responds to the get request:
-			publicv1.RegisterHostPoolsServer(server.Registrar(), &testing.HostPoolsServerFuncs{
-				GetFunc: func(ctx context.Context, request *publicv1.HostPoolsGetRequest,
-				) (response *publicv1.HostPoolsGetResponse, err error) {
-					defer GinkgoRecover()
-					Expect(request.GetId()).To(Equal("pool-123"))
-					response = publicv1.HostPoolsGetResponse_builder{
-						Object: publicv1.HostPool_builder{
-							Id: "pool-123",
-							Status: publicv1.HostPoolStatus_builder{
-								State: publicv1.HostPoolState_HOST_POOL_STATE_READY,
-							}.Build(),
-						}.Build(),
-					}.Build()
-					return
-				},
-			})
-
-			// Start the server:
-			server.Start()
-
-			// Use the helper to send the request, and verify the response:
-			objectHelper := helper.Lookup("hostpool")
-			Expect(objectHelper).ToNot(BeNil())
-			object, err := objectHelper.Get(ctx, "pool-123")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(proto.Equal(object, publicv1.HostPool_builder{
-				Id: "pool-123",
-				Status: publicv1.HostPoolStatus_builder{
-					State: publicv1.HostPoolState_HOST_POOL_STATE_READY,
-				}.Build(),
-			}.Build())).To(BeTrue())
-		})
-
-		It("Invokes host pools delete method", func() {
-			// Register a host pools server that responds to the delete request:
-			publicv1.RegisterHostPoolsServer(server.Registrar(), &testing.HostPoolsServerFuncs{
-				DeleteFunc: func(ctx context.Context, request *publicv1.HostPoolsDeleteRequest,
-				) (response *publicv1.HostPoolsDeleteResponse, err error) {
-					defer GinkgoRecover()
-					Expect(request.GetId()).To(Equal("pool-123"))
-					response = publicv1.HostPoolsDeleteResponse_builder{}.Build()
-					return
-				},
-			})
-
-			// Start the server:
-			server.Start()
-
-			// Use the helper to send the request, and verify the response:
-			objectHelper := helper.Lookup("hostpool")
-			Expect(objectHelper).ToNot(BeNil())
-			err := objectHelper.Delete(ctx, "pool-123")
 			Expect(err).ToNot(HaveOccurred())
 		})
 

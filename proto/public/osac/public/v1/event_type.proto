@@ -20,8 +20,6 @@ import "osac/public/v1/cluster_type.proto";
 import "osac/public/v1/compute_instance_template_type.proto";
 import "osac/public/v1/compute_instance_type.proto";
 import "osac/public/v1/host_class_type.proto";
-import "osac/public/v1/host_pool_type.proto";
-import "osac/public/v1/host_type.proto";
 
 // Represents events delivered by the server.
 message Event {
@@ -38,8 +36,6 @@ message Event {
     HostClass host_class = 5;
     ComputeInstanceTemplate compute_instance_template = 7;
     ComputeInstance compute_instance = 8;
-    Host host = 9;
-    HostPool host_pool = 10;
   }
 }
 

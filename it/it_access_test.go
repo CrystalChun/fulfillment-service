@@ -51,18 +51,6 @@ var _ = Describe("Access control", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("Allows regular users to list hosts", func() {
-			client := publicv1.NewHostsClient(tool.UserConn())
-			_, err := client.List(ctx, publicv1.HostsListRequest_builder{}.Build())
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("Allows regular users to list host pools", func() {
-			client := publicv1.NewHostPoolsClient(tool.UserConn())
-			_, err := client.List(ctx, publicv1.HostPoolsListRequest_builder{}.Build())
-			Expect(err).ToNot(HaveOccurred())
-		})
-
 		It("Allows regular users to list compute instance templates", func() {
 			client := publicv1.NewComputeInstanceTemplatesClient(tool.UserConn())
 			_, err := client.List(ctx, publicv1.ComputeInstanceTemplatesListRequest_builder{}.Build())
@@ -90,18 +78,6 @@ var _ = Describe("Access control", func() {
 		It("Allows admin users to list host classes", func() {
 			client := publicv1.NewHostClassesClient(tool.AdminConn())
 			_, err := client.List(ctx, publicv1.HostClassesListRequest_builder{}.Build())
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("Allows admin users to list hosts", func() {
-			client := publicv1.NewHostsClient(tool.AdminConn())
-			_, err := client.List(ctx, publicv1.HostsListRequest_builder{}.Build())
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("Allows admin users to list host pools", func() {
-			client := publicv1.NewHostPoolsClient(tool.AdminConn())
-			_, err := client.List(ctx, publicv1.HostPoolsListRequest_builder{}.Build())
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -134,18 +110,6 @@ var _ = Describe("Access control", func() {
 		It("Allows admin users to list hubs", func() {
 			client := privatev1.NewHubsClient(tool.AdminConn())
 			_, err := client.List(ctx, privatev1.HubsListRequest_builder{}.Build())
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("Allows admin users to list hosts", func() {
-			client := privatev1.NewHostsClient(tool.AdminConn())
-			_, err := client.List(ctx, privatev1.HostsListRequest_builder{}.Build())
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("Allows admin users to list host pools", func() {
-			client := privatev1.NewHostPoolsClient(tool.AdminConn())
-			_, err := client.List(ctx, privatev1.HostPoolsListRequest_builder{}.Build())
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -188,24 +152,6 @@ var _ = Describe("Access control", func() {
 		It("Denies regular users access to hubs", func() {
 			client := privatev1.NewHubsClient(tool.UserConn())
 			_, err := client.List(ctx, privatev1.HubsListRequest_builder{}.Build())
-			Expect(err).To(HaveOccurred())
-			status, ok := grpcstatus.FromError(err)
-			Expect(ok).To(BeTrue())
-			Expect(status.Code()).To(Equal(grpccodes.PermissionDenied))
-		})
-
-		It("Denies regular users access to hosts", func() {
-			client := privatev1.NewHostsClient(tool.UserConn())
-			_, err := client.List(ctx, privatev1.HostsListRequest_builder{}.Build())
-			Expect(err).To(HaveOccurred())
-			status, ok := grpcstatus.FromError(err)
-			Expect(ok).To(BeTrue())
-			Expect(status.Code()).To(Equal(grpccodes.PermissionDenied))
-		})
-
-		It("Denies regular users access to host pools", func() {
-			client := privatev1.NewHostPoolsClient(tool.UserConn())
-			_, err := client.List(ctx, privatev1.HostPoolsListRequest_builder{}.Build())
 			Expect(err).To(HaveOccurred())
 			status, ok := grpcstatus.FromError(err)
 			Expect(ok).To(BeTrue())
