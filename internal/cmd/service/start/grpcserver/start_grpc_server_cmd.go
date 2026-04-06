@@ -826,9 +826,9 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 	}()
 	privatev1.RegisterEventsServer(grpcServer, privateEventsServer)
 
-	// Create the organizations server (if Keycloak is configured):
+	// Create the organizations and users servers (if Keycloak is configured):
 	if c.args.keycloakURL != "" {
-		c.logger.InfoContext(ctx, "Creating Keycloak client for organizations")
+		c.logger.InfoContext(ctx, "Creating Keycloak client for organizations and users")
 
 		// Create an in-memory token store for Keycloak tokens
 		keycloakTokenStore, err := auth.NewMemoryTokenStore().
@@ -902,8 +902,36 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 			return fmt.Errorf("failed to create organizations server: %w", err)
 		}
 		publicv1.RegisterOrganizationsServer(grpcServer, organizationsServer)
+
+		// Create the private users server
+		c.logger.InfoContext(ctx, "Creating private users server")
+		privateUsersServer, err := servers.NewPrivateUsersServer().
+			SetLogger(c.logger).
+			SetNotifier(notifier).
+			SetAttributionLogic(privateAttributionLogic).
+			SetTenancyLogic(privateTenancyLogic).
+			SetIdpClient(keycloakClient).
+			Build()
+		if err != nil {
+			return fmt.Errorf("failed to create private users server: %w", err)
+		}
+		privatev1.RegisterUsersServer(grpcServer, privateUsersServer)
+
+		// Create the public users server
+		c.logger.InfoContext(ctx, "Creating users server")
+		usersServer, err := servers.NewUsersServer().
+			SetLogger(c.logger).
+			SetNotifier(notifier).
+			SetAttributionLogic(publicAttributionLogic).
+			SetTenancyLogic(publicTenancyLogic).
+			SetIdpClient(keycloakClient).
+			Build()
+		if err != nil {
+			return fmt.Errorf("failed to create users server: %w", err)
+		}
+		publicv1.RegisterUsersServer(grpcServer, usersServer)
 	} else {
-		c.logger.InfoContext(ctx, "Keycloak not configured, skipping Organizations service registration")
+		c.logger.InfoContext(ctx, "Keycloak not configured, skipping Organizations and Users services registration")
 	}
 
 	// Create the metrics listener:
