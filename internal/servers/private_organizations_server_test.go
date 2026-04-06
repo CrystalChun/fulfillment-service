@@ -16,6 +16,7 @@ package servers
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	. "github.com/onsi/ginkgo/v2"
@@ -65,7 +66,11 @@ func (m *mockIdpClient) DeleteOrganization(ctx context.Context, name string) err
 }
 
 func (m *mockIdpClient) CreateUser(ctx context.Context, organization string, user *idp.User) error {
-	user.ID = "mock-user-id"
+	// Reuse the organization failure flags for user operations in tests
+	if m.createOrgShouldFail {
+		return m.createOrgError
+	}
+	user.ID = fmt.Sprintf("mock-user-id-%d", len(m.users[organization]))
 	if m.users == nil {
 		m.users = make(map[string][]*idp.User)
 	}
@@ -74,6 +79,12 @@ func (m *mockIdpClient) CreateUser(ctx context.Context, organization string, use
 }
 
 func (m *mockIdpClient) GetUser(ctx context.Context, organization, userID string) (*idp.User, error) {
+	users := m.users[organization]
+	for _, user := range users {
+		if user.ID == userID {
+			return user, nil
+		}
+	}
 	return nil, nil
 }
 
@@ -82,7 +93,18 @@ func (m *mockIdpClient) ListUsers(ctx context.Context, organization string) ([]*
 }
 
 func (m *mockIdpClient) DeleteUser(ctx context.Context, organization, userID string) error {
-	return nil
+	// Reuse the organization failure flags for user operations in tests
+	if m.deleteOrgShouldFail {
+		return m.deleteOrgError
+	}
+	users := m.users[organization]
+	for i, user := range users {
+		if user.ID == userID {
+			m.users[organization] = append(users[:i], users[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("user %s not found in organization %s", userID, organization)
 }
 
 func (m *mockIdpClient) ListRealmRoles(ctx context.Context, organization string) ([]*idp.Role, error) {

@@ -27,6 +27,7 @@ import "osac/private/v1/network_class_type.proto";
 import "osac/private/v1/organization_type.proto";
 import "osac/private/v1/security_group_type.proto";
 import "osac/private/v1/subnet_type.proto";
+import "osac/private/v1/user_type.proto";
 import "osac/private/v1/virtual_network_type.proto";
 
 // Represents events delivered by the server.
@@ -52,6 +53,7 @@ message Event {
     VirtualNetwork virtual_network = 13;
     SecurityGroup security_group = 14;
     Organization organization = 15;
+    User user = 16;
   }
 }
 
