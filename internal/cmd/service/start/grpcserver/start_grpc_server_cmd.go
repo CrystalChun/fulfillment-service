@@ -316,6 +316,52 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 		return fmt.Errorf("failed to create transactions interceptor: %w", err)
 	}
 
+	// Create the public tenancy logic (needed for users authz interceptor):
+	c.logger.InfoContext(
+		ctx,
+		"Creating public tenancy logic",
+		slog.String("type", c.args.tenancyLogic),
+	)
+	var publicTenancyLogic auth.TenancyLogic
+	switch strings.ToLower(c.args.tenancyLogic) {
+	case "default":
+		publicTenancyLogic, err = auth.NewDefaultTenancyLogic().
+			SetLogger(c.logger).
+			Build()
+		if err != nil {
+			return fmt.Errorf("failed to create default tenancy logic: %w", err)
+		}
+	case "serviceaccount":
+		publicTenancyLogic, err = auth.NewServiceAccountTenancyLogic().
+			SetLogger(c.logger).
+			Build()
+		if err != nil {
+			return fmt.Errorf("failed to create service account tenancy logic: %w", err)
+		}
+	case "guest":
+		publicTenancyLogic, err = auth.NewGuestTenancyLogic().
+			SetLogger(c.logger).
+			Build()
+		if err != nil {
+			return fmt.Errorf("failed to create guest tenancy logic: %w", err)
+		}
+	default:
+		return fmt.Errorf(
+			"unknown tenancy logic '%s', valid values are 'default', 'serviceaccount', and 'guest'",
+			c.args.tenancyLogic,
+		)
+	}
+
+	// Create the users authorization interceptor:
+	c.logger.InfoContext(ctx, "Creating users authorization interceptor")
+	usersAuthzInterceptor, err := auth.NewUsersAuthzInterceptor().
+		SetLogger(c.logger).
+		SetTenancyLogic(publicTenancyLogic).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create users authorization interceptor: %w", err)
+	}
+
 	// Create the gRPC server:
 	c.logger.InfoContext(ctx, "Creating gRPC server")
 	grpcServer := grpc.NewServer(
@@ -324,6 +370,7 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 			metricsInterceptor.UnaryServer,
 			loggingInterceptor.UnaryServer,
 			authUnaryInterceptor,
+			usersAuthzInterceptor.UnaryServer,
 			txInterceptor.UnaryServer,
 		),
 		grpc.ChainStreamInterceptor(
@@ -366,42 +413,6 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 		Build()
 	if err != nil {
 		return fmt.Errorf("failed to create public attribution logic: %w", err)
-	}
-
-	// Create the public tenancy logic:
-	c.logger.InfoContext(
-		ctx,
-		"Creating public tenancy logic",
-		slog.String("type", c.args.tenancyLogic),
-	)
-	var publicTenancyLogic auth.TenancyLogic
-	switch strings.ToLower(c.args.tenancyLogic) {
-	case "default":
-		publicTenancyLogic, err = auth.NewDefaultTenancyLogic().
-			SetLogger(c.logger).
-			Build()
-		if err != nil {
-			return fmt.Errorf("failed to create default tenancy logic: %w", err)
-		}
-	case "serviceaccount":
-		publicTenancyLogic, err = auth.NewServiceAccountTenancyLogic().
-			SetLogger(c.logger).
-			Build()
-		if err != nil {
-			return fmt.Errorf("failed to create service account tenancy logic: %w", err)
-		}
-	case "guest":
-		publicTenancyLogic, err = auth.NewGuestTenancyLogic().
-			SetLogger(c.logger).
-			Build()
-		if err != nil {
-			return fmt.Errorf("failed to create guest tenancy logic: %w", err)
-		}
-	default:
-		return fmt.Errorf(
-			"unknown tenancy logic '%s', valid values are 'default', 'serviceaccount', and 'guest'",
-			c.args.tenancyLogic,
-		)
 	}
 
 	// Create the private attribution logic:

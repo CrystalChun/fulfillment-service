@@ -253,6 +253,19 @@ func (s *PrivateUsersServer) Create(ctx context.Context,
 
 func (s *PrivateUsersServer) Update(ctx context.Context,
 	request *privatev1.UsersUpdateRequest) (response *privatev1.UsersUpdateResponse, err error) {
+	// Get the existing user to find its organization
+	obj := request.GetObject()
+	if obj == nil {
+		err = grpcstatus.Error(grpccodes.InvalidArgument, "object is required")
+		return
+	}
+
+	var getResp *privatev1.UsersGetResponse
+	err = s.generic.Get(ctx, &privatev1.UsersGetRequest{Id: obj.GetId()}, &getResp)
+	if err != nil {
+		return
+	}
+
 	// For now, we don't sync updates to the IdP
 	// You could extend this to update user properties in IdP
 	err = s.generic.Update(ctx, request, &response)
