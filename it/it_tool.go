@@ -28,6 +28,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/onsi/gomega/ghttp"
 	"github.com/osac-project/fulfillment-service/internal/auth"
 	"github.com/osac-project/fulfillment-service/internal/network"
@@ -36,7 +37,6 @@ import (
 	"go.yaml.in/yaml/v2"
 	"google.golang.org/grpc"
 	grpccodes "google.golang.org/grpc/codes"
-	healthv1 "google.golang.org/grpc/health/grpc_health_v1"
 	grpcstatus "google.golang.org/grpc/status"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -50,6 +50,7 @@ import (
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
+	publicv1 "github.com/osac-project/fulfillment-service/internal/api/osac/public/v1"
 	"github.com/osac-project/fulfillment-service/internal/version"
 )
 
@@ -335,8 +336,8 @@ func (t *Tool) Setup(ctx context.Context) error {
 		return err
 	}
 
-	// Wait for the service to be healthy:
-	err = t.waitForHealth(ctx)
+	// Wait for the servers to be ready:
+	err = t.waitForServersReady(ctx)
 	if err != nil {
 		return err
 	}
@@ -1358,23 +1359,68 @@ func (t *Tool) makeHttpClient(tokenSource auth.TokenSource) *http.Client {
 	}
 }
 
-func (t *Tool) waitForHealth(ctx context.Context) error {
-	t.logger.DebugContext(ctx, "Waiting for service to be healthy")
-	healthClient := healthv1.NewHealthClient(t.adminConn)
-	healthRequest := &healthv1.HealthCheckRequest{}
-	var lastErr error
-	for i := 0; i < 12; i++ {
-		healthResponse, err := healthClient.Check(ctx, healthRequest)
-		if err == nil && healthResponse.Status == healthv1.HealthCheckResponse_SERVING {
-			return nil
+func (t *Tool) waitForServersReady(ctx context.Context) error {
+	err := t.waitForGrpcServerReady(ctx)
+	if err != nil {
+		return err
+	}
+	return t.waitForRestGatewayReady(ctx)
+}
+
+func (t *Tool) waitForGrpcServerReady(ctx context.Context) error {
+	t.logger.DebugContext(ctx, "Waiting for gRPC server to be ready")
+	client := publicv1.NewCapabilitiesClient(t.adminConn)
+	request := publicv1.CapabilitiesGetRequest_builder{}.Build()
+	backOff := backoff.NewExponentialBackOff()
+	backOff.InitialInterval = 1 * time.Second
+	backOff.MaxInterval = 10 * time.Second
+	backOff.MaxElapsedTime = 60 * time.Second
+	return backoff.Retry(func() error {
+		_, err := client.Get(ctx, request)
+		if err != nil {
+			t.logger.DebugContext(
+				ctx,
+				"gRPC server not ready yet, will retry",
+				slog.Any("error", err),
+			)
 		}
-		lastErr = err
-		time.Sleep(5 * time.Second)
+		return err
+	}, backoff.WithContext(backOff, ctx))
+}
+
+func (t *Tool) waitForRestGatewayReady(ctx context.Context) error {
+	t.logger.DebugContext(ctx, "Waiting for REST gateway to be ready")
+	endpoint := fmt.Sprintf("https://%s/api/fulfillment/v1/capabilities", serviceAddr)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create REST health check request: %w", err)
 	}
-	if lastErr != nil {
-		return fmt.Errorf("service not healthy after waiting: %w", lastErr)
-	}
-	return fmt.Errorf("service not healthy after waiting")
+	backOff := backoff.NewExponentialBackOff()
+	backOff.InitialInterval = 1 * time.Second
+	backOff.MaxInterval = 10 * time.Second
+	backOff.MaxElapsedTime = 60 * time.Second
+	return backoff.Retry(func() error {
+		response, err := t.adminClient.Do(request)
+		if err != nil {
+			t.logger.DebugContext(
+				ctx,
+				"REST gateway not ready yet, will retry",
+				slog.Any("error", err),
+			)
+			return err
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			err = fmt.Errorf("REST gateway returned status %d", response.StatusCode)
+			t.logger.DebugContext(
+				ctx,
+				"REST gateway not ready yet, will retry",
+				slog.Any("error", err),
+			)
+			return err
+		}
+		return nil
+	}, backoff.WithContext(backOff, ctx))
 }
 
 func (t *Tool) createHubNamespace(ctx context.Context) error {

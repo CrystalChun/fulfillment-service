@@ -56,7 +56,7 @@ spec:
         - --grpc-keep-alive=5m
         - --metrics-listener-address=0.0.0.0:8002
         ports:
-        - name: http
+        - name: api
           containerPort: 8000
           protocol: TCP
         - name: metrics

@@ -397,16 +397,24 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 		return fmt.Errorf("failed to create private tenancy logic: %w", err)
 	}
 
-	// Create the metadata server:
-	c.logger.InfoContext(ctx, "Creating metadata server")
+	// Create the capabilities servers:
+	c.logger.InfoContext(ctx, "Creating capabilities servers")
 	capabilitiesServer, err := servers.NewCapabilitiesServer().
 		SetLogger(c.logger).
 		AddAutnTrustedTokenIssuers(c.args.trustedTokenIssuers...).
 		Build()
 	if err != nil {
-		return fmt.Errorf("failed to create metadata server: %w", err)
+		return fmt.Errorf("failed to create public capabilities server: %w", err)
 	}
 	publicv1.RegisterCapabilitiesServer(grpcServer, capabilitiesServer)
+	privateCapabilitiesServer, err := servers.NewPrivateCapabilitiesServer().
+		SetLogger(c.logger).
+		AddAuthnTrustedTokenIssuers(c.args.trustedTokenIssuers...).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create private capabilities server: %w", err)
+	}
+	privatev1.RegisterCapabilitiesServer(grpcServer, privateCapabilitiesServer)
 
 	// Create the cluster templates server:
 	c.logger.InfoContext(ctx, "Creating cluster templates server")

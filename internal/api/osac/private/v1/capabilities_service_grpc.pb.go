@@ -15,9 +15,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             (unknown)
-// source: osac/public/v1/capabilities_service.proto
+// source: osac/private/v1/capabilities_service.proto
 
-package publicv1
+package privatev1
 
 import (
 	context "context"
@@ -32,7 +32,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Capabilities_Get_FullMethodName = "/osac.public.v1.Capabilities/Get"
+	Capabilities_Get_FullMethodName = "/osac.private.v1.Capabilities/Get"
 )
 
 // CapabilitiesClient is the client API for Capabilities service.
@@ -40,7 +40,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // Provides information about the capabilities of the server, such as the list of trusted token issuers for
-// authentication. This endpoint does not require authentication.
+// authentication. This is the private API equivalent and requires authentication.
 type CapabilitiesClient interface {
 	// Returns the capabilities of the server, including the authentication configuration that clients need in order to
 	// obtain access tokens.
@@ -70,7 +70,7 @@ func (c *capabilitiesClient) Get(ctx context.Context, in *CapabilitiesGetRequest
 // for forward compatibility.
 //
 // Provides information about the capabilities of the server, such as the list of trusted token issuers for
-// authentication. This endpoint does not require authentication.
+// authentication. This is the private API equivalent and requires authentication.
 type CapabilitiesServer interface {
 	// Returns the capabilities of the server, including the authentication configuration that clients need in order to
 	// obtain access tokens.
@@ -131,7 +131,7 @@ func _Capabilities_Get_Handler(srv interface{}, ctx context.Context, dec func(in
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Capabilities_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "osac.public.v1.Capabilities",
+	ServiceName: "osac.private.v1.Capabilities",
 	HandlerType: (*CapabilitiesServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -140,5 +140,5 @@ var Capabilities_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "osac/public/v1/capabilities_service.proto",
+	Metadata: "osac/private/v1/capabilities_service.proto",
 }

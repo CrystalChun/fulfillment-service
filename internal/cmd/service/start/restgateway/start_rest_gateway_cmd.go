@@ -148,7 +148,11 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 		runtime.WithMarshalerOption(runtime.MIMEWildcard, gatewayMarshaller),
 	)
 
-	// Register the service handlers:
+	// Register the public API service handlers:
+	err = publicv1.RegisterCapabilitiesHandler(ctx, gatewayMux, c.grpcClient)
+	if err != nil {
+		return err
+	}
 	err = publicv1.RegisterClusterTemplatesHandler(ctx, gatewayMux, c.grpcClient)
 	if err != nil {
 		return err
@@ -187,6 +191,10 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 	}
 
 	// Register the private API service handlers:
+	err = privatev1.RegisterCapabilitiesHandler(ctx, gatewayMux, c.grpcClient)
+	if err != nil {
+		return err
+	}
 	err = privatev1.RegisterClusterTemplatesHandler(ctx, gatewayMux, c.grpcClient)
 	if err != nil {
 		return err
