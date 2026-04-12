@@ -16,9 +16,9 @@ package computeinstance
 import (
 	"context"
 
-	publicv1 "github.com/osac-project/fulfillment-service/internal/api/osac/public/v1"
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/gomega"
+	publicv1 "github.com/osac-project/fulfillment-service/internal/api/osac/public/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
