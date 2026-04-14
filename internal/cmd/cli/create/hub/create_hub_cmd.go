@@ -97,6 +97,7 @@ func (c *runnerContext) run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC connection: %w", err)
 	}
+	defer conn.Close()
 
 	// Create the client:
 	client := privatev1.NewHubsClient(conn)
