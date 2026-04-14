@@ -136,6 +136,9 @@ func (s *PrivateNetworkClassesServer) Create(ctx context.Context,
 	}
 	nc.Status.SetState(privatev1.NetworkClassState_NETWORK_CLASS_STATE_READY)
 
+	// Clear any caller-provided ID so the DAO always generates a UUID.
+	nc.SetId("")
+
 	err = s.generic.Create(ctx, request, &response)
 	return
 }

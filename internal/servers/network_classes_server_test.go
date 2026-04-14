@@ -280,5 +280,19 @@ var _ = Describe("Network classes server", func() {
 			object := getResponse.GetObject()
 			Expect(object.GetMetadata().GetDeletionTimestamp()).ToNot(BeNil())
 		})
+
+		It("Generates UUID for id ignoring caller-provided value", func() {
+			callerProvidedId := "my-custom-id"
+			response, err := privateServer.Create(ctx, privatev1.NetworkClassesCreateRequest_builder{
+				Object: privatev1.NetworkClass_builder{
+					Id:                     callerProvidedId,
+					Title:                  "Test Network Class",
+					ImplementationStrategy: "ovn-kubernetes",
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(response.GetObject().GetId()).ToNot(Equal(callerProvidedId))
+			Expect(response.GetObject().GetId()).ToNot(BeEmpty())
+		})
 	})
 })
