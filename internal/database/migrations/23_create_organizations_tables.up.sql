@@ -26,7 +26,8 @@ create table organizations (
   tenants text[] not null default '{}',
   labels jsonb not null default '{}'::jsonb,
   annotations jsonb not null default '{}'::jsonb,
-  data jsonb not null
+  data jsonb not null,
+  version integer not null default 0
 );
 
 create table archived_organizations (
@@ -39,7 +40,8 @@ create table archived_organizations (
   tenants text[] not null default '{}',
   labels jsonb not null default '{}'::jsonb,
   annotations jsonb not null default '{}'::jsonb,
-  data jsonb not null
+  data jsonb not null,
+  version integer not null default 0
 );
 
 create index organizations_by_name on organizations (name);
