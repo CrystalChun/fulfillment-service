@@ -19,7 +19,6 @@ resources:
 - service.yaml
 - route.yaml
 - deployment.yaml
-- password-setup-job.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
