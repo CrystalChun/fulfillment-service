@@ -16,6 +16,8 @@ kind: Route
 metadata:
   name: keycloak
 spec:
+  # External hostname - override in overlays if needed
+  host: keycloak.apps.example.com
   to:
     kind: Service
     name: keycloak
