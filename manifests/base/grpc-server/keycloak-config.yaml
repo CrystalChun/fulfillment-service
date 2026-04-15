@@ -11,15 +11,12 @@
 # specific language governing permissions and limitations under the License.
 #
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-- secret.yaml
-- database
-- service
-
-images:
-- name: keycloak
-  newName: quay.io/keycloak/keycloak
-  newTag: latest
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-config
+data:
+  # Use short service name - works within the same namespace
+  url: https://keycloak:443
+  realm: osac
+  admin-realm: master

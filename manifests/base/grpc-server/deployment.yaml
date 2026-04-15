@@ -47,6 +47,21 @@ spec:
         - name: tls
           mountPath: /etc/fulfillment-grpc-server/tls
         env:
+        - name: KEYCLOAK_URL
+          valueFrom:
+            configMapKeyRef:
+              name: keycloak-config
+              key: url
+        - name: KEYCLOAK_REALM
+          valueFrom:
+            configMapKeyRef:
+              name: keycloak-config
+              key: realm
+        - name: KEYCLOAK_ADMIN_REALM
+          valueFrom:
+            configMapKeyRef:
+              name: keycloak-config
+              key: admin-realm
         - name: KEYCLOAK_USERNAME
           valueFrom:
             secretKeyRef:
@@ -73,14 +88,14 @@ spec:
         - --grpc-listener-address=0.0.0.0:8000
         - --grpc-listener-tls-crt=/etc/fulfillment-grpc-server/tls/tls.crt
         - --grpc-listener-tls-key=/etc/fulfillment-grpc-server/tls/tls.key
-        - --grpc-authn-trusted-token-issuers=https://keycloak.keycloak.svc.cluster.local:443/realms/osac
+        - --grpc-authn-trusted-token-issuers=$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)
         - --grpc-authn-type=external
         - --grpc-authn-external-address=authorino-authorino-authorization:50051
         - --tenancy-logic=default
-        - --keycloak-url=https://keycloak.keycloak.svc.cluster.local:443
+        - --keycloak-url=$(KEYCLOAK_URL)
         - --keycloak-username=$(KEYCLOAK_USERNAME)
         - --keycloak-password=$(KEYCLOAK_PASSWORD)
-        - --keycloak-realm=master
+        - --keycloak-realm=$(KEYCLOAK_ADMIN_REALM)
         - --metrics-listener-address=0.0.0.0:8002
         ports:
         - name: grpc

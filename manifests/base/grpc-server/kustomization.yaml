@@ -23,4 +23,4 @@ resources:
 - certificate.yaml
 - deployment.yaml
 - service.yaml
-- keycloak-secret.yaml
+- keycloak-config.yaml

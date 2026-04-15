@@ -87,7 +87,7 @@ spec:
         - name: KC_HTTPS_CERTIFICATE_KEY_FILE
           value: "/secrets/tls/tls.key"
         - name: KC_HOSTNAME
-          value: "keycloak.keycloak.svc.cluster.local"
+          value: "keycloak"
         - name: KC_DB
           value: "postgres"
         - name: KC_DB_URL
