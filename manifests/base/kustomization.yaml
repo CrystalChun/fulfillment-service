@@ -21,7 +21,6 @@ labels:
 resources:
 - namespace.yaml
 - database
-- keycloak
 - authorino
 - grpc-server
 - ingress-proxy

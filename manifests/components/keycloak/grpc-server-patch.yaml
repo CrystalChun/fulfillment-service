@@ -1,0 +1,54 @@
+#
+# Copyright (c) 2025 Red Hat Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+# the License. You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations under the License.
+#
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fulfillment-grpc-server
+spec:
+  template:
+    spec:
+      containers:
+      - name: grpc-server
+        env:
+        - name: KEYCLOAK_URL
+          valueFrom:
+            configMapKeyRef:
+              name: keycloak-config
+              key: url
+        - name: KEYCLOAK_REALM
+          valueFrom:
+            configMapKeyRef:
+              name: keycloak-config
+              key: realm
+        - name: KEYCLOAK_ADMIN_REALM
+          valueFrom:
+            configMapKeyRef:
+              name: keycloak-config
+              key: admin-realm
+        - name: KEYCLOAK_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: keycloak-admin
+              key: username
+        - name: KEYCLOAK_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: keycloak-admin
+              key: password
+        args:
+        - --keycloak-url=$(KEYCLOAK_URL)
+        - --keycloak-username=$(KEYCLOAK_USERNAME)
+        - --keycloak-password=$(KEYCLOAK_PASSWORD)
+        - --keycloak-realm=$(KEYCLOAK_ADMIN_REALM)
+        - --grpc-authn-trusted-token-issuers=$(KEYCLOAK_URL)/realms/$(KEYCLOAK_REALM)
