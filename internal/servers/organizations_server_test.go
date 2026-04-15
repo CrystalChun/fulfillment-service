@@ -32,7 +32,7 @@ var _ = Describe("Organizations Server (Public)", func() {
 		ctx          context.Context
 		tx           database.Tx
 		orgManager   *idp.OrganizationManager
-		idpClient    *mockIdpClient
+		idpClient    *mockClient
 		publicServer *OrganizationsServer
 	)
 
@@ -70,7 +70,7 @@ var _ = Describe("Organizations Server (Public)", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Create mock IdP client:
-		idpClient = &mockIdpClient{
+		idpClient = &mockClient{
 			organizations: make(map[string]*idp.Organization),
 		}
 
