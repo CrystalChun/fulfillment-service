@@ -11,32 +11,20 @@
 # specific language governing permissions and limitations under the License.
 #
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-labels:
-- includeSelectors: true
-  pairs:
-    app: fulfillment-service
-
-resources:
-- namespace.yaml
-- database
-- keycloak
-- authorino
-- grpc-server
-- ingress-proxy
-- rest-gateway
-- client
-- admin
-- controller
-
-images:
-- name: envoy
-  newName: docker.io/envoyproxy/envoy
-  newTag: v1.37.1
-- name: fulfillment-service
-  newName: ghcr.io/osac-project/fulfillment-service
-  newTag: main
-- name: postgres
-  newName: quay.io/sclorg/postgresql-15-c9s
-  newTag: latest
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: keycloak-database-client
+spec:
+  issuerRef:
+    kind: ClusterIssuer
+    name: default-ca
+  usages:
+  - client auth
+  commonName: keycloak
+  secretName: keycloak-database-client-cert
+  privateKey:
+    encoding: PKCS8
+    rotationPolicy: Always
+  additionalOutputFormats:
+  - type: DER
