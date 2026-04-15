@@ -223,3 +223,148 @@ Deploy the application:
 ```shell
 $ kubectl apply -k manifests/overlays/kind
 ```
+
+## Manifest Structure
+
+The manifests are organized using Kustomize with the following structure:
+
+```
+manifests/
+├── base/                    # Base deployment (core services, no Keycloak)
+│   ├── database/            # PostgreSQL database
+│   ├── authorino/           # Authorino authorization service
+│   ├── grpc-server/         # gRPC server deployment
+│   ├── rest-gateway/        # REST gateway
+│   ├── ingress-proxy/       # Envoy ingress proxy
+│   ├── controller/          # Kubernetes controller
+│   ├── client/              # Client deployment
+│   └── admin/               # Admin deployment
+├── components/              # Optional components
+│   └── keycloak/            # Keycloak IdP (optional)
+└── overlays/                # Environment-specific overlays
+    ├── kind/                # Kind cluster (includes Keycloak)
+    └── openshift/           # OpenShift (includes Keycloak)
+```
+
+## Optional Keycloak Component
+
+Keycloak is deployed as an optional Kustomize component. The base deployment **does not include Keycloak**, allowing the service to run without an identity provider. This is suitable for development or testing scenarios that don't require the Organizations API.
+
+When the Keycloak component is included, it:
+- Deploys Keycloak service with PostgreSQL backend
+- Configures the gRPC server with Keycloak connection parameters
+- Enables the Organizations API (which requires Keycloak)
+
+### Deploying Without Keycloak
+
+Use the base manifests directly:
+
+```shell
+$ kubectl apply -k manifests/base
+```
+
+This deploys 4 components:
+- `fulfillment-controller`
+- `fulfillment-grpc-server`
+- `fulfillment-ingress-proxy`
+- `fulfillment-rest-gateway`
+
+### Deploying With Keycloak
+
+The Kind and OpenShift overlays include the Keycloak component by default:
+
+```shell
+# Kind (includes Keycloak)
+$ kubectl apply -k manifests/overlays/kind
+
+# OpenShift (includes Keycloak)
+$ oc apply -k manifests/overlays/openshift
+```
+
+This deploys 5 components (the 4 above plus `keycloak-service`).
+
+### Creating a Custom Overlay
+
+To create your own overlay with Keycloak:
+
+```yaml
+# my-overlay/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: my-namespace
+
+components:
+- ../../components/keycloak  # Include Keycloak
+
+resources:
+- ../../base
+```
+
+To create an overlay without Keycloak, omit the `components` section:
+
+```yaml
+# my-overlay/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: my-namespace
+
+resources:
+- ../../base
+```
+
+### How the Keycloak Component Works
+
+The Keycloak component (`manifests/components/keycloak/`) uses Kustomize's component feature to optionally extend the base deployment. It includes:
+
+1. **Resources**: References `../../base/keycloak` which contains the Keycloak deployment and PostgreSQL database
+2. **ConfigMap** (`keycloak-config.yaml`): Provides Keycloak URL, realm, and admin realm configuration
+3. **Patch** (`grpc-server-patch.yaml`): Adds environment variables and command-line flags to the gRPC server:
+   - `KEYCLOAK_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_ADMIN_REALM`
+   - `KEYCLOAK_USERNAME`, `KEYCLOAK_PASSWORD` (from Secret)
+   - `--keycloak-url`, `--keycloak-username`, `--keycloak-password`, `--keycloak-realm`
+   - `--grpc-authn-trusted-token-issuers`
+
+When the component is not included, the gRPC server starts without these parameters and the Organizations API is not registered.
+
+### Keycloak Configuration
+
+Keycloak configuration is managed via:
+
+- **ConfigMap** `keycloak-config`:
+  - `url`: Keycloak service URL (default: `https://keycloak:443`)
+  - `realm`: Application realm (default: `osac`)
+  - `admin-realm`: Admin realm (default: `master`)
+
+- **Secret** `keycloak-admin`:
+  - `username`: Admin username (default: `admin`)
+  - `password`: Admin password (default: `admin`)
+
+To customize these values, create patches in your overlay:
+
+```yaml
+# my-overlay/keycloak-secret-patch.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-admin
+type: Opaque
+stringData:
+  username: myadmin
+  password: mypassword
+```
+
+Then reference the patch in your kustomization:
+
+```yaml
+# my-overlay/kustomization.yaml
+components:
+- ../../components/keycloak
+
+resources:
+- ../../base
+
+patches:
+- path: keycloak-secret-patch.yaml
+```
