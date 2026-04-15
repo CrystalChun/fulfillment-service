@@ -11,15 +11,12 @@
 # specific language governing permissions and limitations under the License.
 #
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-labels:
-- includeSelectors: true
-  pairs:
-    component: grpc-server
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
 
 resources:
-- authconfig.yaml
-- certificate.yaml
-- deployment.yaml
-- service.yaml
+- ../../base/keycloak
+- keycloak-config.yaml
+
+patches:
+- path: grpc-server-patch.yaml
