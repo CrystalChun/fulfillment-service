@@ -46,6 +46,17 @@ spec:
           mountPath: /secrets/cert
         - name: tls
           mountPath: /etc/fulfillment-grpc-server/tls
+        env:
+        - name: KEYCLOAK_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: keycloak-admin
+              key: username
+        - name: KEYCLOAK_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: keycloak-admin
+              key: password
         command:
         - /usr/local/bin/fulfillment-service
         - start
@@ -67,8 +78,8 @@ spec:
         - --grpc-authn-external-address=authorino-authorino-authorization:50051
         - --tenancy-logic=default
         - --keycloak-url=https://keycloak.keycloak.svc.cluster.local:443
-        - --keycloak-username=admin
-        - --keycloak-password=admin
+        - --keycloak-username=$(KEYCLOAK_USERNAME)
+        - --keycloak-password=$(KEYCLOAK_PASSWORD)
         - --keycloak-realm=master
         - --metrics-listener-address=0.0.0.0:8002
         ports:
