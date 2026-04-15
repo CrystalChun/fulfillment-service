@@ -895,13 +895,7 @@ var file_osac_private_v1_event_type_proto_goTypes = []any{
 	(*VirtualNetwork)(nil),          // 10: osac.private.v1.VirtualNetwork
 	(*SecurityGroup)(nil),           // 11: osac.private.v1.SecurityGroup
 	(*Lease)(nil),                   // 12: osac.private.v1.Lease
-	(*Host)(nil),                    // 8: osac.private.v1.Host
-	(*HostPool)(nil),                // 9: osac.private.v1.HostPool
-	(*NetworkClass)(nil),            // 10: osac.private.v1.NetworkClass
-	(*Subnet)(nil),                  // 11: osac.private.v1.Subnet
-	(*VirtualNetwork)(nil),          // 12: osac.private.v1.VirtualNetwork
-	(*SecurityGroup)(nil),           // 13: osac.private.v1.SecurityGroup
-	(*Organization)(nil),            // 14: osac.private.v1.Organization
+	(*Organization)(nil),            // 13: osac.private.v1.Organization
 }
 var file_osac_private_v1_event_type_proto_depIdxs = []int32{
 	0,  // 0: osac.private.v1.Event.type:type_name -> osac.private.v1.EventType
@@ -921,18 +915,12 @@ var file_osac_private_v1_event_type_proto_depIdxs = []int32{
 	12, // [12:12] is the sub-list for extension type_name
 	12, // [12:12] is the sub-list for extension extendee
 	0,  // [0:12] is the sub-list for field type_name
-	8,  // 7: osac.private.v1.Event.host:type_name -> osac.private.v1.Host
-	9,  // 8: osac.private.v1.Event.host_pool:type_name -> osac.private.v1.HostPool
-	10, // 9: osac.private.v1.Event.network_class:type_name -> osac.private.v1.NetworkClass
-	11, // 10: osac.private.v1.Event.subnet:type_name -> osac.private.v1.Subnet
-	12, // 11: osac.private.v1.Event.virtual_network:type_name -> osac.private.v1.VirtualNetwork
-	13, // 12: osac.private.v1.Event.security_group:type_name -> osac.private.v1.SecurityGroup
-	14, // 13: osac.private.v1.Event.organization:type_name -> osac.private.v1.Organization
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	13, // 13: osac.private.v1.Event.organization:type_name -> osac.private.v1.Organization
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_osac_private_v1_event_type_proto_init() }
