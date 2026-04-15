@@ -159,7 +159,6 @@ func (s *PrivateOrganizationsServer) Create(ctx context.Context,
 	adminEmail := annotations[AnnotationAdminEmail]
 	adminUsername := annotations[AnnotationAdminUsername]
 	adminPassword := annotations[AnnotationAdminPassword]
-	assignRealmMgmt := annotations[AnnotationAssignRealmManagement] == "true"
 
 	// Validate admin credentials
 	if adminEmail == "" {
@@ -184,15 +183,14 @@ func (s *PrivateOrganizationsServer) Create(ctx context.Context,
 	)
 
 	config := &idp.OrganizationConfig{
-		Name:                       orgName,
-		DisplayName:                orgName, // Use name as display name
-		AdminEmail:                 adminEmail,
-		AdminUsername:              adminUsername,
-		AdminPassword:              adminPassword,
-		AssignRealmManagementRoles: assignRealmMgmt,
+		Name:               orgName,
+		DisplayName:        orgName, // Use name as display name
+		BreakGlassUsername: adminUsername,
+		BreakGlassEmail:    adminEmail,
+		BreakGlassPassword: adminPassword,
 	}
 
-	err = s.orgManager.CreateOrganizationRealm(ctx, config)
+	breakGlassCredentials, err := s.orgManager.CreateOrganization(ctx, config)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to create organization in IdP",
 			slog.String("organization", orgName),
@@ -205,6 +203,8 @@ func (s *PrivateOrganizationsServer) Create(ctx context.Context,
 
 	s.logger.InfoContext(ctx, "Organization created successfully in IdP",
 		slog.String("organization", orgName),
+		slog.String("break-glass-username", breakGlassCredentials.Username),
+		slog.String("break-glass-email", breakGlassCredentials.Email),
 	)
 
 	// Create organization in the database

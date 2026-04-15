@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,27 +29,28 @@ import (
 )
 
 // mockIdpClient is a mock implementation of idp.Client for testing
-type mockIdpClient struct {
-	organizations         map[string]*idp.Organization
-	users                 map[string][]*idp.User
-	createOrgError        error
-	deleteOrgError        error
-	createOrgShouldFail   bool
-	deleteOrgShouldFail   bool
-	createOrgFailAfterN   int
-	createOrgCallCount    int
+type mockClient struct {
+	organizations       map[string]*idp.Organization
+	users               map[string][]*idp.User
+	createOrgError      error
+	deleteOrgError      error
+	createOrgShouldFail bool
+	deleteOrgShouldFail bool
+	createOrgFailAfterN int
+	createOrgCallCount  int
 }
 
-func (m *mockIdpClient) CreateOrganization(ctx context.Context, org *idp.Organization) error {
+func (m *mockClient) CreateOrganization(ctx context.Context, org *idp.Organization) (*idp.Organization, error) {
+	org.ID = "mock-org-id"
 	m.createOrgCallCount++
 	if m.createOrgShouldFail || (m.createOrgFailAfterN > 0 && m.createOrgCallCount >= m.createOrgFailAfterN) {
-		return m.createOrgError
+		return nil, m.createOrgError
 	}
 	m.organizations[org.Name] = org
-	return nil
+	return org, nil
 }
 
-func (m *mockIdpClient) GetOrganization(ctx context.Context, name string) (*idp.Organization, error) {
+func (m *mockClient) GetOrganization(ctx context.Context, name string) (*idp.Organization, error) {
 	org, ok := m.organizations[name]
 	if !ok {
 		return nil, nil
@@ -56,7 +58,7 @@ func (m *mockIdpClient) GetOrganization(ctx context.Context, name string) (*idp.
 	return org, nil
 }
 
-func (m *mockIdpClient) DeleteOrganization(ctx context.Context, name string) error {
+func (m *mockClient) DeleteOrganization(ctx context.Context, name string) error {
 	if m.deleteOrgShouldFail {
 		return m.deleteOrgError
 	}
@@ -64,60 +66,68 @@ func (m *mockIdpClient) DeleteOrganization(ctx context.Context, name string) err
 	return nil
 }
 
-func (m *mockIdpClient) CreateUser(ctx context.Context, organization string, user *idp.User) error {
-	user.ID = "mock-user-id"
+func (m *mockClient) CreateUser(ctx context.Context, organization string, user *idp.User) (*idp.User, error) {
+	user.ID = uuid.New().String()
 	if m.users == nil {
 		m.users = make(map[string][]*idp.User)
 	}
 	m.users[organization] = append(m.users[organization], user)
-	return nil
+	return user, nil
 }
 
-func (m *mockIdpClient) GetUser(ctx context.Context, organization, userID string) (*idp.User, error) {
+func (m *mockClient) GetUser(ctx context.Context, organization, userID string) (*idp.User, error) {
 	return nil, nil
 }
 
-func (m *mockIdpClient) ListUsers(ctx context.Context, organization string) ([]*idp.User, error) {
+func (m *mockClient) ListUsers(ctx context.Context, organization string) ([]*idp.User, error) {
 	return m.users[organization], nil
 }
 
-func (m *mockIdpClient) DeleteUser(ctx context.Context, organization, userID string) error {
+func (m *mockClient) DeleteUser(ctx context.Context, organization, userID string) error {
 	return nil
 }
 
-func (m *mockIdpClient) ListRealmRoles(ctx context.Context, organization string) ([]*idp.Role, error) {
+func (m *mockClient) ListOrganizationRoles(ctx context.Context, organization string) ([]*idp.Role, error) {
 	return nil, nil
 }
 
-func (m *mockIdpClient) ListClientRoles(ctx context.Context, organization, clientID string) ([]*idp.Role, error) {
+func (m *mockClient) ListClientRoles(ctx context.Context, organization, clientID string) ([]*idp.Role, error) {
 	return []*idp.Role{
-		{ID: "1", Name: "manage-realm", ApplicationRole: true},
-		{ID: "2", Name: "manage-users", ApplicationRole: true},
-		{ID: "3", Name: "manage-clients", ApplicationRole: true},
+		{ID: "1", Name: "manage-realm", ClientRole: true},
+		{ID: "2", Name: "manage-users", ClientRole: true},
+		{ID: "3", Name: "manage-clients", ClientRole: true},
 	}, nil
 }
 
-func (m *mockIdpClient) AssignRealmRolesToUser(ctx context.Context, organization, userID string, roles []*idp.Role) error {
+func (m *mockClient) AssignOrganizationRolesToUser(ctx context.Context, organization, userID string, roles []*idp.Role) error {
 	return nil
 }
 
-func (m *mockIdpClient) AssignClientRolesToUser(ctx context.Context, organization, userID, clientID string, roles []*idp.Role) error {
+func (m *mockClient) AssignOrganizationAdminPermissions(ctx context.Context, organization, userID string) error {
 	return nil
 }
 
-func (m *mockIdpClient) RemoveRealmRolesFromUser(ctx context.Context, organization, userID string, roles []*idp.Role) error {
+func (m *mockClient) AssignIdpManagerPermissions(ctx context.Context, organization, userID string) error {
 	return nil
 }
 
-func (m *mockIdpClient) RemoveClientRolesFromUser(ctx context.Context, organization, userID, clientID string, roles []*idp.Role) error {
+func (m *mockClient) AssignClientRolesToUser(ctx context.Context, organization, userID, clientID string, roles []*idp.Role) error {
 	return nil
 }
 
-func (m *mockIdpClient) GetUserRealmRoles(ctx context.Context, organization, userID string) ([]*idp.Role, error) {
+func (m *mockClient) RemoveOrganizationRolesFromUser(ctx context.Context, organization, userID string, roles []*idp.Role) error {
+	return nil
+}
+
+func (m *mockClient) RemoveClientRolesFromUser(ctx context.Context, organization, userID, clientID string, roles []*idp.Role) error {
+	return nil
+}
+
+func (m *mockClient) GetUserOrganizationRoles(ctx context.Context, organization, userID string) ([]*idp.Role, error) {
 	return nil, nil
 }
 
-func (m *mockIdpClient) GetUserClientRoles(ctx context.Context, organization, userID, clientID string) ([]*idp.Role, error) {
+func (m *mockClient) GetUserClientRoles(ctx context.Context, organization, userID, clientID string) ([]*idp.Role, error) {
 	return nil, nil
 }
 
@@ -126,7 +136,7 @@ var _ = Describe("Organizations Server", func() {
 		ctx           context.Context
 		tx            database.Tx
 		orgManager    *idp.OrganizationManager
-		idpClient     *mockIdpClient
+		idpClient     *mockClient
 		privateServer *PrivateOrganizationsServer
 	)
 
@@ -164,7 +174,7 @@ var _ = Describe("Organizations Server", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Create mock IdP client:
-		idpClient = &mockIdpClient{
+		idpClient = &mockClient{
 			organizations: make(map[string]*idp.Organization),
 		}
 
