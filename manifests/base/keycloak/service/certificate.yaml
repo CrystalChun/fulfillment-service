@@ -21,7 +21,8 @@ spec:
     name: default-ca
   dnsNames:
   - keycloak
-  - keycloak.keycloak.svc.cluster.local
+  - keycloak.osac
+  - keycloak.osac.svc.cluster.local
   secretName: keycloak-tls-cert
   privateKey:
     rotationPolicy: Always
