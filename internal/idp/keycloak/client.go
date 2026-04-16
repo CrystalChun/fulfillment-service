@@ -294,6 +294,23 @@ func (c *Client) ListUsers(ctx context.Context, organizationName string) ([]*idp
 	return allUsers, nil
 }
 
+// UpdateUser updates an existing user's properties.
+func (c *Client) UpdateUser(ctx context.Context, organizationName string, user *idp.User) (*idp.User, error) {
+	kcUser := toKeycloakUser(user)
+
+	// For update, we need to remove credentials as they're set via separate endpoint
+	kcUser.Credentials = nil
+
+	response, err := c.httpClient.DoRequest(ctx, http.MethodPut, fmt.Sprintf("/admin/realms/%s/users/%s", url.PathEscape(organizationName), url.PathEscape(user.ID)), kcUser)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update user: %w", err)
+	}
+	defer response.Body.Close()
+
+	// Fetch the updated user to return
+	return c.GetUser(ctx, organizationName, user.ID)
+}
+
 // DeleteUser deletes a user by ID.
 func (c *Client) DeleteUser(ctx context.Context, organizationName, userID string) error {
 	response, err := c.httpClient.DoRequest(ctx, http.MethodDelete, fmt.Sprintf("/admin/realms/%s/users/%s", url.PathEscape(organizationName), url.PathEscape(userID)), nil)
@@ -303,6 +320,53 @@ func (c *Client) DeleteUser(ctx context.Context, organizationName, userID string
 			return fmt.Errorf("user %q not found in organization %q: %w", userID, organizationName, err)
 		}
 		return fmt.Errorf("failed to delete user: %w", err)
+	}
+	defer response.Body.Close()
+	return nil
+}
+
+// EnableUser enables a user account.
+func (c *Client) EnableUser(ctx context.Context, organizationName, userID string) error {
+	enabled := true
+	update := &keycloakUser{
+		Enabled: &enabled,
+	}
+
+	response, err := c.httpClient.DoRequest(ctx, http.MethodPut, fmt.Sprintf("/admin/realms/%s/users/%s", url.PathEscape(organizationName), url.PathEscape(userID)), update)
+	if err != nil {
+		return fmt.Errorf("failed to enable user: %w", err)
+	}
+	defer response.Body.Close()
+	return nil
+}
+
+// DisableUser disables a user account.
+func (c *Client) DisableUser(ctx context.Context, organizationName, userID string) error {
+	enabled := false
+	update := &keycloakUser{
+		Enabled: &enabled,
+	}
+
+	response, err := c.httpClient.DoRequest(ctx, http.MethodPut, fmt.Sprintf("/admin/realms/%s/users/%s", url.PathEscape(organizationName), url.PathEscape(userID)), update)
+	if err != nil {
+		return fmt.Errorf("failed to disable user: %w", err)
+	}
+	defer response.Body.Close()
+	return nil
+}
+
+// ResetUserPassword sets a new password for a user.
+// If temporary is true, the user will be required to change their password on next login.
+func (c *Client) ResetUserPassword(ctx context.Context, organizationName, userID, newPassword string, temporary bool) error {
+	credential := &keycloakCred{
+		Type:      "password",
+		Value:     newPassword,
+		Temporary: &temporary,
+	}
+
+	response, err := c.httpClient.DoRequest(ctx, http.MethodPut, fmt.Sprintf("/admin/realms/%s/users/%s/reset-password", url.PathEscape(organizationName), url.PathEscape(userID)), credential)
+	if err != nil {
+		return fmt.Errorf("failed to reset user password: %w", err)
 	}
 	defer response.Body.Close()
 	return nil

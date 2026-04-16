@@ -28,8 +28,12 @@ type Client interface {
 	// User operations
 	CreateUser(ctx context.Context, organizationName string, user *User) (*User, error)
 	GetUser(ctx context.Context, organizationName, userID string) (*User, error)
+	UpdateUser(ctx context.Context, organizationName string, user *User) (*User, error)
 	ListUsers(ctx context.Context, organizationName string) ([]*User, error)
 	DeleteUser(ctx context.Context, organizationName, userID string) error
+	EnableUser(ctx context.Context, organizationName, userID string) error
+	DisableUser(ctx context.Context, organizationName, userID string) error
+	ResetUserPassword(ctx context.Context, organizationName, userID, newPassword string, temporary bool) error
 
 	// Role operations
 	// Roles can be at the organization level or client level
