@@ -231,9 +231,21 @@ func (s *OrganizationsServer) Create(ctx context.Context,
 		return nil, err
 	}
 
+	// Map break-glass credentials from private to public response
+	var publicBreakGlass *publicv1.BreakGlassCredentials
+	if privateBreakGlass := privateResponse.GetBreakGlassCredentials(); privateBreakGlass != nil {
+		publicBreakGlass = &publicv1.BreakGlassCredentials{
+			UserId:            privateBreakGlass.GetUserId(),
+			Username:          privateBreakGlass.GetUsername(),
+			Email:             privateBreakGlass.GetEmail(),
+			TemporaryPassword: privateBreakGlass.GetTemporaryPassword(),
+		}
+	}
+
 	// Build and return the response:
 	response = &publicv1.OrganizationsCreateResponse{}
 	response.SetObject(publicObject)
+	response.SetBreakGlassCredentials(publicBreakGlass)
 	return
 }
 

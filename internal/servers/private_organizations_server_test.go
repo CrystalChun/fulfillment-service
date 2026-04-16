@@ -220,30 +220,79 @@ var _ = Describe("Organizations Server", func() {
 		Expect(response.Object.Id).ToNot(BeEmpty())
 		Expect(response.Object.Metadata.Name).To(Equal("test-org"))
 
-		// Verify password annotation was removed from response:
+		// Verify all credential annotations were removed from response:
 		Expect(response.Object.Metadata.Annotations).ToNot(HaveKey(AnnotationAdminPassword))
+		Expect(response.Object.Metadata.Annotations).ToNot(HaveKey(AnnotationAdminEmail))
+		Expect(response.Object.Metadata.Annotations).ToNot(HaveKey(AnnotationAdminUsername))
+
+		// Verify break-glass credentials are returned in the response:
+		Expect(response.BreakGlassCredentials).ToNot(BeNil())
+		Expect(response.BreakGlassCredentials.UserId).ToNot(BeEmpty())
+		Expect(response.BreakGlassCredentials.Username).To(Equal("admin"))
+		Expect(response.BreakGlassCredentials.Email).To(Equal("admin@test-org.com"))
+		Expect(response.BreakGlassCredentials.TemporaryPassword).To(Equal("password123"))
 
 		// Verify organization was created in IdP:
 		Expect(idpClient.organizations).To(HaveKey("test-org"))
 		Expect(idpClient.organizations["test-org"].Name).To(Equal("test-org"))
 	})
 
-	It("Fails to create organization without admin email", func() {
+	It("Does not persist credentials in the database", func() {
+		// Create request with credentials in annotations:
 		request := &privatev1.OrganizationsCreateRequest{
 			Object: &privatev1.Organization{
 				Metadata: &privatev1.Metadata{
-					Name: "test-org",
+					Name: "test-org-secure",
 					Annotations: map[string]string{
+						AnnotationAdminEmail:    "admin@test-org-secure.com",
 						AnnotationAdminUsername: "admin",
 						AnnotationAdminPassword: "password123",
+					},
+				},
+				Description: "Test Organization for Security",
+			},
+		}
+
+		// Create organization:
+		createResp, err := privateServer.Create(ctx, request)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Retrieve the organization from the database:
+		getResp, err := privateServer.Get(ctx, &privatev1.OrganizationsGetRequest{
+			Id: createResp.Object.Id,
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		// Verify credentials are NOT in the stored annotations:
+		Expect(getResp.Object.Metadata.Annotations).ToNot(HaveKey(AnnotationAdminPassword))
+		Expect(getResp.Object.Metadata.Annotations).ToNot(HaveKey(AnnotationAdminEmail))
+		Expect(getResp.Object.Metadata.Annotations).ToNot(HaveKey(AnnotationAdminUsername))
+
+		// Verify credentials were returned in the create response:
+		Expect(createResp.BreakGlassCredentials).ToNot(BeNil())
+		Expect(createResp.BreakGlassCredentials.TemporaryPassword).To(Equal("password123"))
+	})
+
+	It("Supports partial credential overrides", func() {
+		// Provide only custom email, other fields auto-generated:
+		request := &privatev1.OrganizationsCreateRequest{
+			Object: &privatev1.Organization{
+				Metadata: &privatev1.Metadata{
+					Name: "partial-override-org",
+					Annotations: map[string]string{
+						AnnotationAdminEmail: "custom@example.com",
 					},
 				},
 			},
 		}
 
-		_, err := privateServer.Create(ctx, request)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring(AnnotationAdminEmail))
+		response, err := privateServer.Create(ctx, request)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Custom email used, but username and password auto-generated:
+		Expect(response.BreakGlassCredentials.Email).To(Equal("custom@example.com"))
+		Expect(response.BreakGlassCredentials.Username).To(Equal("partial-override-org-osac-break-glass"))
+		Expect(response.BreakGlassCredentials.TemporaryPassword).To(HaveLen(24))
 	})
 
 	It("Lists organizations", func() {
@@ -327,40 +376,55 @@ var _ = Describe("Organizations Server", func() {
 		Expect(idpClient.organizations).ToNot(HaveKey("test-org"))
 	})
 
-	It("Fails to create organization without admin username", func() {
+	It("Auto-generates credentials when annotations are not provided", func() {
+		// Create organization without any credential annotations:
 		request := &privatev1.OrganizationsCreateRequest{
 			Object: &privatev1.Organization{
 				Metadata: &privatev1.Metadata{
-					Name: "test-org",
-					Annotations: map[string]string{
-						AnnotationAdminEmail:    "admin@test-org.com",
-						AnnotationAdminPassword: "password123",
-					},
+					Name: "auto-creds-org",
 				},
+				Description: "Organization with auto-generated credentials",
 			},
 		}
 
-		_, err := privateServer.Create(ctx, request)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring(AnnotationAdminUsername))
+		// Create organization:
+		response, err := privateServer.Create(ctx, request)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(response).ToNot(BeNil())
+
+		// Verify auto-generated credentials are returned:
+		Expect(response.BreakGlassCredentials).ToNot(BeNil())
+		Expect(response.BreakGlassCredentials.UserId).ToNot(BeEmpty())
+		Expect(response.BreakGlassCredentials.Username).To(Equal("auto-creds-org-osac-break-glass"))
+		Expect(response.BreakGlassCredentials.Email).To(Equal("break-glass@auto-creds-org.osac.local"))
+		Expect(response.BreakGlassCredentials.TemporaryPassword).ToNot(BeEmpty())
+		Expect(response.BreakGlassCredentials.TemporaryPassword).To(HaveLen(24))
+		Expect(response.BreakGlassCredentials.TemporaryPassword).To(MatchRegexp(`^[A-Za-z0-9!@#$%]{24}$`))
 	})
 
-	It("Fails to create organization without admin password", func() {
+	It("Uses provided credentials when annotations are present", func() {
+		// Create organization with custom credentials:
 		request := &privatev1.OrganizationsCreateRequest{
 			Object: &privatev1.Organization{
 				Metadata: &privatev1.Metadata{
-					Name: "test-org",
+					Name: "custom-creds-org",
 					Annotations: map[string]string{
-						AnnotationAdminEmail:    "admin@test-org.com",
-						AnnotationAdminUsername: "admin",
+						AnnotationAdminEmail:    "custom-admin@example.com",
+						AnnotationAdminUsername: "custom-admin",
+						AnnotationAdminPassword: "CustomP@ss123",
 					},
 				},
 			},
 		}
 
-		_, err := privateServer.Create(ctx, request)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring(AnnotationAdminPassword))
+		// Create organization:
+		response, err := privateServer.Create(ctx, request)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Verify custom credentials are used:
+		Expect(response.BreakGlassCredentials.Username).To(Equal("custom-admin"))
+		Expect(response.BreakGlassCredentials.Email).To(Equal("custom-admin@example.com"))
+		Expect(response.BreakGlassCredentials.TemporaryPassword).To(Equal("CustomP@ss123"))
 	})
 
 	It("Fails to create organization when IdP creation fails", func() {

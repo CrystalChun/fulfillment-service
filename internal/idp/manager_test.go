@@ -249,10 +249,10 @@ var _ = Describe("OrganizationManager", func() {
 			Expect(breakGlassUser.LastName).To(Equal("Break-Glass"))
 
 			// Verify credentials were returned
-			Expect(credentials.UserID).To(Equal(breakGlassUser.ID))
+			Expect(credentials.UserId).To(Equal(breakGlassUser.ID))
 			Expect(credentials.Username).To(Equal("test-org-osac-break-glass"))
 			Expect(credentials.Email).To(Equal("break-glass@test-org.osac.local"))
-			Expect(credentials.Password).To(Equal("breakglass123"))
+			Expect(credentials.TemporaryPassword).To(Equal("breakglass123"))
 
 			// Verify password is temporary
 			Expect(breakGlassUser.Credentials).To(HaveLen(1))
@@ -271,13 +271,13 @@ var _ = Describe("OrganizationManager", func() {
 			Expect(credentials).ToNot(BeNil())
 			Expect(credentials.Username).ToNot(BeEmpty())
 			Expect(credentials.Email).ToNot(BeEmpty())
-			Expect(credentials.Password).ToNot(BeEmpty())
-			Expect(credentials.UserID).ToNot(BeEmpty())
+			Expect(credentials.TemporaryPassword).ToNot(BeEmpty())
+			Expect(credentials.UserId).ToNot(BeEmpty())
 
 			// Verify break-glass user was created
 			Expect(mock.createdUsers).To(HaveLen(1))
 			breakGlassUserID := mock.createdUsers[0].ID
-			Expect(credentials.UserID).To(Equal(breakGlassUserID))
+			Expect(credentials.UserId).To(Equal(breakGlassUserID))
 
 			// Verify IdP manager roles were assigned
 			Expect(mock.userRoleAssignments).ToNot(BeNil())
@@ -323,8 +323,8 @@ var _ = Describe("OrganizationManager", func() {
 
 			Expect(credentials.Username).To(Equal("custom-break-glass"))
 			Expect(credentials.Email).To(Equal("custom@example.com"))
-			Expect(credentials.Password).To(Equal("breakglass123"))
-			Expect(credentials.UserID).To(Equal(breakGlassUser.ID))
+			Expect(credentials.TemporaryPassword).To(Equal("breakglass123"))
+			Expect(credentials.UserId).To(Equal(breakGlassUser.ID))
 		})
 
 		It("generates password when not provided", func() {
@@ -338,10 +338,10 @@ var _ = Describe("OrganizationManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(credentials.Username).To(Equal("test-org-osac-break-glass"))
 			Expect(credentials.Email).To(Equal("break-glass@test-org.osac.local"))
-			Expect(credentials.Password).ToNot(BeEmpty())
-			Expect(credentials.Password).To(HaveLen(24))
+			Expect(credentials.TemporaryPassword).ToNot(BeEmpty())
+			Expect(credentials.TemporaryPassword).To(HaveLen(24))
 			// Password should contain characters from the defined charset
-			Expect(credentials.Password).To(MatchRegexp(`^[A-Za-z0-9!@#$%]{24}$`))
+			Expect(credentials.TemporaryPassword).To(MatchRegexp(`^[A-Za-z0-9!@#$%]{24}$`))
 		})
 
 		It("rolls back organization on break-glass user creation failure", func() {

@@ -154,28 +154,15 @@ func (s *PrivateOrganizationsServer) Create(ctx context.Context,
 		return
 	}
 
-	// Extract admin credentials from annotations
+	// Extract optional admin credentials from annotations.
+	// If not provided, the IdP manager will auto-generate them:
+	// - Username: {org-name}-osac-break-glass
+	// - Email: break-glass@{org-name}.osac.local
+	// - Password: 24-character cryptographically random string
 	annotations := metadata.GetAnnotations()
 	adminEmail := annotations[AnnotationAdminEmail]
 	adminUsername := annotations[AnnotationAdminUsername]
 	adminPassword := annotations[AnnotationAdminPassword]
-
-	// Validate admin credentials
-	if adminEmail == "" {
-		err = grpcstatus.Errorf(grpccodes.InvalidArgument,
-			"annotation '%s' is required for organization creation", AnnotationAdminEmail)
-		return
-	}
-	if adminUsername == "" {
-		err = grpcstatus.Errorf(grpccodes.InvalidArgument,
-			"annotation '%s' is required for organization creation", AnnotationAdminUsername)
-		return
-	}
-	if adminPassword == "" {
-		err = grpcstatus.Errorf(grpccodes.InvalidArgument,
-			"annotation '%s' is required for organization creation", AnnotationAdminPassword)
-		return
-	}
 
 	// Create organization in the IdP first
 	s.logger.InfoContext(ctx, "Creating organization in IdP",
@@ -207,7 +194,16 @@ func (s *PrivateOrganizationsServer) Create(ctx context.Context,
 		slog.String("break-glass-email", breakGlassCredentials.Email),
 	)
 
-	// Create organization in the database
+	// Remove sensitive credentials from annotations before storing in database.
+	// This prevents passwords from being persisted in the database, logs, or backups.
+	// The credentials will be returned in the response instead.
+	if annotations != nil {
+		delete(annotations, AnnotationAdminPassword)
+		delete(annotations, AnnotationAdminEmail)
+		delete(annotations, AnnotationAdminUsername)
+	}
+
+	// Create organization in the database (now without credential annotations)
 	err = s.generic.Create(ctx, request, &response)
 	if err != nil {
 		// IdP realm was created but database insertion failed - attempt cleanup
@@ -225,10 +221,9 @@ func (s *PrivateOrganizationsServer) Create(ctx context.Context,
 		return
 	}
 
-	// Remove sensitive credentials from the response annotations
-	if response.Object != nil && response.Object.Metadata != nil && response.Object.Metadata.Annotations != nil {
-		delete(response.Object.Metadata.Annotations, AnnotationAdminPassword)
-	}
+	// Attach the break-glass credentials to the response.
+	// These are only returned on creation and must be stored securely by the caller.
+	response.BreakGlassCredentials = breakGlassCredentials
 
 	return
 }
