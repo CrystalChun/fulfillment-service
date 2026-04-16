@@ -83,7 +83,40 @@ func (m *mockClient) ListUsers(ctx context.Context, organization string) ([]*idp
 	return m.users[organization], nil
 }
 
+func (m *mockClient) UpdateUser(ctx context.Context, organization string, user *idp.User) (*idp.User, error) {
+	// Find and update user in the map
+	if users, ok := m.users[organization]; ok {
+		for i, u := range users {
+			if u.ID == user.ID {
+				m.users[organization][i] = user
+				return user, nil
+			}
+		}
+	}
+	return nil, errors.New("user not found")
+}
+
 func (m *mockClient) DeleteUser(ctx context.Context, organization, userID string) error {
+	if users, ok := m.users[organization]; ok {
+		for i, u := range users {
+			if u.ID == userID {
+				m.users[organization] = append(users[:i], users[i+1:]...)
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
+func (m *mockClient) EnableUser(ctx context.Context, organization, userID string) error {
+	return nil
+}
+
+func (m *mockClient) DisableUser(ctx context.Context, organization, userID string) error {
+	return nil
+}
+
+func (m *mockClient) ResetUserPassword(ctx context.Context, organization, userID, newPassword string, temporary bool) error {
 	return nil
 }
 
