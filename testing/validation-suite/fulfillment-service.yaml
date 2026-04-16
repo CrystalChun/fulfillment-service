@@ -1,0 +1,243 @@
+# Fulfillment Service Control Plane Validation Configuration
+#
+# This configuration validates the fulfillment-service Organizations API
+# which provides IdP management capabilities including:
+# - Organization CRUD operations
+# - Break-glass credential management
+# - Identity provider lifecycle management
+#
+# Prerequisites:
+#   1. fulfillment-service running with REST gateway (default: localhost:8001)
+#   2. PostgreSQL database configured and accessible
+#   3. (Optional) Valid JWT token for authenticated endpoints
+#
+# Environment variables:
+#   FULFILLMENT_SERVICE_URL - Base URL for REST gateway (default: http://localhost:8001)
+#   FULFILLMENT_SERVICE_TOKEN - Bearer token for authentication
+#
+# Usage:
+#   uv run isvctl test run -f fulfillment-service.yaml
+
+version: "1.0"
+
+# Template parameters that can be overridden
+defaults:
+  base_url: "http://localhost:8001"
+  api_version: "v1"
+  timeout: 120
+
+commands:
+  fulfillment_service:
+    phases: ["setup", "test", "teardown"]
+    steps:
+      # ═══════════════════════════════════════════════════════════════
+      # SETUP: API Health Check
+      # ═══════════════════════════════════════════════════════════════
+      - name: check_api_public
+        phase: setup
+        command: "python3 ./check_api.py"
+        args:
+          - "--base-url"
+          - "{{base_url}}"
+          - "--api-version"
+          - "{{api_version}}"
+        timeout: "{{timeout}}"
+        validations:
+          - type: json_field
+            field: success
+            expected: true
+            description: "Public API endpoints are reachable"
+          - type: json_field
+            field: tests.organizations_list.passed
+            expected: true
+            description: "Organizations List endpoint is accessible"
+
+      - name: check_api_private
+        phase: setup
+        command: "python3 ./check_api.py"
+        args:
+          - "--base-url"
+          - "{{base_url}}"
+          - "--api-version"
+          - "{{api_version}}"
+          - "--use-private-api"
+        timeout: "{{timeout}}"
+        validations:
+          - type: json_field
+            field: success
+            expected: true
+            description: "Private API endpoints are reachable"
+
+      # ═══════════════════════════════════════════════════════════════
+      # SETUP: Create Access Key
+      # ═══════════════════════════════════════════════════════════════
+      - name: create_access_key
+        phase: setup
+        command: "python3 ./create_access_key.py"
+        args:
+          - "--base-url"
+          - "{{base_url}}"
+          - "--organization-id"
+          - "{{organization_id}}"
+        timeout: 60
+
+      # ═══════════════════════════════════════════════════════════════
+      # TEST: Access Key Lifecycle
+      # ═══════════════════════════════════════════════════════════════
+      - name: test_access_key
+        phase: test
+        command: "python3 ./test_access_key.py"
+        args:
+          - "--access-key-id"
+          - "{{steps.create_access_key.access_key_id}}"
+          - "--secret-access-key"
+          - "{{steps.create_access_key.secret_access_key}}"
+          - "--base-url"
+          - "{{base_url}}"
+          - "--organization-id"
+          - "{{organization_id}}"
+        sensitive_args: ["--secret-access-key"]
+        timeout: 120
+
+      - name: disable_access_key
+        phase: test
+        command: "python3 ./disable_access_key.py"
+        args:
+          - "--username"
+          - "{{steps.create_access_key.username}}"
+          - "--access-key-id"
+          - "{{steps.create_access_key.access_key_id}}"
+          - "--base-url"
+          - "{{base_url}}"
+          - "--organization-id"
+          - "{{organization_id}}"
+        timeout: 60
+
+      - name: verify_key_rejected
+        phase: test
+        command: "python3 ./verify_key_rejected.py"
+        args:
+          - "--access-key-id"
+          - "{{steps.create_access_key.access_key_id}}"
+          - "--secret-access-key"
+          - "{{steps.create_access_key.secret_access_key}}"
+          - "--base-url"
+          - "{{base_url}}"
+          - "--organization-id"
+          - "{{organization_id}}"
+        sensitive_args: ["--secret-access-key"]
+        timeout: 120
+
+      # ═══════════════════════════════════════════════════════════════
+      # TEST: Organization Lifecycle (optional, if token provided)
+      # ═══════════════════════════════════════════════════════════════
+      # NOTE: These tests require authentication
+      # Uncomment and customize based on your test organization setup
+
+      # - name: create_organization
+      #   phase: test
+      #   command: "python3 ./create_organization.py"
+      #   args:
+      #     - "--base-url"
+      #     - "{{base_url}}"
+      #     - "--name"
+      #     - "test-org-{{timestamp}}"
+      #   timeout: 60
+      #   validations:
+      #     - type: json_field
+      #       field: success
+      #       expected: true
+      #       description: "Organization created successfully"
+      #     - type: json_field_exists
+      #       field: break_glass_credentials.username
+      #       description: "Break-glass credentials returned"
+      #     - type: json_field_exists
+      #       field: break_glass_credentials.temporary_password
+      #       description: "Break-glass password provided"
+
+      # - name: list_organizations
+      #   phase: test
+      #   command: "python3 ./list_organizations.py"
+      #   args:
+      #     - "--base-url"
+      #     - "{{base_url}}"
+      #   timeout: 30
+      #   validations:
+      #     - type: json_field
+      #       field: success
+      #       expected: true
+      #     - type: json_field
+      #       field: total
+      #       operator: ">="
+      #       expected: 1
+      #       description: "At least one organization exists"
+
+      # - name: get_organization
+      #   phase: test
+      #   command: "python3 ./get_organization.py"
+      #   args:
+      #     - "--base-url"
+      #     - "{{base_url}}"
+      #     - "--id"
+      #     - "{{create_organization.output.id}}"
+      #   timeout: 30
+      #   validations:
+      #     - type: json_field
+      #       field: success
+      #       expected: true
+      #     - type: json_field
+      #       field: object.metadata.name
+      #       expected: "test-org-{{timestamp}}"
+
+      # ═══════════════════════════════════════════════════════════════
+      # TEARDOWN: Cleanup
+      # ═══════════════════════════════════════════════════════════════
+      - name: delete_access_key
+        phase: teardown
+        command: "python3 ./delete_access_key.py"
+        args:
+          - "--username"
+          - "{{steps.create_access_key.username}}"
+          - "--access-key-id"
+          - "{{steps.create_access_key.access_key_id}}"
+          - "--base-url"
+          - "{{base_url}}"
+          - "--organization-id"
+          - "{{organization_id}}"
+        timeout: 60
+        continue_on_error: true
+
+# - name: delete_organization
+#   phase: teardown
+#   command: "python3 ./delete_organization.py"
+#   args:
+#     - "--base-url"
+#     - "{{base_url}}"
+#     - "--id"
+#     - "{{create_organization.output.id}}"
+#   timeout: 60
+#   continue_on_error: true
+
+# Additional metadata for reporting
+metadata:
+  name: "Fulfillment Service Control Plane Validation"
+  version: "1.0"
+  description: "Validates fulfillment-service Organizations, Users, and Access Keys APIs"
+  author: "OSAC Project"
+  tags:
+    - control-plane
+    - idp
+    - organizations
+    - users
+    - access-keys
+    - fulfillment-service
+
+# Settings that can be overridden
+tests:
+  platform: control_plane
+  cluster_name: "fulfillment-service-validation"
+  description: "Control plane: API health, access key lifecycle, user management"
+
+  settings:
+    base_url: "http://localhost:8001"
+    organization_id: ""  # Must be set via environment or command line
