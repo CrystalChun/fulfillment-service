@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Check fulfillment-service API connectivity and health.
 
-Tests the fulfillment-service Organizations API endpoints which include
-IdP management capabilities (break-glass credentials, identity provider setup).
+Tests the fulfillment-service APIs:
+- Organizations API: IdP management, break-glass credentials
+- Users API: User CRUD operations within organizations
+- Access Keys API: Programmatic API access credentials
 
 Required environment variables:
     FULFILLMENT_SERVICE_URL: Base URL for the REST gateway (default: http://localhost:8001)
@@ -15,7 +17,8 @@ Output JSON:
     "account_id": "fulfillment-service",
     "tests": {
         "organizations_list": {"passed": true, "latency_ms": 123},
-        "organizations_get": {"passed": true, "latency_ms": 89}
+        "users_list": {"passed": true, "latency_ms": 89},
+        "access_keys_list": {"passed": true, "latency_ms": 45}
     }
 }
 
@@ -95,7 +98,7 @@ def test_endpoint(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Check fulfillment-service API health (Organizations/IdP)"
+        description="Check fulfillment-service API health (Organizations/Users/Access Keys)"
     )
     parser.add_argument(
         "--base-url",
@@ -141,7 +144,7 @@ def main() -> int:
         "tests": {},
     }
 
-    # Test 1: Organizations List endpoint
+    # Test Organizations endpoints
     result["tests"]["organizations_list"] = test_endpoint(
         base_url=args.base_url,
         path=f"{api_prefix}/organizations",
@@ -149,8 +152,6 @@ def main() -> int:
         headers=headers,
     )
 
-    # Test 2: Organizations Get endpoint (with a likely non-existent ID)
-    # This tests that the endpoint is wired up correctly
     result["tests"]["organizations_get"] = test_endpoint(
         base_url=args.base_url,
         path=f"{api_prefix}/organizations/health-check-test-id",
@@ -158,14 +159,63 @@ def main() -> int:
         headers=headers,
     )
 
-    # Test 3: Check if we can reach the Create endpoint
-    # (We don't actually create, just check if endpoint responds)
     result["tests"]["organizations_create_endpoint"] = test_endpoint(
         base_url=args.base_url,
         path=f"{api_prefix}/organizations",
         method="POST",
         headers=headers,
-        json_body={},  # Empty body will likely fail validation, but proves endpoint exists
+        json_body={},  # Empty body will fail validation, but proves endpoint exists
+    )
+
+    # Test Users endpoints
+    # Use a test org ID for the path
+    test_org_id = "test-org"
+
+    result["tests"]["users_list"] = test_endpoint(
+        base_url=args.base_url,
+        path=f"{api_prefix}/organizations/{test_org_id}/users",
+        method="GET",
+        headers=headers,
+    )
+
+    result["tests"]["users_get"] = test_endpoint(
+        base_url=args.base_url,
+        path=f"{api_prefix}/organizations/{test_org_id}/users/health-check-user-id",
+        method="GET",
+        headers=headers,
+    )
+
+    result["tests"]["users_create_endpoint"] = test_endpoint(
+        base_url=args.base_url,
+        path=f"{api_prefix}/organizations/{test_org_id}/users",
+        method="POST",
+        headers=headers,
+        json_body={},
+    )
+
+    # Test Access Keys endpoints
+    test_user_id = "test-user"
+
+    result["tests"]["access_keys_list"] = test_endpoint(
+        base_url=args.base_url,
+        path=f"{api_prefix}/organizations/{test_org_id}/users/{test_user_id}/access-keys",
+        method="GET",
+        headers=headers,
+    )
+
+    result["tests"]["access_keys_get"] = test_endpoint(
+        base_url=args.base_url,
+        path=f"{api_prefix}/organizations/{test_org_id}/access-keys/health-check-key-id",
+        method="GET",
+        headers=headers,
+    )
+
+    result["tests"]["access_keys_create_endpoint"] = test_endpoint(
+        base_url=args.base_url,
+        path=f"{api_prefix}/organizations/{test_org_id}/users/{test_user_id}/access-keys",
+        method="POST",
+        headers=headers,
+        json_body={},
     )
 
     # Count passed tests
