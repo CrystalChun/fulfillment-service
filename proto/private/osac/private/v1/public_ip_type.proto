@@ -100,19 +100,13 @@ message PublicIPStatus {
   //
   // Mirrors spec.pool for convenience in status queries. Populated when the IP is allocated.
   string pool = 5 [(google.api.field_behavior) = OUTPUT_ONLY];
-
-  // Region where this public IP is located.
-  //
-  // Inherited from the parent PublicIPPool's region. Set during allocation and remains constant
-  // for the lifetime of the PublicIP.
-  string region = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 // Lifecycle states for PublicIP resources.
 //
 // State transitions follow the attachment lifecycle: UNSPECIFIED -> PENDING -> ALLOCATED ->
 // ATTACHED -> RELEASING. A PublicIP in ATTACHED state can return to ALLOCATED when detached
-// from its ComputeInstance.
+// from its ComputeInstance. FAILED is a terminal state for provisioning or release failures.
 enum PublicIPState {
   // State is unknown or has not been determined yet. Default state before initialization.
   PUBLIC_IP_STATE_UNSPECIFIED = 0;
@@ -142,4 +136,10 @@ enum PublicIPState {
   // up cluster resources. The IP address will be returned to the pool's available capacity
   // once release completes.
   PUBLIC_IP_STATE_RELEASING = 4;
+
+  // Provisioning or release failed. Check status.message for error details.
+  //
+  // This is a terminal error state. The PublicIP may require manual intervention
+  // (e.g., deleting and recreating) or a Signal RPC to retry the operation.
+  PUBLIC_IP_STATE_FAILED = 5;
 }
