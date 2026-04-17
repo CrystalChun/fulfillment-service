@@ -85,34 +85,34 @@ message PublicIPPoolSpec {
 // updates them based on reconciliation of the spec and feedback from the cluster controller.
 message PublicIPPoolStatus {
   // Current lifecycle state of the public IP pool.
-  PublicIPPoolState state = 1;
+  PublicIPPoolState state = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Human-readable message providing additional details about the current state.
   //
   // For PENDING state, may contain progress information like "Waiting for MetalLB configuration".
   // For FAILED state, contains error details. For READY state, typically empty.
-  optional string message = 2;
+  optional string message = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Identifier of the hub cluster that this pool is deployed to.
   //
   // Set by the fulfillment-service controller when reconciling the pool to a Kubernetes CR on
   // the target hub cluster. Used for tracking which cluster the pool resources reside on.
-  string hub = 3;
+  string hub = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Total number of usable IP addresses across all CIDRs in this pool.
   //
   // Calculated from the CIDR ranges (e.g., a /24 IPv4 CIDR yields 254 usable addresses,
   // excluding network and broadcast addresses). Uses int64 to accommodate large IPv6 CIDR
   // ranges whose address counts exceed int32 capacity.
-  int64 total = 4;
+  int64 total = 4 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Number of IP addresses currently allocated to PublicIP resources from this pool.
-  int64 allocated = 5;
+  int64 allocated = 5 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Number of IP addresses available for new allocations from this pool.
   //
   // Equal to total minus allocated.
-  int64 available = 6;
+  int64 available = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 // IP address family for a PublicIPPool.

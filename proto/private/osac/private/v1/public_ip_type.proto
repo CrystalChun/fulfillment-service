@@ -75,20 +75,20 @@ message PublicIPSpec {
 // updates them based on reconciliation of the spec and feedback from the cluster controller.
 message PublicIPStatus {
   // Current lifecycle state of the public IP.
-  PublicIPState state = 1;
+  PublicIPState state = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Human-readable message providing additional details about the current state.
   //
   // For PENDING state, may contain progress information like "Waiting for IP allocation".
   // For RELEASING state, may contain cleanup progress. Typically empty for ALLOCATED and
   // ATTACHED states.
-  optional string message = 2;
+  optional string message = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Identifier of the hub cluster that this public IP is deployed to.
   //
   // Set by the fulfillment-service controller when reconciling the public IP to a Kubernetes CR
   // on the target hub cluster. Used for tracking which cluster the IP resources reside on.
-  string hub = 3;
+  string hub = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // Allocated IP address from the parent pool's CIDR range.
   //
