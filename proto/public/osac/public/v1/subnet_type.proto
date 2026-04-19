@@ -76,7 +76,7 @@ message SubnetSpec {
     (google.api.field_behavior) = IMMUTABLE
   ];
 
-  // IPv4 CIDR block for this subnet. Optional for IPv6-only subnets.
+  // IPv4 CIDR block for this subnet. Optional for IPv6-only subnets. Immutable after creation.
   //
   // Must be valid CIDR notation and a subset of the parent VirtualNetwork.spec.ipv4_cidr. Validation enforced
   // at service layer. The CIDR block must not overlap with other Subnets within the same VirtualNetwork.
@@ -84,9 +84,9 @@ message SubnetSpec {
   // Example: "10.0.1.0/24", "192.168.100.0/24"
   //
   // Leave empty for IPv6-only subnets.
-  optional string ipv4_cidr = 2;
+  optional string ipv4_cidr = 2 [(google.api.field_behavior) = IMMUTABLE];
 
-  // IPv6 CIDR block for this subnet. Optional for IPv4-only subnets.
+  // IPv6 CIDR block for this subnet. Optional for IPv4-only subnets. Immutable after creation.
   //
   // Must be valid CIDR notation and a subset of the parent VirtualNetwork.spec.ipv6_cidr. Validation enforced
   // at service layer. The CIDR block must not overlap with other Subnets within the same VirtualNetwork.
@@ -94,7 +94,7 @@ message SubnetSpec {
   // Example: "2001:db8::/64", "fd00:1234::/64"
   //
   // Leave empty for IPv4-only subnets.
-  optional string ipv6_cidr = 3;
+  optional string ipv6_cidr = 3 [(google.api.field_behavior) = IMMUTABLE];
 }
 
 // Represents the current operational state of a Subnet.

@@ -16,10 +16,13 @@ package servers
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	grpccodes "google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
@@ -294,6 +297,94 @@ var _ = Describe("Virtual networks server", func() {
 			}.Build())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(getResponse.GetObject().GetMetadata().GetName()).To(Equal("updated-name"))
+		})
+
+		It("Update object preserves CIDRs when explicitly repeated in request", func() {
+			// Create the object via the private server:
+			privateObj := createVirtualNetwork()
+
+			// Update with CIDRs explicitly repeated — must pass, CIDRs preserved.
+			updateResponse, err := publicServer.Update(ctx, publicv1.VirtualNetworksUpdateRequest_builder{
+				Object: publicv1.VirtualNetwork_builder{
+					Id: privateObj.GetId(),
+					Metadata: publicv1.Metadata_builder{
+						Name: "cidr-explicit",
+					}.Build(),
+					Spec: publicv1.VirtualNetworkSpec_builder{
+						NetworkClass: "default",
+						Ipv4Cidr:     proto.String("10.0.0.0/16"),
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateResponse.GetObject().GetSpec().GetIpv4Cidr()).To(Equal("10.0.0.0/16"))
+		})
+
+		It("Update object preserves CIDRs when omitted from request body", func() {
+			// Create the object via the private server:
+			privateObj := createVirtualNetwork()
+
+			// Update body omits CIDR fields entirely. The private server's
+			// validateImmutableFieldsVirtualNetwork backfills CIDRs from the existing object.
+			updateResponse, err := publicServer.Update(ctx, publicv1.VirtualNetworksUpdateRequest_builder{
+				Object: publicv1.VirtualNetwork_builder{
+					Id: privateObj.GetId(),
+					Metadata: publicv1.Metadata_builder{
+						Name: "cidr-omitted",
+					}.Build(),
+					Spec: publicv1.VirtualNetworkSpec_builder{
+						NetworkClass: "default",
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateResponse.GetObject().GetSpec().GetIpv4Cidr()).To(Equal("10.0.0.0/16"))
+		})
+
+		It("Update object rejects CIDR change via public API (CR-001)", func() {
+			// Create with a known CIDR via the private server:
+			privateObj := createVirtualNetwork()
+
+			// Update via public server with a different CIDR — must be rejected as immutable.
+			_, err := publicServer.Update(ctx, publicv1.VirtualNetworksUpdateRequest_builder{
+				Object: publicv1.VirtualNetwork_builder{
+					Id: privateObj.GetId(),
+					Spec: publicv1.VirtualNetworkSpec_builder{
+						NetworkClass: "default",
+						Ipv4Cidr:     proto.String("192.168.0.0/16"),
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			st, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(st.Code()).To(Equal(grpccodes.InvalidArgument))
+			Expect(err.Error()).To(ContainSubstring("immutable"))
+		})
+
+		It("Update object rejects stale version when lock is enabled", func() {
+			// Create the object via the private server:
+			privateObj := createVirtualNetwork()
+
+			// Attempt an update via public server with lock enabled and a wrong version — expect codes.Aborted:
+			_, err := publicServer.Update(ctx, publicv1.VirtualNetworksUpdateRequest_builder{
+				Object: publicv1.VirtualNetwork_builder{
+					Id: privateObj.GetId(),
+					Metadata: publicv1.Metadata_builder{
+						Name:    "locked-update",
+						Version: math.MaxInt32,
+					}.Build(),
+					Spec: publicv1.VirtualNetworkSpec_builder{
+						NetworkClass: "default",
+						Ipv4Cidr:     proto.String("10.0.0.0/16"),
+					}.Build(),
+				}.Build(),
+				Lock: true,
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			st, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(st.Code()).To(Equal(grpccodes.Aborted))
 		})
 
 		It("Create object via public API sets default region", func() {

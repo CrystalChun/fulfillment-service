@@ -79,7 +79,7 @@ message VirtualNetworkSpec {
     (google.api.field_behavior) = IMMUTABLE
   ];
 
-  // IPv4 CIDR block for this network. Optional for IPv6-only networks.
+  // IPv4 CIDR block for this network. Optional for IPv6-only networks. Immutable after creation.
   //
   // Must be valid CIDR notation. Validation enforced at service layer.
   // The CIDR block should be appropriately sized for the expected number of compute instances.
@@ -87,9 +87,9 @@ message VirtualNetworkSpec {
   // Example: "10.0.0.0/16", "192.168.0.0/24"
   //
   // Leave empty when creating an IPv6-only network.
-  optional string ipv4_cidr = 3;
+  optional string ipv4_cidr = 3 [(google.api.field_behavior) = IMMUTABLE];
 
-  // IPv6 CIDR block for this network. Optional for IPv4-only networks.
+  // IPv6 CIDR block for this network. Optional for IPv4-only networks. Immutable after creation.
   //
   // Must be valid CIDR notation. Validation enforced at service layer.
   // IPv6 addresses should follow standard allocation practices for tenant networks.
@@ -97,7 +97,7 @@ message VirtualNetworkSpec {
   // Example: "2001:db8::/48", "fd00::/64"
   //
   // Leave empty when creating an IPv4-only network.
-  optional string ipv6_cidr = 4;
+  optional string ipv6_cidr = 4 [(google.api.field_behavior) = IMMUTABLE];
 
   // Requested network capabilities for this VirtualNetwork.
   //

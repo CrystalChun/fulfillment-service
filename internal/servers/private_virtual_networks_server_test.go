@@ -617,6 +617,275 @@ var _ = Describe("Private virtual networks server", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
+
+		Context("VN-VAL-11: IPv4 CIDR immutability on Update", func() {
+			It("prevents ipv4_cidr field modification", func() {
+				// Fake NetworkClass: immutability check for NC fires before the NC reference lookup
+				// guard, so a fake NC ID is fine here. Region and NC stay identical so those
+				// immutability checks do not fire.
+				existing := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: "test-class",
+						Ipv4Cidr:     proto.String("10.0.0.0/16"),
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: "test-class",
+						Ipv4Cidr:     proto.String("192.168.0.0/16"),
+					}.Build(),
+				}.Build()
+
+				_, err := server.validateVirtualNetwork(ctx, updated, existing)
+				Expect(err).To(HaveOccurred())
+				status, ok := grpcstatus.FromError(err)
+				Expect(ok).To(BeTrue())
+				Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+				Expect(err.Error()).To(ContainSubstring("ipv4_cidr"))
+				Expect(err.Error()).To(ContainSubstring("immutable"))
+			})
+
+			It("allows ipv4_cidr to stay same on Update", func() {
+				// NC reference lookup guard: skips DB lookup when NC is unchanged.
+				// Using a real NC so the guard's equality check works cleanly.
+				nc := createNetworkClass(ctx, privatev1.NetworkClassState_NETWORK_CLASS_STATE_READY)
+
+				existing := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: nc.GetId(),
+						Ipv4Cidr:     proto.String("10.0.0.0/16"),
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: nc.GetId(),
+						Ipv4Cidr:     proto.String("10.0.0.0/16"),
+					}.Build(),
+				}.Build()
+
+				_, err := server.validateVirtualNetwork(ctx, updated, existing)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("prevents adding ipv4_cidr to an IPv6-only VirtualNetwork", func() {
+				// existing: IPv6-only (no ipv4_cidr set).
+				// updated: explicitly sets ipv4_cidr — HasIpv4Cidr() returns true,
+				// existing.GetIpv4Cidr() == "" != new value → reject.
+				existing := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: "test-class",
+						Ipv6Cidr:     proto.String("2001:db8::/32"),
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: "test-class",
+						Ipv4Cidr:     proto.String("10.0.0.0/16"),
+						Ipv6Cidr:     proto.String("2001:db8::/32"),
+					}.Build(),
+				}.Build()
+
+				_, err := server.validateVirtualNetwork(ctx, updated, existing)
+				Expect(err).To(HaveOccurred())
+				status, ok := grpcstatus.FromError(err)
+				Expect(ok).To(BeTrue())
+				Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+				Expect(err.Error()).To(ContainSubstring("ipv4_cidr"))
+				Expect(err.Error()).To(ContainSubstring("immutable"))
+			})
+
+			It("rejects explicit empty ipv4_cidr on Update when existing ipv4_cidr is set (empty string edge case)", func() {
+				// HasIpv4Cidr() returns true for explicitly-set empty string.
+				// Immutability fires first: HasIpv4Cidr() true and "" != existing → rejected.
+				existing := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: "test-class",
+						Ipv4Cidr:     proto.String("10.0.0.0/16"),
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: "test-class",
+						Ipv4Cidr:     proto.String(""),
+						Ipv6Cidr:     proto.String("2001:db8::/32"),
+					}.Build(),
+				}.Build()
+
+				_, err := server.validateVirtualNetwork(ctx, updated, existing)
+				Expect(err).To(HaveOccurred())
+				status, ok := grpcstatus.FromError(err)
+				Expect(ok).To(BeTrue())
+				Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+				Expect(err.Error()).To(ContainSubstring("ipv4_cidr"))
+				Expect(err.Error()).To(ContainSubstring("immutable"))
+			})
+		})
+
+		Context("VN-VAL-12: IPv6 CIDR immutability on Update", func() {
+			It("prevents ipv6_cidr field modification", func() {
+				existing := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: "test-class",
+						Ipv6Cidr:     proto.String("2001:db8::/32"),
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: "test-class",
+						Ipv6Cidr:     proto.String("fd00:1234::/32"),
+					}.Build(),
+				}.Build()
+
+				_, err := server.validateVirtualNetwork(ctx, updated, existing)
+				Expect(err).To(HaveOccurred())
+				status, ok := grpcstatus.FromError(err)
+				Expect(ok).To(BeTrue())
+				Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+				Expect(err.Error()).To(ContainSubstring("ipv6_cidr"))
+				Expect(err.Error()).To(ContainSubstring("immutable"))
+			})
+
+			It("allows ipv6_cidr to stay same on Update", func() {
+				nc := createNetworkClass(ctx, privatev1.NetworkClassState_NETWORK_CLASS_STATE_READY)
+
+				existing := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: nc.GetId(),
+						Ipv6Cidr:     proto.String("2001:db8::/32"),
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: nc.GetId(),
+						Ipv6Cidr:     proto.String("2001:db8::/32"),
+					}.Build(),
+				}.Build()
+
+				_, err := server.validateVirtualNetwork(ctx, updated, existing)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("prevents adding ipv6_cidr to an IPv4-only VirtualNetwork", func() {
+				// existing: IPv4-only (no ipv6_cidr set).
+				// updated: explicitly sets ipv6_cidr — HasIpv6Cidr() returns true,
+				// existing.GetIpv6Cidr() == "" != new value → reject.
+				// ipv4_cidr is identical so the ipv4 check does not fire first.
+				existing := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: "test-class",
+						Ipv4Cidr:     proto.String("10.0.0.0/16"),
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: "test-class",
+						Ipv4Cidr:     proto.String("10.0.0.0/16"),
+						Ipv6Cidr:     proto.String("2001:db8::/32"),
+					}.Build(),
+				}.Build()
+
+				_, err := server.validateVirtualNetwork(ctx, updated, existing)
+				Expect(err).To(HaveOccurred())
+				status, ok := grpcstatus.FromError(err)
+				Expect(ok).To(BeTrue())
+				Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+				Expect(err.Error()).To(ContainSubstring("ipv6_cidr"))
+				Expect(err.Error()).To(ContainSubstring("immutable"))
+			})
+
+			It("rejects explicit empty ipv6_cidr on Update when existing ipv6_cidr is set (empty string edge case)", func() {
+				// Symmetric case of the ipv4 empty-string test above.
+				// existing has both CIDRs set. updated keeps ipv4_cidr identical
+				// (so VN-VAL-11 doesn't fire), sets ipv6_cidr to "" explicitly.
+				existing := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: "test-class",
+						Ipv4Cidr:     proto.String("10.0.0.0/16"),
+						Ipv6Cidr:     proto.String("2001:db8::/32"),
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.VirtualNetwork_builder{
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Region:       "us-west-1",
+						NetworkClass: "test-class",
+						Ipv4Cidr:     proto.String("10.0.0.0/16"),
+						Ipv6Cidr:     proto.String(""),
+					}.Build(),
+				}.Build()
+
+				_, err := server.validateVirtualNetwork(ctx, updated, existing)
+				Expect(err).To(HaveOccurred())
+				status, ok := grpcstatus.FromError(err)
+				Expect(ok).To(BeTrue())
+				Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+				Expect(err.Error()).To(ContainSubstring("ipv6_cidr"))
+				Expect(err.Error()).To(ContainSubstring("immutable"))
+			})
+		})
+
+		Context("Round-trip: server.Update preserves CIDRs", func() {
+			It("preserves CIDRs when Update omits CIDR fields (sec-1 regression)", func() {
+				nc := createNetworkClass(ctx, privatev1.NetworkClassState_NETWORK_CLASS_STATE_READY)
+
+				// Create a VN with IPv4 CIDR via the server:
+				createResponse, err := server.Create(ctx, privatev1.VirtualNetworksCreateRequest_builder{
+					Object: privatev1.VirtualNetwork_builder{
+						Metadata: privatev1.Metadata_builder{
+							Tenants: []string{"shared"},
+						}.Build(),
+						Spec: privatev1.VirtualNetworkSpec_builder{
+							Ipv4Cidr:     proto.String("10.0.0.0/16"),
+							NetworkClass: nc.GetId(),
+							Region:       "us-west-1",
+						}.Build(),
+					}.Build(),
+				}.Build())
+				Expect(err).ToNot(HaveOccurred())
+				created := createResponse.GetObject()
+
+				// Update with only the name changed; no CIDR fields in the request:
+				updateResponse, err := server.Update(ctx, privatev1.VirtualNetworksUpdateRequest_builder{
+					Object: privatev1.VirtualNetwork_builder{
+						Id: created.GetId(),
+						Metadata: privatev1.Metadata_builder{
+							Name: "renamed-vn",
+						}.Build(),
+						Spec: privatev1.VirtualNetworkSpec_builder{
+							NetworkClass: nc.GetId(),
+							Region:       "us-west-1",
+						}.Build(),
+					}.Build(),
+				}.Build())
+				Expect(err).ToNot(HaveOccurred())
+				updated := updateResponse.GetObject()
+
+				// CIDRs must be preserved from the existing record:
+				Expect(updated.GetSpec().GetIpv4Cidr()).To(Equal("10.0.0.0/16"))
+			})
+		})
 	})
 
 	Describe("GenericDAO VirtualNetwork operations", func() {

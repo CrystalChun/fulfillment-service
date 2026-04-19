@@ -71,6 +71,7 @@ var _ = Describe("Private subnets server", func() {
 		err = dao.CreateTables[*privatev1.VirtualNetwork](ctx)
 		Expect(err).ToNot(HaveOccurred())
 		err = dao.CreateTables[*privatev1.NetworkClass](ctx)
+		Expect(err).ToNot(HaveOccurred())
 
 		// Create the subnet DAO:
 		subnetDao, err = dao.NewGenericDAO[*privatev1.Subnet]().
@@ -780,6 +781,285 @@ var _ = Describe("Private subnets server", func() {
 
 				err := server.validateSubnet(ctx, updated, existing)
 				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		Context("SUB-VAL-14: IPv4 CIDR immutability on Update", func() {
+			const fakeVNID = "vn-fake-id"
+
+			It("prevents ipv4_cidr field modification", func() {
+				// Fake VN ID: both existing and updated use the same ID, so validateSubnet
+				// skips the VN reference lookup entirely. Rejection tests don't need a real VN.
+				existing := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv4Cidr:       proto.String("10.0.1.0/24"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv4Cidr:       proto.String("10.0.2.0/24"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				err := server.validateSubnet(ctx, updated, existing)
+				Expect(err).To(HaveOccurred())
+				status, ok := grpcstatus.FromError(err)
+				Expect(ok).To(BeTrue())
+				Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+				Expect(err.Error()).To(ContainSubstring("ipv4_cidr"))
+				Expect(err.Error()).To(ContainSubstring("immutable"))
+			})
+
+			It("allows ipv4_cidr to stay same on Update", func() {
+				// Same VN ID, same CIDR: immutability passes, VN lookup skipped.
+				existing := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv4Cidr:       proto.String("10.0.1.0/24"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv4Cidr:       proto.String("10.0.1.0/24"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				err := server.validateSubnet(ctx, updated, existing)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("prevents adding ipv4_cidr to an IPv6-only subnet", func() {
+				// existing: IPv6-only (no ipv4_cidr set).
+				// updated: explicitly sets ipv4_cidr — HasIpv4Cidr() returns true,
+				// existing.GetIpv4Cidr() == "" != new value → reject.
+				existing := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv6Cidr:       proto.String("2001:db8::/64"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv4Cidr:       proto.String("10.0.1.0/24"),
+						Ipv6Cidr:       proto.String("2001:db8::/64"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				err := server.validateSubnet(ctx, updated, existing)
+				Expect(err).To(HaveOccurred())
+				status, ok := grpcstatus.FromError(err)
+				Expect(ok).To(BeTrue())
+				Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+				Expect(err.Error()).To(ContainSubstring("ipv4_cidr"))
+				Expect(err.Error()).To(ContainSubstring("immutable"))
+			})
+
+			It("rejects explicit empty ipv4_cidr on Update when existing ipv4_cidr is set (empty string edge case)", func() {
+				// HasIpv4Cidr() returns true for explicitly-set empty string.
+				// Immutability fires first: HasIpv4Cidr() true and "" != existing → rejected.
+				existing := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv4Cidr:       proto.String("10.0.1.0/24"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv4Cidr:       proto.String(""),
+						Ipv6Cidr:       proto.String("2001:db8::/64"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				err := server.validateSubnet(ctx, updated, existing)
+				Expect(err).To(HaveOccurred())
+				status, ok := grpcstatus.FromError(err)
+				Expect(ok).To(BeTrue())
+				Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+				Expect(err.Error()).To(ContainSubstring("ipv4_cidr"))
+				Expect(err.Error()).To(ContainSubstring("immutable"))
+			})
+		})
+
+		Context("SUB-VAL-15: IPv6 CIDR immutability on Update", func() {
+			const fakeVNID = "vn-fake-id"
+
+			It("prevents ipv6_cidr field modification", func() {
+				existing := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv6Cidr:       proto.String("2001:db8::/64"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv6Cidr:       proto.String("fd00:1234::/64"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				err := server.validateSubnet(ctx, updated, existing)
+				Expect(err).To(HaveOccurred())
+				status, ok := grpcstatus.FromError(err)
+				Expect(ok).To(BeTrue())
+				Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+				Expect(err.Error()).To(ContainSubstring("ipv6_cidr"))
+				Expect(err.Error()).To(ContainSubstring("immutable"))
+			})
+
+			It("allows ipv6_cidr to stay same on Update", func() {
+				existing := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv6Cidr:       proto.String("2001:db8::/64"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv6Cidr:       proto.String("2001:db8::/64"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				err := server.validateSubnet(ctx, updated, existing)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("prevents adding ipv6_cidr to an IPv4-only subnet", func() {
+				// existing: IPv4-only (no ipv6_cidr set).
+				// updated: explicitly sets ipv6_cidr — HasIpv6Cidr() returns true,
+				// so the immutability check runs. existing.GetIpv6Cidr() == "" != new value → reject.
+				// ipv4_cidr is identical so the ipv4 check does not fire first.
+				existing := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv4Cidr:       proto.String("10.0.1.0/24"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv4Cidr:       proto.String("10.0.1.0/24"),
+						Ipv6Cidr:       proto.String("2001:db8::/64"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				err := server.validateSubnet(ctx, updated, existing)
+				Expect(err).To(HaveOccurred())
+				status, ok := grpcstatus.FromError(err)
+				Expect(ok).To(BeTrue())
+				Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+				Expect(err.Error()).To(ContainSubstring("ipv6_cidr"))
+				Expect(err.Error()).To(ContainSubstring("immutable"))
+			})
+
+			It("rejects explicit empty ipv6_cidr on Update when existing ipv6_cidr is set (empty string edge case)", func() {
+				// Symmetric case of the ipv4 empty-string test above.
+				// existing has both CIDRs set. updated keeps ipv4_cidr identical
+				// (so SUB-VAL-14 doesn't fire), sets ipv6_cidr to "" explicitly.
+				existing := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv4Cidr:       proto.String("10.0.1.0/24"),
+						Ipv6Cidr:       proto.String("2001:db8::/64"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.Subnet_builder{
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv4Cidr:       proto.String("10.0.1.0/24"),
+						Ipv6Cidr:       proto.String(""),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				err := server.validateSubnet(ctx, updated, existing)
+				Expect(err).To(HaveOccurred())
+				status, ok := grpcstatus.FromError(err)
+				Expect(ok).To(BeTrue())
+				Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+				Expect(err.Error()).To(ContainSubstring("ipv6_cidr"))
+				Expect(err.Error()).To(ContainSubstring("immutable"))
+			})
+		})
+
+		Context("Metadata-only update with identical CIDRs", func() {
+			It("passes validation when only non-CIDR fields change", func() {
+				fakeVNID := "vn-fake-id-for-metadata-test"
+				existing := privatev1.Subnet_builder{
+					Metadata: privatev1.Metadata_builder{
+						Name: "original-name",
+					}.Build(),
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv4Cidr:       proto.String("10.0.1.0/24"),
+						Ipv6Cidr:       proto.String("2001:db8::/64"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				updated := privatev1.Subnet_builder{
+					Metadata: privatev1.Metadata_builder{
+						Name: "renamed-subnet",
+					}.Build(),
+					Spec: privatev1.SubnetSpec_builder{
+						Ipv4Cidr:       proto.String("10.0.1.0/24"),
+						Ipv6Cidr:       proto.String("2001:db8::/64"),
+						VirtualNetwork: fakeVNID,
+					}.Build(),
+				}.Build()
+
+				err := server.validateSubnet(ctx, updated, existing)
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		Context("Round-trip: server.Update preserves CIDRs", func() {
+			It("preserves CIDRs when Update omits CIDR fields (sec-1 regression)", func() {
+				vn := createVirtualNetwork(ctx, "10.0.0.0/16", "")
+
+				// Create a subnet with IPv4 CIDR via the server:
+				createResponse, err := server.Create(ctx, privatev1.SubnetsCreateRequest_builder{
+					Object: privatev1.Subnet_builder{
+						Metadata: privatev1.Metadata_builder{
+							Tenants: []string{"shared"},
+						}.Build(),
+						Spec: privatev1.SubnetSpec_builder{
+							Ipv4Cidr:       proto.String("10.0.1.0/24"),
+							VirtualNetwork: vn.GetId(),
+						}.Build(),
+					}.Build(),
+				}.Build())
+				Expect(err).ToNot(HaveOccurred())
+				created := createResponse.GetObject()
+
+				// Update with only the name changed; no CIDR fields in the request:
+				updateResponse, err := server.Update(ctx, privatev1.SubnetsUpdateRequest_builder{
+					Object: privatev1.Subnet_builder{
+						Id: created.GetId(),
+						Metadata: privatev1.Metadata_builder{
+							Name: "renamed-subnet",
+						}.Build(),
+						Spec: privatev1.SubnetSpec_builder{
+							VirtualNetwork: vn.GetId(),
+						}.Build(),
+					}.Build(),
+				}.Build())
+				Expect(err).ToNot(HaveOccurred())
+				updated := updateResponse.GetObject()
+
+				// CIDRs must be preserved from the existing record:
+				Expect(updated.GetSpec().GetIpv4Cidr()).To(Equal("10.0.1.0/24"))
 			})
 		})
 

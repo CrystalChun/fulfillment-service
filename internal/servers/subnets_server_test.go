@@ -16,10 +16,13 @@ package servers
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	grpccodes "google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
@@ -359,6 +362,130 @@ var _ = Describe("Subnets server", func() {
 			}.Build())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(getResponse.GetObject().GetMetadata().GetName()).To(Equal("updated-name"))
+		})
+
+		It("Update object preserves CIDRs when explicitly repeated in request", func() {
+			// Create the object:
+			createResponse, err := server.Create(ctx, publicv1.SubnetsCreateRequest_builder{
+				Object: publicv1.Subnet_builder{
+					Spec: publicv1.SubnetSpec_builder{
+						VirtualNetwork: virtualNetworkID,
+						Ipv4Cidr:       proto.String("10.0.1.0/24"),
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			object := createResponse.GetObject()
+
+			// Update with CIDRs explicitly repeated — must pass, CIDRs preserved.
+			updateResponse, err := server.Update(ctx, publicv1.SubnetsUpdateRequest_builder{
+				Object: publicv1.Subnet_builder{
+					Id: object.GetId(),
+					Metadata: publicv1.Metadata_builder{
+						Name: "renamed",
+					}.Build(),
+					Spec: publicv1.SubnetSpec_builder{
+						VirtualNetwork: virtualNetworkID,
+						Ipv4Cidr:       proto.String("10.0.1.0/24"),
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateResponse.GetObject().GetSpec().GetIpv4Cidr()).To(Equal("10.0.1.0/24"))
+		})
+
+		It("Update object preserves CIDRs when omitted from request body", func() {
+			// Create the object:
+			createResponse, err := server.Create(ctx, publicv1.SubnetsCreateRequest_builder{
+				Object: publicv1.Subnet_builder{
+					Spec: publicv1.SubnetSpec_builder{
+						VirtualNetwork: virtualNetworkID,
+						Ipv4Cidr:       proto.String("10.0.2.0/24"),
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			object := createResponse.GetObject()
+
+			// Update body omits CIDR fields entirely. The private server's
+			// validateImmutableFieldsSubnet backfills CIDRs from the existing object.
+			updateResponse, err := server.Update(ctx, publicv1.SubnetsUpdateRequest_builder{
+				Object: publicv1.Subnet_builder{
+					Id: object.GetId(),
+					Metadata: publicv1.Metadata_builder{
+						Name: "cidr-omitted",
+					}.Build(),
+					Spec: publicv1.SubnetSpec_builder{
+						VirtualNetwork: virtualNetworkID,
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateResponse.GetObject().GetSpec().GetIpv4Cidr()).To(Equal("10.0.2.0/24"))
+		})
+
+		It("Update object rejects CIDR change via public API (CR-001)", func() {
+			// Create with "10.0.3.0/24":
+			createResponse, err := server.Create(ctx, publicv1.SubnetsCreateRequest_builder{
+				Object: publicv1.Subnet_builder{
+					Spec: publicv1.SubnetSpec_builder{
+						VirtualNetwork: virtualNetworkID,
+						Ipv4Cidr:       proto.String("10.0.3.0/24"),
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			object := createResponse.GetObject()
+
+			// Update with a different CIDR — must be rejected as immutable.
+			_, err = server.Update(ctx, publicv1.SubnetsUpdateRequest_builder{
+				Object: publicv1.Subnet_builder{
+					Id: object.GetId(),
+					Spec: publicv1.SubnetSpec_builder{
+						VirtualNetwork: virtualNetworkID,
+						Ipv4Cidr:       proto.String("10.0.4.0/24"),
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			st, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(st.Code()).To(Equal(grpccodes.InvalidArgument))
+			Expect(err.Error()).To(ContainSubstring("immutable"))
+		})
+
+		It("Update object rejects stale version when lock is enabled", func() {
+			// Create the object:
+			createResponse, err := server.Create(ctx, publicv1.SubnetsCreateRequest_builder{
+				Object: publicv1.Subnet_builder{
+					Spec: publicv1.SubnetSpec_builder{
+						VirtualNetwork: virtualNetworkID,
+						Ipv4Cidr:       proto.String("10.0.5.0/24"),
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			object := createResponse.GetObject()
+
+			// Attempt an update with lock enabled and a wrong version — expect codes.Aborted:
+			_, err = server.Update(ctx, publicv1.SubnetsUpdateRequest_builder{
+				Object: publicv1.Subnet_builder{
+					Id: object.GetId(),
+					Metadata: publicv1.Metadata_builder{
+						Name:    "locked-update",
+						Version: math.MaxInt32,
+					}.Build(),
+					Spec: publicv1.SubnetSpec_builder{
+						VirtualNetwork: virtualNetworkID,
+						Ipv4Cidr:       proto.String("10.0.5.0/24"),
+					}.Build(),
+				}.Build(),
+				Lock: true,
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			st, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(st.Code()).To(Equal(grpccodes.Aborted))
 		})
 
 		It("Delete object", func() {

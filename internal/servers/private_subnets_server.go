@@ -213,6 +213,13 @@ func (s *PrivateSubnetsServer) validateSubnet(ctx context.Context,
 		return grpcstatus.Errorf(grpccodes.InvalidArgument, "subnet spec is mandatory")
 	}
 
+	// SUB-VAL-11, SUB-VAL-14, SUB-VAL-15: Check immutable fields (only on Update).
+	// Run before SUB-VAL-03 so that explicit-empty-string attempts to clear an immutable CIDR
+	// return "field is immutable" rather than "at least one CIDR required".
+	if err := validateImmutableFieldsSubnet(newSubnet, existingSubnet); err != nil {
+		return err
+	}
+
 	// SUB-VAL-03: At least one CIDR must be provided
 	if spec.GetIpv4Cidr() == "" && spec.GetIpv6Cidr() == "" {
 		return grpcstatus.Errorf(grpccodes.InvalidArgument,
@@ -233,13 +240,9 @@ func (s *PrivateSubnetsServer) validateSubnet(ctx context.Context,
 		}
 	}
 
-	// SUB-VAL-11: Check immutable fields (only on Update)
-	if err := validateImmutableFieldsSubnet(newSubnet, existingSubnet); err != nil {
-		return err
-	}
-
 	// SUB-VAL-04, SUB-VAL-05, SUB-VAL-06, SUB-VAL-07, SUB-VAL-08: Validate parent VirtualNetwork
-	// Only validate on Create or if virtual_network changed (though it shouldn't on Update)
+	// Only on Create (existingSubnet == nil) or if virtual_network differs (SUB-VAL-11 above prevents
+	// VN changes on Update, so the second branch is effectively dead but kept for safety).
 	if existingSubnet == nil || spec.GetVirtualNetwork() != existingSubnet.GetSpec().GetVirtualNetwork() {
 		if err := s.validateVirtualNetworkReference(ctx, spec); err != nil {
 			return err
@@ -451,6 +454,30 @@ func validateImmutableFieldsSubnet(newSubnet *privatev1.Subnet, existingSubnet *
 		return grpcstatus.Errorf(grpccodes.InvalidArgument,
 			"field 'spec.virtual_network' is immutable and cannot be changed from '%s' to '%s'",
 			existingSpec.GetVirtualNetwork(), newSpec.GetVirtualNetwork())
+	}
+
+	// SUB-VAL-14: Preserve and check immutable ipv4_cidr field.
+	// If the request omits ipv4_cidr (HasIpv4Cidr() false), copy the existing value to prevent
+	// erasure — the private API has no Merge() step to preserve absent optional fields.
+	if existingSpec.HasIpv4Cidr() && !newSpec.HasIpv4Cidr() {
+		newSpec.SetIpv4Cidr(existingSpec.GetIpv4Cidr())
+	}
+	if newSpec.HasIpv4Cidr() && newSpec.GetIpv4Cidr() != existingSpec.GetIpv4Cidr() {
+		return grpcstatus.Errorf(grpccodes.InvalidArgument,
+			"field 'spec.ipv4_cidr' is immutable and cannot be changed from '%s' to '%s'",
+			existingSpec.GetIpv4Cidr(), newSpec.GetIpv4Cidr())
+	}
+
+	// SUB-VAL-15: Preserve and check immutable ipv6_cidr field.
+	// If the request omits ipv6_cidr (HasIpv6Cidr() false), copy the existing value to prevent
+	// erasure — the private API has no Merge() step to preserve absent optional fields.
+	if existingSpec.HasIpv6Cidr() && !newSpec.HasIpv6Cidr() {
+		newSpec.SetIpv6Cidr(existingSpec.GetIpv6Cidr())
+	}
+	if newSpec.HasIpv6Cidr() && newSpec.GetIpv6Cidr() != existingSpec.GetIpv6Cidr() {
+		return grpcstatus.Errorf(grpccodes.InvalidArgument,
+			"field 'spec.ipv6_cidr' is immutable and cannot be changed from '%s' to '%s'",
+			existingSpec.GetIpv6Cidr(), newSpec.GetIpv6Cidr())
 	}
 
 	return nil
