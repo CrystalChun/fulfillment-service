@@ -469,4 +469,87 @@ var _ = Describe("update tenant annotation", func() {
 		nodeRequest := nodeRequests[0].(map[string]any)
 		Expect(nodeRequest["numberOfNodes"]).To(BeNumerically("==", 3))
 	})
+
+	It("should map explicit cluster fields to ClusterOrder CR spec", func() {
+		scheme := runtime.NewScheme()
+		scheme.AddKnownTypeWithName(
+			schema.GroupVersionKind{
+				Group:   gvks.ClusterOrder.Group,
+				Version: gvks.ClusterOrder.Version,
+				Kind:    gvks.ClusterOrder.Kind + "List",
+			},
+			&unstructured.UnstructuredList{},
+		)
+
+		fakeClient := fake.NewClientBuilder().
+			WithScheme(scheme).
+			Build()
+
+		hubCache := controllers.NewMockHubCache(ctrl)
+		hubCache.EXPECT().
+			Get(gomock.Any(), hubID).
+			Return(&controllers.HubEntry{
+				Namespace: hubNamespace,
+				Client:    fakeClient,
+			}, nil)
+
+		pullSecret := "my-pull-secret"
+		sshKey := "ssh-ed25519 AAAA..."
+		releaseImage := "quay.io/openshift-release-dev/ocp-release:4.17.0-multi"
+		podCIDR := "10.128.0.0/14"
+		serviceCIDR := "172.30.0.0/16"
+
+		cluster := privatev1.Cluster_builder{
+			Id: clusterID,
+			Metadata: privatev1.Metadata_builder{
+				Finalizers: []string{finalizers.Controller},
+				Tenants:    []string{tenantName},
+			}.Build(),
+			Spec: privatev1.ClusterSpec_builder{
+				Template:     "test-template",
+				PullSecret:   &pullSecret,
+				SshPublicKey: &sshKey,
+				ReleaseImage: &releaseImage,
+				Network: privatev1.ClusterNetwork_builder{
+					PodCidr:     &podCIDR,
+					ServiceCidr: &serviceCIDR,
+				}.Build(),
+			}.Build(),
+			Status: privatev1.ClusterStatus_builder{
+				State: privatev1.ClusterState_CLUSTER_STATE_PROGRESSING,
+				Hub:   hubID,
+			}.Build(),
+		}.Build()
+
+		t := &task{
+			r: &function{
+				logger:         logger,
+				hubCache:       hubCache,
+				maskCalculator: nil,
+			},
+			cluster: cluster,
+		}
+
+		err := t.update(ctx)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Verify the ClusterOrder CR spec contains the explicit fields
+		list := &unstructured.UnstructuredList{}
+		list.SetGroupVersionKind(gvks.ClusterOrderList)
+		err = fakeClient.List(ctx, list)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(list.Items).To(HaveLen(1))
+
+		spec, found, err := unstructured.NestedMap(list.Items[0].Object, "spec")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(found).To(BeTrue())
+		Expect(spec["pullSecret"]).To(Equal(pullSecret))
+		Expect(spec["sshPublicKey"]).To(Equal(sshKey))
+		Expect(spec["releaseImage"]).To(Equal(releaseImage))
+
+		network, ok := spec["network"].(map[string]any)
+		Expect(ok).To(BeTrue())
+		Expect(network["podCIDR"]).To(Equal(podCIDR))
+		Expect(network["serviceCIDR"]).To(Equal(serviceCIDR))
+	})
 })

@@ -320,11 +320,16 @@ func (s *ClustersServer) Update(ctx context.Context,
 		return
 	}
 
+	// Check if the client sent back the redacted pull_secret sentinel ("***").
+	// If so, strip it so it doesn't get stored. We'll preserve the existing value below.
+	pullSecretWasRedacted := stripRedactedSecrets(publicCluster)
+
 	// Determine how to prepare the private cluster based on whether there's a field mask. When there's a field mask,
 	// we don't want to merge into the existing object because that would prevent proper replacement of map fields
 	// (like node sets). Instead, we copy to a new object and let the generic server handle the merge with the
 	// database object, which correctly applies field mask semantics.
 	var privateCluster *privatev1.Cluster
+	var existingPullSecret string
 	updateMask := request.GetUpdateMask()
 	if len(updateMask.GetPaths()) > 0 {
 		privateCluster = &privatev1.Cluster{}
@@ -338,8 +343,17 @@ func (s *ClustersServer) Update(ctx context.Context,
 			return nil, err
 		}
 		privateCluster = getResponse.GetObject()
+		// Save the existing pull_secret before the mapper overwrites it
+		if pullSecretWasRedacted && privateCluster.GetSpec().HasPullSecret() {
+			existingPullSecret = privateCluster.GetSpec().GetPullSecret()
+		}
 	}
 	err = s.inMapper.Copy(ctx, publicCluster, privateCluster)
+
+	// Restore the pull_secret if it was stripped from the redacted sentinel
+	if pullSecretWasRedacted && existingPullSecret != "" {
+		privateCluster.GetSpec().SetPullSecret(existingPullSecret)
+	}
 	if err != nil {
 		s.logger.ErrorContext(
 			ctx,
@@ -733,4 +747,18 @@ func redactClusterSecrets(cluster *publicv1.Cluster) {
 	if cluster.Spec.HasPullSecret() {
 		cluster.Spec.SetPullSecret("***")
 	}
+}
+
+// stripRedactedSecrets removes the redacted sentinel value from write-only fields
+// so that an Update echoing back a GET response doesn't overwrite the stored secret.
+// Returns true if a redacted value was stripped.
+func stripRedactedSecrets(cluster *publicv1.Cluster) bool {
+	if cluster == nil || cluster.Spec == nil {
+		return false
+	}
+	if cluster.Spec.HasPullSecret() && cluster.Spec.GetPullSecret() == "***" {
+		cluster.Spec.ClearPullSecret()
+		return true
+	}
+	return false
 }
