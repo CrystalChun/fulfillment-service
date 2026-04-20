@@ -114,13 +114,13 @@ func Cmd() *cobra.Command {
 		&runner.args.podCIDR,
 		"pod-cidr",
 		"",
-		"CIDR for the cluster's pod network (default: 10.128.0.0/14).",
+		"CIDR for the cluster's pod network. If omitted, the server default is used.",
 	)
 	flags.StringVar(
 		&runner.args.serviceCIDR,
 		"service-cidr",
 		"",
-		"CIDR for the cluster's service network (default: 172.30.0.0/16).",
+		"CIDR for the cluster's service network. If omitted, the server default is used.",
 	)
 	return result
 }
