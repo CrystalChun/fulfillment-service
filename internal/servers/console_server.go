@@ -184,6 +184,14 @@ func (s *consoleServer) Connect(stream publicv1.Console_ConnectServer) error {
 		if errors.As(err, &sessionErr) {
 			return status.Errorf(codes.FailedPrecondition, "%v", sessionErr)
 		}
+		s.logger.ErrorContext(ctx, "Failed to open console backend connection",
+			slog.String("resource_type", resourceType.String()),
+			slog.String("resource_id", resourceID),
+			slog.String("hub", target.HubID),
+			slog.String("namespace", target.Namespace),
+			slog.String("vm", target.VMName),
+			slog.Any("error", err),
+		)
 		return status.Errorf(codes.Internal, "failed to connect: %v", err)
 	}
 	defer conn.Close()
