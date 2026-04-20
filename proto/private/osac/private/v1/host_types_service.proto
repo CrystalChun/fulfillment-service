@@ -27,9 +27,9 @@ message HostTypesListRequest {
 }
 
 message HostTypesListResponse {
-  int32 size = 3;
-  int32 total = 4;
-  repeated HostType items = 5;
+  int32 size = 1;
+  int32 total = 2;
+  repeated HostType items = 3;
 }
 
 message HostTypesGetRequest {

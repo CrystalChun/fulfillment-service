@@ -48,13 +48,13 @@ message OrganizationsListRequest {
 
 message OrganizationsListResponse {
   // Actual number of items returned.
-  int32 size = 3;
+  int32 size = 1;
 
   // Total number of items of the collection that match the search criteria.
-  int32 total = 4;
+  int32 total = 2;
 
   // List of results.
-  repeated Organization items = 5;
+  repeated Organization items = 3;
 }
 
 message OrganizationsGetRequest {
