@@ -247,6 +247,10 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 	if err != nil {
 		return err
 	}
+	err = privatev1.RegisterPublicIPPoolsHandler(ctx, gatewayMux, c.grpcClient)
+	if err != nil {
+		return err
+	}
 
 	// Add the health endpoint:
 	c.logger.InfoContext(ctx, "Adding health endpoint")

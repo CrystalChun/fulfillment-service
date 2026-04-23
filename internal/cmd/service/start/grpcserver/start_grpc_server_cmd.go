@@ -717,6 +717,20 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 	}
 	privatev1.RegisterPublicIPsServer(grpcServer, privatePublicIPsServer)
 
+	// Create the private public IP pools server:
+	c.logger.InfoContext(ctx, "Creating private public IP pools server")
+	privatePublicIPPoolsServer, err := servers.NewPrivatePublicIPPoolsServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(privateAttributionLogic).
+		SetTenancyLogic(privateTenancyLogic).
+		SetMetricsRegisterer(metricsRegisterer).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create private public IP pools server: %w", err)
+	}
+	privatev1.RegisterPublicIPPoolsServer(grpcServer, privatePublicIPPoolsServer)
+
 	// Create the console manager and server:
 	c.logger.InfoContext(ctx, "Creating console server")
 	hubConfigProvider := console.HubConfigProviderFromKubeconfigs(
