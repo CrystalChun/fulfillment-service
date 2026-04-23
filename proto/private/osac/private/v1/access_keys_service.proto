@@ -16,6 +16,7 @@ syntax = "proto3";
 package osac.private.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/field_mask.proto";
 import "osac/private/v1/access_key_type.proto";
 
 message AccessKeysListRequest {
@@ -71,6 +72,20 @@ message AccessKeysEnableResponse {
   AccessKey object = 1;
 }
 
+message AccessKeysUpdateRequest {
+  AccessKey object = 1;
+  google.protobuf.FieldMask update_mask = 2;
+
+  // Lock enables optimistic locking. When set to true, the server verifies that the current version of the object
+  // matches the value of the metadata.version field of the submitted object. If they differ the update will be
+  // rejected. This is useful to prevent lost updates when multiple clients are modifying the same object concurrently.
+  bool lock = 3;
+}
+
+message AccessKeysUpdateResponse {
+  AccessKey object = 1;
+}
+
 message AccessKeysDeleteRequest {
   string id = 1;
   string organization_id = 2;
@@ -117,6 +132,14 @@ service AccessKeys {
     option (google.api.http) = {
       post: "/api/private/v1/organizations/{organization_id}/users/{user_id}/access-keys/{id}:enable"
       body: "*"
+      response_body: "object"
+    };
+  }
+
+  rpc Update(AccessKeysUpdateRequest) returns (AccessKeysUpdateResponse) {
+    option (google.api.http) = {
+      patch: "/api/private/v1/organizations/{object.spec.organization_id}/users/{object.spec.user_id}/access-keys/{object.id}"
+      body: "object"
       response_body: "object"
     };
   }

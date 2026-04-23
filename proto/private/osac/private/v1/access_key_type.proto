@@ -42,6 +42,12 @@ message AccessKeySpec {
 
   // Whether the access key is enabled.
   bool enabled = 3;
+
+  // The access key ID (public identifier).
+  string access_key_id = 4;
+
+  // Hashed secret access key (for verification, never return in responses).
+  string secret_hash = 5;
 }
 
 // AccessKeyStatus contains the observed state of the access key.

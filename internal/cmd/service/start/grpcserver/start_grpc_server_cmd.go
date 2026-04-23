@@ -689,6 +689,20 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 	}
 	privatev1.RegisterLeasesServer(grpcServer, privateLeasesServer)
 
+	// Create the private access keys server:
+	c.logger.InfoContext(ctx, "Creating private access keys server")
+	privateAccessKeysServer, err := servers.NewPrivateAccessKeysServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(privateAttributionLogic).
+		SetTenancyLogic(privateTenancyLogic).
+		SetMetricsRegisterer(metricsRegisterer).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create private access keys server: %w", err)
+	}
+	privatev1.RegisterAccessKeysServer(grpcServer, privateAccessKeysServer)
+
 	// Create the console manager and server:
 	c.logger.InfoContext(ctx, "Creating console server")
 	hubConfigProvider := console.HubConfigProviderFromKubeconfigs(

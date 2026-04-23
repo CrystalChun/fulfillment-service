@@ -37,6 +37,7 @@ const (
 	AccessKeys_Create_FullMethodName  = "/osac.private.v1.AccessKeys/Create"
 	AccessKeys_Disable_FullMethodName = "/osac.private.v1.AccessKeys/Disable"
 	AccessKeys_Enable_FullMethodName  = "/osac.private.v1.AccessKeys/Enable"
+	AccessKeys_Update_FullMethodName  = "/osac.private.v1.AccessKeys/Update"
 	AccessKeys_Delete_FullMethodName  = "/osac.private.v1.AccessKeys/Delete"
 	AccessKeys_Signal_FullMethodName  = "/osac.private.v1.AccessKeys/Signal"
 )
@@ -50,6 +51,7 @@ type AccessKeysClient interface {
 	Create(ctx context.Context, in *AccessKeysCreateRequest, opts ...grpc.CallOption) (*AccessKeysCreateResponse, error)
 	Disable(ctx context.Context, in *AccessKeysDisableRequest, opts ...grpc.CallOption) (*AccessKeysDisableResponse, error)
 	Enable(ctx context.Context, in *AccessKeysEnableRequest, opts ...grpc.CallOption) (*AccessKeysEnableResponse, error)
+	Update(ctx context.Context, in *AccessKeysUpdateRequest, opts ...grpc.CallOption) (*AccessKeysUpdateResponse, error)
 	Delete(ctx context.Context, in *AccessKeysDeleteRequest, opts ...grpc.CallOption) (*AccessKeysDeleteResponse, error)
 	Signal(ctx context.Context, in *AccessKeysSignalRequest, opts ...grpc.CallOption) (*AccessKeysSignalResponse, error)
 }
@@ -112,6 +114,16 @@ func (c *accessKeysClient) Enable(ctx context.Context, in *AccessKeysEnableReque
 	return out, nil
 }
 
+func (c *accessKeysClient) Update(ctx context.Context, in *AccessKeysUpdateRequest, opts ...grpc.CallOption) (*AccessKeysUpdateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AccessKeysUpdateResponse)
+	err := c.cc.Invoke(ctx, AccessKeys_Update_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *accessKeysClient) Delete(ctx context.Context, in *AccessKeysDeleteRequest, opts ...grpc.CallOption) (*AccessKeysDeleteResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AccessKeysDeleteResponse)
@@ -141,6 +153,7 @@ type AccessKeysServer interface {
 	Create(context.Context, *AccessKeysCreateRequest) (*AccessKeysCreateResponse, error)
 	Disable(context.Context, *AccessKeysDisableRequest) (*AccessKeysDisableResponse, error)
 	Enable(context.Context, *AccessKeysEnableRequest) (*AccessKeysEnableResponse, error)
+	Update(context.Context, *AccessKeysUpdateRequest) (*AccessKeysUpdateResponse, error)
 	Delete(context.Context, *AccessKeysDeleteRequest) (*AccessKeysDeleteResponse, error)
 	Signal(context.Context, *AccessKeysSignalRequest) (*AccessKeysSignalResponse, error)
 	mustEmbedUnimplementedAccessKeysServer()
@@ -167,6 +180,9 @@ func (UnimplementedAccessKeysServer) Disable(context.Context, *AccessKeysDisable
 }
 func (UnimplementedAccessKeysServer) Enable(context.Context, *AccessKeysEnableRequest) (*AccessKeysEnableResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Enable not implemented")
+}
+func (UnimplementedAccessKeysServer) Update(context.Context, *AccessKeysUpdateRequest) (*AccessKeysUpdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Update not implemented")
 }
 func (UnimplementedAccessKeysServer) Delete(context.Context, *AccessKeysDeleteRequest) (*AccessKeysDeleteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
@@ -285,6 +301,24 @@ func _AccessKeys_Enable_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AccessKeys_Update_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AccessKeysUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessKeysServer).Update(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessKeys_Update_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessKeysServer).Update(ctx, req.(*AccessKeysUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AccessKeys_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AccessKeysDeleteRequest)
 	if err := dec(in); err != nil {
@@ -347,6 +381,10 @@ var AccessKeys_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Enable",
 			Handler:    _AccessKeys_Enable_Handler,
+		},
+		{
+			MethodName: "Update",
+			Handler:    _AccessKeys_Update_Handler,
 		},
 		{
 			MethodName: "Delete",
