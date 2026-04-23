@@ -13,6 +13,8 @@ language governing permissions and limitations under the License.
 
 package idp
 
+//go:generate mockgen -destination=manager_mock.go -package=idp . OrganizationManagerInterface
+
 import (
 	"context"
 	"crypto/rand"
@@ -22,6 +24,12 @@ import (
 	"math/big"
 	"time"
 )
+
+// OrganizationManagerInterface defines the interface for managing organization lifecycles in the IDP.
+type OrganizationManagerInterface interface {
+	CreateOrganization(ctx context.Context, config *OrganizationConfig) (*BreakGlassCredentials, error)
+	DeleteOrganizationRealm(ctx context.Context, organizationName string) error
+}
 
 // OrganizationManager handles the lifecycle of IdP realms for organizations.
 // It works with any IdP client implementation.
