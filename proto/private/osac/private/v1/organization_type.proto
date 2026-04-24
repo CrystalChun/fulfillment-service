@@ -16,12 +16,18 @@ syntax = "proto3";
 package osac.private.v1;
 
 import "osac/private/v1/metadata_type.proto";
+import "osac/private/v1/break_glass_credentials_type.proto";
 
 message Organization {
   string id = 1;
   Metadata metadata = 2;
   OrganizationSpec spec = 3;
   OrganizationStatus status = 4;
+
+  // Break-glass account credentials.
+  // Only populated on successful creation. These credentials must be stored securely.
+  // This field is not persisted and will be empty when reading existing organizations.
+  optional BreakGlassCredentials break_glass_credentials = 5;
 }
 
 message OrganizationSpec {
