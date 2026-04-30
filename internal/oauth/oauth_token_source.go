@@ -835,6 +835,12 @@ func (s *TokenSource) encode(data []byte) string {
 	return base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(data)
 }
 
+// Invalidate clears the cached token, forcing a fresh token to be generated on the next Token() call.
+func (s *TokenSource) Invalidate(ctx context.Context) error {
+	// Save an empty token to invalidate the cache
+	return s.store.Save(ctx, &auth.Token{})
+}
+
 // defaultRedirectUri is the default redirect URI to use for the authorization code flow. It binds to localhost with
 // a dynamically allocated port.
 const defaultRedirectUri = "http://localhost:0"

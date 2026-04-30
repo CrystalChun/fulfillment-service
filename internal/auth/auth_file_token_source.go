@@ -141,3 +141,10 @@ func (s *fileTokenSource) Token(ctx context.Context) (result *Token, err error) 
 	result = s.token
 	return
 }
+
+// Invalidate clears the cached token, forcing the file to be re-read on the next Token() call.
+func (s *fileTokenSource) Invalidate(ctx context.Context) error {
+	s.token = nil
+	s.timestamp = time.Time{}
+	return nil
+}

@@ -145,6 +145,16 @@ func (c *Client) CreateOrganization(ctx context.Context, org *idp.Organization) 
 	}
 	response.Body.Close()
 
+	// After creating a new realm, refresh the token so that subsequent requests
+	// have access to the newly created realm. The current token was issued before
+	// the realm existed and doesn't contain resource_access for the new realm.
+	if err := c.httpClient.RefreshToken(ctx); err != nil {
+		c.logger.WarnContext(ctx, "Failed to refresh token after creating organization",
+			slog.String("organization", org.Name),
+			slog.Any("error", err),
+		)
+	}
+
 	// Keycloak's POST /admin/realms returns 201 with no body, so we fetch the created realm
 	// to get the server-assigned ID and verify the realm was actually created
 	return c.GetOrganization(ctx, org.Name)
