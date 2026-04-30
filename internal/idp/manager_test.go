@@ -28,12 +28,19 @@ type mockClient struct {
 	deletedRealm        string
 	deletedUsers        []string                      // Track deleted user IDs
 	userRoleAssignments map[string]map[string][]*Role // userID -> clientID -> roles
+	assignedRoles       []string                      // Track user IDs that had roles assigned
 	failUserCreation    bool                          // Trigger user creation failure
 	failRoleAssignment  bool                          // Trigger role assignment failure
 	failOrgDeletion     bool                          // Trigger organization deletion failure
+	orgAlreadyExists    bool                          // Simulate organization already exists
 }
 
 func (m *mockClient) CreateOrganization(ctx context.Context, org *Organization) (*Organization, error) {
+	if m.orgAlreadyExists {
+		// Simulate organization already exists error
+		return nil, fmt.Errorf("organization %q already exists", org.Name)
+	}
+
 	// Create a copy to avoid mutation
 	createdOrg := &Organization{
 		ID:          org.ID,
@@ -47,7 +54,18 @@ func (m *mockClient) CreateOrganization(ctx context.Context, org *Organization) 
 }
 
 func (m *mockClient) GetOrganization(ctx context.Context, name string) (*Organization, error) {
-	return m.createdRealm, nil
+	if m.createdRealm != nil {
+		return m.createdRealm, nil
+	}
+	if m.orgAlreadyExists {
+		// Return a pre-existing organization
+		return &Organization{
+			Name:        name,
+			DisplayName: name,
+			Enabled:     true,
+		}, nil
+	}
+	return nil, fmt.Errorf("organization not found")
 }
 
 func (m *mockClient) DeleteOrganization(ctx context.Context, name string) error {
@@ -194,6 +212,9 @@ func (m *mockClient) AssignIdpManagerPermissions(ctx context.Context, organizati
 	if m.failRoleAssignment {
 		return fmt.Errorf("simulated role assignment failure")
 	}
+	// Track that roles were assigned to this user
+	m.assignedRoles = append(m.assignedRoles, userID)
+
 	// Simulate assigning limited IdP manager roles (matching keycloakIdpManagerRoles)
 	roles := []*Role{
 		{ID: "2", Name: "manage-users", ClientRole: true},
@@ -344,7 +365,7 @@ var _ = Describe("OrganizationManager", func() {
 			Expect(credentials.Password).To(MatchRegexp(`^[A-Za-z0-9!@#$%]{24}$`))
 		})
 
-		It("rolls back organization on break-glass user creation failure", func() {
+		It("leaves partial state on break-glass user creation failure for retry", func() {
 			// Create a mock that fails on user creation
 			failingMock := &mockClient{
 				failUserCreation: true,
@@ -364,15 +385,16 @@ var _ = Describe("OrganizationManager", func() {
 
 			credentials, err := failingManager.CreateOrganization(ctx, config)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to create break-glass account"))
+			Expect(err.Error()).To(ContainSubstring("failed to ensure break-glass account"))
 			Expect(credentials).To(BeNil())
 
-			// Verify organization was created then deleted (rollback)
+			// Verify organization was created and LEFT IN PLACE (no rollback)
+			// This allows retry to pick up where it left off
 			Expect(failingMock.createdRealm).ToNot(BeNil())
-			Expect(failingMock.deletedRealm).To(Equal("test-org"))
+			Expect(failingMock.deletedRealm).To(BeEmpty())
 		})
 
-		It("rolls back organization on role assignment failure", func() {
+		It("leaves partial state on role assignment failure for retry", func() {
 			// Create a mock that fails on role assignment
 			failingMock := &mockClient{
 				failRoleAssignment: true,
@@ -392,50 +414,64 @@ var _ = Describe("OrganizationManager", func() {
 
 			credentials, err := failingManager.CreateOrganization(ctx, config)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to assign IdP manager permissions"))
+			Expect(err.Error()).To(ContainSubstring("failed to ensure IdP manager permissions"))
 			Expect(credentials).To(BeNil())
 
-			// Verify user was created
-			Expect(failingMock.createdUsers).To(HaveLen(1))
-
-			// Verify organization was created then deleted (rollback)
-			// Deleting the organization cascade-deletes all users, so we don't
-			// need to explicitly delete the user
+			// Verify organization and user were created and LEFT IN PLACE (no rollback)
+			// This allows retry to pick up where it left off
 			Expect(failingMock.createdRealm).ToNot(BeNil())
-			Expect(failingMock.deletedRealm).To(Equal("test-org"))
+			Expect(failingMock.createdUsers).To(HaveLen(1))
+			Expect(failingMock.deletedRealm).To(BeEmpty())
 		})
 
-		It("rolls back organization even when original context is cancelled", func() {
-			// Create a mock that fails on user creation
-			failingMock := &mockClient{
-				failUserCreation: true,
-			}
-
-			failingManager, err := NewOrganizationManager().
-				SetLogger(logger).
-				SetClient(failingMock).
-				Build()
-			Expect(err).ToNot(HaveOccurred())
-
-			// Create a context that is already cancelled
-			cancelledCtx, cancel := context.WithCancel(context.Background())
-			cancel()
-
+		It("is idempotent - succeeds when organization already exists", func() {
 			config := &OrganizationConfig{
-				Name:               "test-org",
-				DisplayName:        "Test Organization",
+				Name:               "existing-org",
+				DisplayName:        "Existing Organization",
 				BreakGlassPassword: "breakglass123",
 			}
 
-			credentials, err := failingManager.CreateOrganization(cancelledCtx, config)
-			Expect(err).To(HaveOccurred())
-			Expect(credentials).To(BeNil())
+			// First call: create the organization
+			credentials1, err := manager.CreateOrganization(ctx, config)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(credentials1).ToNot(BeNil())
+			Expect(credentials1.UserID).ToNot(BeEmpty())
 
-			// Verify organization was created then deleted (rollback)
-			// Even though the original context was cancelled, rollback should succeed
-			// because it uses a fresh context
-			Expect(failingMock.createdRealm).ToNot(BeNil())
-			Expect(failingMock.deletedRealm).To(Equal("test-org"))
+			// Second call: organization already exists, should succeed and return same user
+			credentials2, err := manager.CreateOrganization(ctx, config)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(credentials2).ToNot(BeNil())
+			Expect(credentials2.UserID).To(Equal(credentials1.UserID))
+			Expect(credentials2.Username).To(Equal(credentials1.Username))
+		})
+
+		It("completes setup when organization exists but break-glass account is missing", func() {
+			// Create a mock that will simulate organization already exists
+			// but user needs to be created
+			orgExistsMock := &mockClient{
+				orgAlreadyExists: true,
+			}
+
+			orgExistsManager, err := NewOrganizationManager().
+				SetLogger(logger).
+				SetClient(orgExistsMock).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+
+			config := &OrganizationConfig{
+				Name:               "existing-org",
+				DisplayName:        "Existing Organization",
+				BreakGlassPassword: "breakglass123",
+			}
+
+			credentials, err := orgExistsManager.CreateOrganization(ctx, config)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(credentials).ToNot(BeNil())
+
+			// Verify user was created
+			Expect(orgExistsMock.createdUsers).To(HaveLen(1))
+			// Verify roles were assigned
+			Expect(orgExistsMock.assignedRoles).To(HaveLen(1))
 		})
 	})
 

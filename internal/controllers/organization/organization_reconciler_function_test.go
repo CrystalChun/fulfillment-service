@@ -232,6 +232,11 @@ var _ = Describe("IDP Sync", func() {
 			Times(1)
 
 		mockClient.EXPECT().
+			ListUsers(gomock.Any(), "test-org").
+			Return([]*idp.User{}, nil).
+			Times(1)
+
+		mockClient.EXPECT().
 			CreateUser(gomock.Any(), "test-org", gomock.Any()).
 			DoAndReturn(func(ctx context.Context, orgName string, user *idp.User) (*idp.User, error) {
 				Expect(user.Username).To(Equal("test-org-osac-break-glass"))
@@ -276,6 +281,11 @@ var _ = Describe("IDP Sync", func() {
 				Expect(organization.GetStatus().GetState()).To(Equal(privatev1.OrganizationState_ORGANIZATION_STATE_PENDING))
 				return org, nil
 			}).
+			Times(1)
+
+		mockClient.EXPECT().
+			ListUsers(gomock.Any(), "test-org").
+			Return([]*idp.User{}, nil).
 			Times(1)
 
 		mockClient.EXPECT().
@@ -338,6 +348,29 @@ var _ = Describe("IDP Sync", func() {
 		mockClient.EXPECT().
 			CreateOrganization(gomock.Any(), gomock.Any()).
 			Return(nil, fmt.Errorf("organization already exists")).
+			Times(1)
+
+		mockClient.EXPECT().
+			GetOrganization(gomock.Any(), "test-org").
+			Return(&idp.Organization{
+				Name:    "test-org",
+				Enabled: true,
+			}, nil).
+			Times(1)
+
+		mockClient.EXPECT().
+			ListUsers(gomock.Any(), "test-org").
+			Return([]*idp.User{}, nil).
+			Times(1)
+
+		mockClient.EXPECT().
+			CreateUser(gomock.Any(), "test-org", gomock.Any()).
+			Return(&idp.User{ID: "user-123"}, nil).
+			Times(1)
+
+		mockClient.EXPECT().
+			AssignIdpManagerPermissions(gomock.Any(), "test-org", "user-123").
+			Return(nil).
 			Times(1)
 
 		task := &task{

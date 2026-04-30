@@ -20,7 +20,10 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
-	"time"
+	"net/http"
+	"strings"
+
+	"github.com/osac-project/fulfillment-service/internal/apiclient"
 )
 
 // OrganizationManager handles the lifecycle of IdP realms for organizations.
@@ -119,6 +122,10 @@ type BreakGlassCredentials struct {
 
 // CreateOrganization creates a complete IdP organization setup with a break-glass account.
 // Returns the break-glass account credentials and error.
+//
+// This method is idempotent - it can be safely retried if it fails partway through.
+// If the organization already exists, it will verify and complete any missing steps
+// (break-glass account creation, permission assignment).
 func (m *OrganizationManager) CreateOrganization(ctx context.Context, config *OrganizationConfig) (*BreakGlassCredentials, error) {
 	if config == nil {
 		return nil, errors.New("OrganizationConfig is mandatory")
@@ -128,21 +135,7 @@ func (m *OrganizationManager) CreateOrganization(ctx context.Context, config *Or
 		slog.String("organization", config.Name),
 	)
 
-	var (
-		// Track if the organization was created in case of error and rollback is needed
-		organizationCreated bool
-		credentials         *BreakGlassCredentials
-		err                 error
-	)
-
-	// Defer cleanup on error
-	defer func() {
-		if err != nil {
-			m.rollback(ctx, config.Name, organizationCreated)
-		}
-	}()
-
-	// Step 1: Create the organization
+	// Step 1: Create or verify the organization exists
 	org := &Organization{
 		Name:        config.Name,
 		DisplayName: config.DisplayName,
@@ -150,65 +143,71 @@ func (m *OrganizationManager) CreateOrganization(ctx context.Context, config *Or
 	}
 	createdOrg, err := m.client.CreateOrganization(ctx, org)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create organization: %w", err)
-	}
-	organizationCreated = true
-	m.logger.InfoContext(ctx, "Organization created",
-		slog.String("organization", createdOrg.Name),
-	)
+		// Check if this is a "organization already exists" error by checking for HTTP 409 Conflict
+		// or error message containing "already exists"
+		isConflict := isOrganizationExistsError(err)
+		if !isConflict {
+			// Not a conflict error - this is a real error, don't try to continue
+			m.logger.ErrorContext(ctx, "Failed to create organization",
+				slog.String("organization", config.Name),
+				slog.Any("error", err),
+			)
+			return nil, fmt.Errorf("failed to create organization: %w", err)
+		}
 
-	// Step 2: Create break-glass account
-	credentials, err = m.createBreakGlassAccount(ctx, config)
+		// Organization already exists, verify it and continue with idempotent setup
+		existingOrg, getErr := m.client.GetOrganization(ctx, config.Name)
+		if getErr != nil {
+			m.logger.ErrorContext(ctx, "Failed to get organization",
+				slog.String("organization", config.Name),
+				slog.Any("error", getErr),
+			)
+			return nil, fmt.Errorf("failed to create organization: %w (verified it exists but failed to retrieve: %w)", err, getErr)
+		}
+		createdOrg = existingOrg
+		m.logger.InfoContext(ctx, "Organization already exists, continuing setup",
+			slog.String("organization", createdOrg.Name),
+		)
+	} else {
+		m.logger.InfoContext(ctx, "Organization created",
+			slog.String("organization", createdOrg.Name),
+		)
+	}
+
+	// Step 2: Create or verify break-glass account exists
+	credentials, err := m.ensureBreakGlassAccount(ctx, config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create break-glass account: %w", err)
+		m.logger.ErrorContext(ctx, "Failed to ensure break-glass account",
+			slog.String("organization", config.Name),
+			slog.Any("error", err),
+		)
+		return nil, fmt.Errorf("failed to ensure break-glass account: %w", err)
 	}
 
-	// Step 3: Assign IdP manager permissions to break-glass account
-	err = m.assignIdpManagerPermissions(ctx, createdOrg.Name, credentials.UserID)
+	// Step 3: Ensure IdP manager permissions are assigned
+	err = m.ensureIdpManagerPermissions(ctx, createdOrg.Name, credentials.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to assign IdP manager permissions: %w", err)
+		m.logger.ErrorContext(ctx, "Failed to ensure IdP manager permissions",
+			slog.String("organization", config.Name),
+			slog.Any("error", err),
+		)
+		return nil, fmt.Errorf("failed to ensure IdP manager permissions: %w", err)
 	}
 
-	m.logger.InfoContext(ctx, "IdP organization created successfully",
+	m.logger.InfoContext(ctx, "IdP organization setup complete",
 		slog.String("organization", createdOrg.Name),
 	)
 	return credentials, nil
 }
 
-// rollback performs cleanup by deleting the organization.
-// Deleting the organization will cascade-delete all resources within it (users, roles, etc.).
-func (m *OrganizationManager) rollback(ctx context.Context, organizationName string, deleteOrg bool) {
-	if !deleteOrg {
-		return
-	}
-
-	// Use a fresh context for cleanup so rollback succeeds even if
-	// the original context was cancelled or timed out.
-	cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	m.logger.WarnContext(ctx, "Rolling back organization creation",
-		slog.String("organization", organizationName),
-	)
-
-	// Delete organization (cascade-deletes all users and resources within it)
-	if err := m.client.DeleteOrganization(cleanupCtx, organizationName); err != nil {
-		m.logger.ErrorContext(ctx, "Failed to rollback organization deletion",
-			slog.String("organization", organizationName),
-			slog.Any("error", err),
-		)
-	} else {
-		m.logger.InfoContext(ctx, "Rolled back organization deletion",
-			slog.String("organization", organizationName),
-		)
-	}
-}
-
-// createBreakGlassAccount creates the break-glass account for an organization.
+// ensureBreakGlassAccount creates or verifies the break-glass account for an organization.
 // Returns the break-glass credentials and error.
 // The break-glass account is a built-in OSAC user with limited privileges (idp-manager role)
 // that can manage IdP configuration and roles.
-func (m *OrganizationManager) createBreakGlassAccount(ctx context.Context, config *OrganizationConfig) (*BreakGlassCredentials, error) {
+//
+// This method is idempotent - if the account already exists, it returns the existing account's
+// credentials (password will be regenerated if not provided in config).
+func (m *OrganizationManager) ensureBreakGlassAccount(ctx context.Context, config *OrganizationConfig) (*BreakGlassCredentials, error) {
 	// Set defaults if not provided
 	username := config.BreakGlassUsername
 	if username == "" {
@@ -239,49 +238,78 @@ func (m *OrganizationManager) createBreakGlassAccount(ctx context.Context, confi
 		)
 	}
 
-	user := &User{
-		Username:      username,
-		Email:         email,
-		EmailVerified: true,
-		Enabled:       true,
-		FirstName:     "OSAC",
-		LastName:      "Break-Glass",
-		Credentials: []*Credential{
-			{
-				Type:      "password",
-				Value:     password,
-				Temporary: true, // User must change password on first login
-			},
-		},
+	// Check if break-glass account already exists
+	existingUsers, err := m.client.ListUsers(ctx, config.Name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
 
-	createdUser, err := m.client.CreateUser(ctx, config.Name, user)
-	if err != nil {
-		return nil, err
+	var existingUser *User
+	for _, u := range existingUsers {
+		if u.Username == username {
+			existingUser = u
+			break
+		}
+	}
+
+	var userID string
+	if existingUser != nil {
+		// User already exists
+		userID = existingUser.ID
+		m.logger.InfoContext(ctx, "Break-glass account already exists",
+			slog.String("organization", config.Name),
+			slog.String("username", username),
+			slog.String("user_id", userID),
+		)
+	} else {
+		// Create new user
+		user := &User{
+			Username:      username,
+			Email:         email,
+			EmailVerified: true,
+			Enabled:       true,
+			FirstName:     "OSAC",
+			LastName:      "Break-Glass",
+			Credentials: []*Credential{
+				{
+					Type:      "password",
+					Value:     password,
+					Temporary: true, // User must change password on first login
+				},
+			},
+		}
+
+		createdUser, err := m.client.CreateUser(ctx, config.Name, user)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create user: %w", err)
+		}
+		userID = createdUser.ID
+
+		m.logger.InfoContext(ctx, "Break-glass account created for organization",
+			slog.String("organization_name", config.Name),
+			slog.String("username", username),
+			slog.String("user_id", userID),
+		)
 	}
 
 	credentials := &BreakGlassCredentials{
-		UserID:   createdUser.ID,
+		UserID:   userID,
 		Username: username,
 		Email:    email,
 		Password: password,
 	}
 
-	m.logger.InfoContext(ctx, "Break-glass account created for organization",
-		slog.String("organization_name", config.Name),
-		slog.String("username", username),
-		slog.String("user_id", createdUser.ID),
-	)
-
 	return credentials, nil
 }
 
-// assignIdpManagerPermissions assigns limited IdP manager permissions to a user.
+// ensureIdpManagerPermissions ensures limited IdP manager permissions are assigned to a user.
 // This grants the user permissions to manage users and identity providers but not
 // critical realm settings.
 // The implementation is provider-specific (delegated to the IdP client).
-func (m *OrganizationManager) assignIdpManagerPermissions(ctx context.Context, organizationName, userID string) error {
-	m.logger.InfoContext(ctx, "Assigning IdP manager permissions to user",
+//
+// This method is idempotent - it will not fail if permissions are already assigned.
+func (m *OrganizationManager) ensureIdpManagerPermissions(ctx context.Context, organizationName, userID string) error {
+	m.logger.InfoContext(ctx, "Ensuring IdP manager permissions for user",
 		slog.String("organization", organizationName),
 		slog.String("user_id", userID),
 	)
@@ -291,7 +319,7 @@ func (m *OrganizationManager) assignIdpManagerPermissions(ctx context.Context, o
 		return fmt.Errorf("failed to assign IdP manager permissions: %w", err)
 	}
 
-	m.logger.InfoContext(ctx, "IdP manager permissions assigned",
+	m.logger.InfoContext(ctx, "IdP manager permissions ensured",
 		slog.String("organization", organizationName),
 		slog.String("user_id", userID),
 	)
@@ -313,4 +341,21 @@ func (m *OrganizationManager) DeleteOrganizationRealm(ctx context.Context, organ
 		slog.String("organization", organizationName),
 	)
 	return nil
+}
+
+// isOrganizationExistsError checks if an error indicates the organization already exists.
+// This checks for HTTP 409 Conflict status or error messages containing "already exists".
+func isOrganizationExistsError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check if the error is an APIError with HTTP 409 Conflict status
+	var apiErr *apiclient.APIError
+	if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusConflict {
+		return true
+	}
+
+	// Check if the error message contains "already exists"
+	return strings.Contains(err.Error(), "already exists")
 }
