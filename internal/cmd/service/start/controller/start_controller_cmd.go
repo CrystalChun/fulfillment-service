@@ -904,18 +904,10 @@ func (r *runnerContext) createIDPManager(ctx context.Context, caPool *x509.CertP
 		}
 	}
 
-	// Get the issuer URL (same as auth issuer URL)
-	issuerUrl := r.args.authIssuerUrl
-	if issuerUrl == "" && r.args.authIssuerUrlFile != "" {
-		var err error
-		issuerUrl, err = r.readTrimmedFile(r.args.authIssuerUrlFile)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to read issuer URL from file '%s': %w",
-				r.args.authIssuerUrlFile, err,
-			)
-		}
-	}
+	// For Keycloak, construct the issuer URL from the IDP URL
+	// The token endpoint is at {idp-url}/realms/{realm}
+	// We use the "master" realm for admin authentication
+	issuerUrl := r.args.idpURL + "/realms/master"
 
 	r.logger.DebugContext(
 		ctx,

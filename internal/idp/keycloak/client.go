@@ -134,6 +134,15 @@ func (b *ClientBuilder) Build() (result *Client, err error) {
 // CreateOrganization creates a new organization (Keycloak realm).
 // Returns the created organization with server-assigned ID and any server defaults.
 func (c *Client) CreateOrganization(ctx context.Context, org *idp.Organization) (*idp.Organization, error) {
+	// After creating a new realm, refresh the token so that subsequent requests
+	// have access to the newly created realm. The current token was issued before
+	// the realm existed and doesn't contain resource_access for the new realm.
+	if err := c.httpClient.RefreshToken(ctx); err != nil {
+		c.logger.WarnContext(ctx, "Failed to refresh token after creating organization",
+			slog.String("organization", org.Name),
+			slog.Any("error", err),
+		)
+	}
 	kcRealm := toKeycloakRealm(org)
 	response, err := c.httpClient.DoRequest(ctx, http.MethodPost, "/admin/realms", kcRealm)
 	if err != nil {

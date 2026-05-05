@@ -247,6 +247,22 @@ The integration tests use TLS with SNI (_Server Name Indication_) routing throug
 This means that the services are accessed using their Kubernetes internal host names, but routed
 through `127.0.0.1:8000` which is exposed by the Kind cluster.
 
+### Resource requirements
+
+The integration tests create a Kind cluster that runs multiple services including cert-manager,
+trust-manager, Envoy Gateway, Authorino, PostgreSQL, Keycloak, and the fulfillment service components.
+The Kind container should have at least **4-6GB of memory** allocated to run all these services reliably.
+
+If you're using **Docker Desktop** or **Podman Desktop**, increase the memory limit in the settings:
+- Docker Desktop: Preferences → Resources → Memory (set to at least 6GB)
+- Podman Desktop: Settings → Resources → Memory (set to at least 6GB)
+
+If you see OOMKilled pods or CrashLoopBackOff errors during test execution, this usually indicates
+insufficient memory. The kubelet is configured to reserve 512Mi for system processes and will evict
+pods when less than 200Mi of memory remains available.
+
+### Host name resolution
+
 For the tests to work correctly, the following host names must resolve to `127.0.0.1`:
 
 - `keycloak.keycloak.svc.cluster.local` - The Keycloak identity provider used for authentication.

@@ -79,6 +79,14 @@ spec:
           value: admin
         - name: KC_BOOTSTRAP_ADMIN_PASSWORD
           value: admin
+        {{- if .Values.javaOpts }}
+        - name: JAVA_OPTS_KC_HEAP
+          value: {{ .Values.javaOpts | quote }}
+        {{- end }}
+        {{- if .Values.resources }}
+        resources:
+{{ toYaml .Values.resources | indent 10 }}
+        {{- end }}
         command:
         - /bin/bash
         - -c

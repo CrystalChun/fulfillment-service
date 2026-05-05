@@ -513,6 +513,13 @@ func (k *Kind) createCluster(ctx context.Context) error {
 			map[string]any{
 				"role":              "control-plane",
 				"extraPortMappings": extraPortMappings,
+				"kubeadmConfigPatches": []string{
+					`kind: InitConfiguration
+nodeRegistration:
+  kubeletExtraArgs:
+    system-reserved: memory=512Mi,cpu=500m
+    eviction-hard: memory.available<200Mi`,
+				},
 			},
 		},
 	}
@@ -681,6 +688,18 @@ func (k *Kind) installCertManager(ctx context.Context) (err error) {
 			"--namespace", certManagerNamespace,
 			"--create-namespace",
 			"--set", "crds.enabled=true",
+			"--set", "resources.requests.memory=64Mi",
+			"--set", "resources.requests.cpu=50m",
+			"--set", "resources.limits.memory=256Mi",
+			"--set", "resources.limits.cpu=200m",
+			"--set", "webhook.resources.requests.memory=64Mi",
+			"--set", "webhook.resources.requests.cpu=50m",
+			"--set", "webhook.resources.limits.memory=128Mi",
+			"--set", "webhook.resources.limits.cpu=100m",
+			"--set", "cainjector.resources.requests.memory=64Mi",
+			"--set", "cainjector.resources.requests.cpu=50m",
+			"--set", "cainjector.resources.limits.memory=256Mi",
+			"--set", "cainjector.resources.limits.cpu=200m",
 			"--wait",
 		).
 		Build()
@@ -721,6 +740,10 @@ func (k *Kind) installTrustManager(ctx context.Context) (err error) {
 			"--kubeconfig", k.kubeconfigFile,
 			"--namespace", certManagerNamespace,
 			"--set", "defaultPackage.enabled=false",
+			"--set", "resources.requests.memory=64Mi",
+			"--set", "resources.requests.cpu=50m",
+			"--set", "resources.limits.memory=256Mi",
+			"--set", "resources.limits.cpu=200m",
 			"--wait",
 		).
 		Build()
@@ -916,6 +939,10 @@ func (k *Kind) installEnvoyGateway(ctx context.Context) (err error) {
 			"--kubeconfig", k.kubeconfigFile,
 			"--namespace", envoyGatewayNamespace,
 			"--create-namespace",
+			"--set", "resources.requests.memory=128Mi",
+			"--set", "resources.requests.cpu=100m",
+			"--set", "resources.limits.memory=512Mi",
+			"--set", "resources.limits.cpu=500m",
 			"--wait",
 		).
 		Build()

@@ -32,6 +32,31 @@ certs:
 images:
   keycloak: quay.io/keycloak/keycloak:26.3
 
+# Resource limits and requests for the Keycloak container. These can be adjusted based on your cluster resources.
+# For Kind clusters or resource-constrained environments, these values are set conservatively.
+# For production deployments, increase these values based on expected load.
+#
+# The default values are suitable for development and testing with approximately:
+# - 5-10 concurrent users
+# - Light realm and user management operations
+#
+# For production with higher load, consider:
+# - requests.memory: 1Gi, limits.memory: 2Gi
+# - requests.cpu: 500m, limits.cpu: 2000m
+# - javaOpts: "-Xms512m -Xmx1536m"
+resources:
+  requests:
+    memory: 512Mi
+    cpu: 250m
+  limits:
+    memory: 1Gi
+    cpu: 1000m
+
+# Java options for Keycloak. These control the JVM heap size and other settings.
+# The heap size should be less than the memory limit to leave room for native memory usage.
+# Rule of thumb: max heap should be ~75% of memory limit.
+javaOpts: "-Xms256m -Xmx768m"
+
 # Database connection configuration. Keycloak expects an external PostgreSQL database to be available. The database
 # should be created before installing this chart.
 database:

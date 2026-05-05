@@ -1118,6 +1118,28 @@ func (t *Tool) deployServiceWithHelm(ctx context.Context, imageRef string) error
 				"configMap": "ca-bundle",
 			},
 		},
+		"idp": map[string]any{
+			"enabled":  true,
+			"provider": "keycloak",
+			"url":      fmt.Sprintf("https://%s/realms/master", keycloakAddr),
+			"credentials": []any{
+				map[string]any{
+					"secret": map[string]any{
+						"name": controllerCredentialsSecret,
+						"items": []any{
+							map[string]any{
+								"key":   "client-id",
+								"param": "client-id",
+							},
+							map[string]any{
+								"key":   "client-secret",
+								"param": "client-secret",
+							},
+						},
+					},
+				},
+			},
+		},
 		"auth": map[string]any{
 			"issuerUrl": fmt.Sprintf("https://%s/realms/osac", keycloakAddr),
 			"controllerCredentials": []any{
