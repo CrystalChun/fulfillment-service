@@ -95,6 +95,16 @@ var _ = Describe("ResourceManager", func() {
 					}, nil
 				})
 
+			// Expect viewers group creation (new organization groups API)
+			mockClient.EXPECT().
+				CreateAuthorizationGroup(ctx, "acme", "Viewers", "/Projects/web-app/Viewers").
+				Return(nil)
+
+			// Expect managers group creation (new organization groups API)
+			mockClient.EXPECT().
+				CreateAuthorizationGroup(ctx, "acme", "Managers", "/Projects/web-app/Managers").
+				Return(nil)
+
 			resourceID, err := manager.CreateProjectAuthorizationResource(ctx, testProjectID, testTenant, testProject, testScopes)
 
 			Expect(err).ToNot(HaveOccurred())
@@ -113,12 +123,113 @@ var _ = Describe("ResourceManager", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to create authorization resource"))
 		})
+
+		It("should cleanup resource when viewers group creation fails", func() {
+			expectedResourceID := "resource-456"
+			testScopes := []string{ScopeViewProject, ScopeManageProject}
+
+			// Resource creation succeeds
+			mockClient.EXPECT().
+				CreateAuthorizationResource(ctx, gomock.Any()).
+				Return(&AuthorizationResource{
+					ID:   expectedResourceID,
+					Name: "PROJECT-acme-web-app",
+				}, nil)
+
+			// Viewers group creation fails
+			mockClient.EXPECT().
+				CreateAuthorizationGroup(ctx, "acme", "Viewers", "/Projects/web-app/Viewers").
+				Return(context.DeadlineExceeded)
+
+			// Expect cleanup: delete the resource
+			mockClient.EXPECT().
+				DeleteAuthorizationResource(ctx, expectedResourceID).
+				Return(nil)
+
+			_, err := manager.CreateProjectAuthorizationResource(ctx, testProjectID, testTenant, testProject, testScopes)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to create authorization groups"))
+		})
+
+		It("should cleanup resource and viewers group when managers group creation fails", func() {
+			expectedResourceID := "resource-456"
+			testScopes := []string{ScopeViewProject, ScopeManageProject}
+
+			// Resource creation succeeds
+			mockClient.EXPECT().
+				CreateAuthorizationResource(ctx, gomock.Any()).
+				Return(&AuthorizationResource{
+					ID:   expectedResourceID,
+					Name: "PROJECT-acme-web-app",
+				}, nil)
+
+			// Viewers group creation succeeds
+			mockClient.EXPECT().
+				CreateAuthorizationGroup(ctx, "acme", "Viewers", "/Projects/web-app/Viewers").
+				Return(nil)
+
+			// Managers group creation fails
+			mockClient.EXPECT().
+				CreateAuthorizationGroup(ctx, "acme", "Managers", "/Projects/web-app/Managers").
+				Return(context.DeadlineExceeded)
+
+			// Expect cleanup: get viewers group ID, then delete it
+			mockClient.EXPECT().
+				GetGroupIDByPath(ctx, "acme", "/Projects/web-app/Viewers").
+				Return("viewers-group-id", nil)
+			mockClient.EXPECT().
+				DeleteAuthorizationGroup(ctx, "acme", "viewers-group-id").
+				Return(nil)
+
+			// Expect cleanup: delete the resource
+			mockClient.EXPECT().
+				DeleteAuthorizationResource(ctx, expectedResourceID).
+				Return(nil)
+
+			_, err := manager.CreateProjectAuthorizationResource(ctx, testProjectID, testTenant, testProject, testScopes)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to create authorization groups"))
+		})
 	})
 
 	Describe("DeleteAuthorizationResource", func() {
 		It("should delete an authorization resource by ID", func() {
 			resourceID := "resource-456"
 
+			// Get resource to extract name and tenant for group cleanup
+			mockClient.EXPECT().
+				GetAuthorizationResource(ctx, resourceID).
+				Return(&AuthorizationResource{
+					ID:   resourceID,
+					Name: resourceName,
+					Attributes: map[string][]string{
+						"tenant": {"acme"},
+					},
+				}, nil)
+
+			// Get viewers group ID (new organization groups API)
+			mockClient.EXPECT().
+				GetGroupIDByPath(ctx, "acme", "/Projects/web-app/Viewers").
+				Return("viewers-group-id", nil)
+
+			// Delete viewers group (new organization groups API)
+			mockClient.EXPECT().
+				DeleteAuthorizationGroup(ctx, "acme", "viewers-group-id").
+				Return(nil)
+
+			// Get managers group ID (new organization groups API)
+			mockClient.EXPECT().
+				GetGroupIDByPath(ctx, "acme", "/Projects/web-app/Managers").
+				Return("managers-group-id", nil)
+
+			// Delete managers group (new organization groups API)
+			mockClient.EXPECT().
+				DeleteAuthorizationGroup(ctx, "acme", "managers-group-id").
+				Return(nil)
+
+			// Delete the resource itself
 			mockClient.EXPECT().
 				DeleteAuthorizationResource(ctx, resourceID).
 				Return(nil)
@@ -131,6 +242,70 @@ var _ = Describe("ResourceManager", func() {
 		It("should return error when client fails", func() {
 			resourceID := "resource-456"
 
+			// Get resource fails (might already be deleted)
+			mockClient.EXPECT().
+				GetAuthorizationResource(ctx, resourceID).
+				Return(nil, context.DeadlineExceeded)
+
+			// Should still attempt to delete the resource
+			mockClient.EXPECT().
+				DeleteAuthorizationResource(ctx, resourceID).
+				Return(nil)
+
+			err := manager.DeleteAuthorizationResource(ctx, resourceID)
+
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should continue deleting resource even if group deletion fails", func() {
+			resourceID := "resource-456"
+			resourceName := "PROJECT-acme-web-app"
+
+			// Get resource succeeds with tenant attribute
+			mockClient.EXPECT().
+				GetAuthorizationResource(ctx, resourceID).
+				Return(&AuthorizationResource{
+					ID:   resourceID,
+					Name: resourceName,
+					Attributes: map[string][]string{
+						"tenant": {"acme"},
+					},
+				}, nil)
+
+			// Viewers group lookup fails
+			mockClient.EXPECT().
+				GetGroupIDByPath(ctx, "acme", "/Projects/web-app/Viewers").
+				Return("", context.DeadlineExceeded)
+
+			// Managers group lookup succeeds
+			mockClient.EXPECT().
+				GetGroupIDByPath(ctx, "acme", "/Projects/web-app/Managers").
+				Return("managers-group-id", nil)
+
+			// Managers group deletion fails
+			mockClient.EXPECT().
+				DeleteAuthorizationGroup(ctx, "acme", "managers-group-id").
+				Return(context.DeadlineExceeded)
+
+			// Should still delete the resource
+			mockClient.EXPECT().
+				DeleteAuthorizationResource(ctx, resourceID).
+				Return(nil)
+
+			err := manager.DeleteAuthorizationResource(ctx, resourceID)
+
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should return error when resource deletion fails", func() {
+			resourceID := "resource-456"
+
+			// Get resource fails
+			mockClient.EXPECT().
+				GetAuthorizationResource(ctx, resourceID).
+				Return(nil, context.DeadlineExceeded)
+
+			// Resource deletion fails
 			mockClient.EXPECT().
 				DeleteAuthorizationResource(ctx, resourceID).
 				Return(context.DeadlineExceeded)

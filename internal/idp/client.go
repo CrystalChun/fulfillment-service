@@ -78,6 +78,17 @@ type Client interface {
 	GetAuthorizationResource(ctx context.Context, resourceID string) (*AuthorizationResource, error)
 	DeleteAuthorizationResource(ctx context.Context, resourceID string) error
 
+	// Authorization policy and permission operations
+	// These methods control who can access which resources with what scopes.
+	// CreateAuthorizationGroup creates a Keycloak organization group for authorization purposes.
+	// Organization groups are scoped to a specific organization and support hierarchical paths.
+	// Recommended path format: "/Projects/{project-name}/{Viewers|Managers}" for top-level projects.
+	CreateAuthorizationGroup(ctx context.Context, organizationName, groupName, groupPath string) error
+	// DeleteAuthorizationGroup deletes a Keycloak organization group by ID.
+	DeleteAuthorizationGroup(ctx context.Context, organizationName, groupID string) error
+	// GetGroupIDByPath gets a Keycloak organization group ID by its path.
+	GetGroupIDByPath(ctx context.Context, organizationName, groupPath string) (string, error)
+
 	// Identity Provider operations
 	// GetIdentityProvider retrieves an external identity provider configuration by alias at the realm level.
 	// This returns the IdP without verifying organization assignment.

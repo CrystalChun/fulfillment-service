@@ -254,6 +254,19 @@ func (m *mockClient) ListIdentityProviders(ctx context.Context, organizationName
 	return nil, nil
 }
 
+func (m *mockClient) CreateAuthorizationGroup(ctx context.Context, organizationName, groupName, groupPath string) error {
+	return nil
+}
+
+func (m *mockClient) DeleteAuthorizationGroup(ctx context.Context, organizationName, groupID string) error {
+	return nil
+}
+
+func (m *mockClient) GetGroupIDByPath(ctx context.Context, organizationName, groupPath string) (string, error) {
+	// Return a fake group ID for testing
+	return "test-group-id", nil
+}
+
 var _ = Describe("OrganizationManager", func() {
 	var (
 		ctx     context.Context
