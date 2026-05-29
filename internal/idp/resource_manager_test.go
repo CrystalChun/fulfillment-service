@@ -72,11 +72,12 @@ var _ = Describe("ResourceManager", func() {
 	})
 
 	Describe("CreateProjectAuthorizationResource", func() {
-		It("should create an authorization resource with correct naming format", func() {
+		It("should create an authorization resource with correct naming format and groups", func() {
 			expectedResourceName := "PROJECT-acme-web-app"
 			expectedResourceID := "resource-456"
 			testScopes := []string{ScopeViewProject, ScopeManageProject}
 
+			// Expect resource creation
 			mockClient.EXPECT().
 				CreateAuthorizationResource(ctx, gomock.Any()).
 				DoAndReturn(func(ctx context.Context, resource *AuthorizationResource) (*AuthorizationResource, error) {
@@ -111,7 +112,7 @@ var _ = Describe("ResourceManager", func() {
 			Expect(resourceID).To(Equal(expectedResourceID))
 		})
 
-		It("should return error when client fails", func() {
+		It("should return error when resource creation fails", func() {
 			testScopes := []string{ScopeViewProject, ScopeManageProject}
 
 			mockClient.EXPECT().
@@ -195,8 +196,9 @@ var _ = Describe("ResourceManager", func() {
 	})
 
 	Describe("DeleteAuthorizationResource", func() {
-		It("should delete an authorization resource by ID", func() {
+		It("should delete an authorization resource and its groups by ID", func() {
 			resourceID := "resource-456"
+			resourceName := "PROJECT-acme-web-app"
 
 			// Get resource to extract name and tenant for group cleanup
 			mockClient.EXPECT().
@@ -239,7 +241,7 @@ var _ = Describe("ResourceManager", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should return error when client fails", func() {
+		It("should continue deleting resource even if GetAuthorizationResource fails", func() {
 			resourceID := "resource-456"
 
 			// Get resource fails (might already be deleted)

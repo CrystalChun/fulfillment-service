@@ -70,6 +70,7 @@ func (b *ResourceManagerBuilder) Build() (result *ResourceManager, err error) {
 
 // CreateProjectAuthorizationResource creates an Authorization Resource for a project.
 // The resource name follows the format: PROJECT-{tenant}-{projectName}
+// This also creates authorization groups for viewer and manager access.
 func (m *ResourceManager) CreateProjectAuthorizationResource(ctx context.Context, projectID, tenant, projectName string, scopes []string) (string, error) {
 	resourceName := fmt.Sprintf("PROJECT-%s-%s", tenant, projectName)
 
@@ -103,6 +104,18 @@ func (m *ResourceManager) CreateProjectAuthorizationResource(ctx context.Context
 		slog.String("resource_name", createdResource.Name),
 		slog.String("project_id", projectID),
 	)
+
+	// Create authorization groups for the project
+	err = m.createProjectAuthorizationGroups(ctx, createdResource.ID, tenant, projectName)
+	if err != nil {
+		// Clean up the resource if group creation fails
+		m.logger.ErrorContext(ctx, "Failed to create authorization groups, cleaning up resource",
+			slog.String("resource_id", createdResource.ID),
+			slog.Any("error", err),
+		)
+		_ = m.client.DeleteAuthorizationResource(ctx, createdResource.ID)
+		return "", fmt.Errorf("failed to create authorization groups: %w", err)
+	}
 
 	return createdResource.ID, nil
 }
@@ -156,6 +169,7 @@ func (m *ResourceManager) createProjectAuthorizationGroups(ctx context.Context, 
 }
 
 // DeleteAuthorizationResource deletes an Authorization Resource by ID.
+// This also deletes the associated groups
 func (m *ResourceManager) DeleteAuthorizationResource(ctx context.Context, resourceID string) error {
 	m.logger.DebugContext(ctx, "Deleting authorization resource",
 		slog.String("resource_id", resourceID),

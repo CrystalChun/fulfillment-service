@@ -212,6 +212,16 @@ var _ = Describe("Validation and Activation", func() {
 					Name: "PROJECT-acme-test-project",
 				}, nil)
 
+			// Expect viewers group creation (new organization groups API)
+			mockIdpClient.EXPECT().
+				CreateAuthorizationGroup(gomock.Any(), "acme", "Viewers", "/Projects/test-project/Viewers").
+				Return(nil)
+
+			// Expect managers group creation (new organization groups API)
+			mockIdpClient.EXPECT().
+				CreateAuthorizationGroup(gomock.Any(), "acme", "Managers", "/Projects/test-project/Managers").
+				Return(nil)
+
 			task := &task{
 				r:       functionObj,
 				project: project,
@@ -245,6 +255,16 @@ var _ = Describe("Validation and Activation", func() {
 					ID:   "resource-abc-123",
 					Name: "PROJECT-acme-test-project",
 				}, nil)
+
+			// Expect viewers group creation (new organization groups API)
+			mockIdpClient.EXPECT().
+				CreateAuthorizationGroup(gomock.Any(), "acme", "Viewers", "/Projects/test-project/Viewers").
+				Return(nil)
+
+			// Expect managers group creation (new organization groups API)
+			mockIdpClient.EXPECT().
+				CreateAuthorizationGroup(gomock.Any(), "acme", "Managers", "/Projects/test-project/Managers").
+				Return(nil)
 
 			task := &task{
 				r:       functionObj,
@@ -298,6 +318,16 @@ var _ = Describe("Validation and Activation", func() {
 					ID:   "resource-456",
 					Name: "PROJECT-acme-child-project",
 				}, nil)
+
+			// Expect viewers group creation (new organization groups API)
+			mockIdpClient.EXPECT().
+				CreateAuthorizationGroup(gomock.Any(), "acme", "Viewers", "/Projects/child-project/Viewers").
+				Return(nil)
+
+			// Expect managers group creation (new organization groups API)
+			mockIdpClient.EXPECT().
+				CreateAuthorizationGroup(gomock.Any(), "acme", "Managers", "/Projects/child-project/Managers").
+				Return(nil)
 
 			task := &task{
 				r:       functionObj,
@@ -363,6 +393,16 @@ var _ = Describe("Validation and Activation", func() {
 					ID:   "resource-789",
 					Name: "PROJECT-acme-child-project",
 				}, nil)
+
+			// Expect viewers group creation (new organization groups API)
+			mockIdpClient.EXPECT().
+				CreateAuthorizationGroup(gomock.Any(), "acme", "Viewers", "/Projects/child-project/Viewers").
+				Return(nil)
+
+			// Expect managers group creation (new organization groups API)
+			mockIdpClient.EXPECT().
+				CreateAuthorizationGroup(gomock.Any(), "acme", "Managers", "/Projects/child-project/Managers").
+				Return(nil)
 
 			task := &task{
 				r:       functionObj,
@@ -734,7 +774,38 @@ var _ = Describe("Deletion Cleanup", func() {
 				Size: 0,
 			}, nil)
 
-		// Expect deletion call
+		// Expect get resource to extract name and tenant for group cleanup
+		mockIdpClient.EXPECT().
+			GetAuthorizationResource(gomock.Any(), "resource-123").
+			Return(&idp.AuthorizationResource{
+				ID:   "resource-123",
+				Name: "PROJECT-acme-test-project",
+				Attributes: map[string][]string{
+					"tenant": {"acme"},
+				},
+			}, nil)
+
+		// Expect viewers group ID lookup (new organization groups API with new paths)
+		mockIdpClient.EXPECT().
+			GetGroupIDByPath(gomock.Any(), "acme", "/Projects/test-project/Viewers").
+			Return("viewers-group-id", nil)
+
+		// Expect viewers group deletion (new organization groups API)
+		mockIdpClient.EXPECT().
+			DeleteAuthorizationGroup(gomock.Any(), "acme", "viewers-group-id").
+			Return(nil)
+
+		// Expect managers group ID lookup (new organization groups API with new paths)
+		mockIdpClient.EXPECT().
+			GetGroupIDByPath(gomock.Any(), "acme", "/Projects/test-project/Managers").
+			Return("managers-group-id", nil)
+
+		// Expect managers group deletion (new organization groups API)
+		mockIdpClient.EXPECT().
+			DeleteAuthorizationGroup(gomock.Any(), "acme", "managers-group-id").
+			Return(nil)
+
+		// Expect resource deletion
 		mockIdpClient.EXPECT().
 			DeleteAuthorizationResource(gomock.Any(), "resource-123").
 			Return(nil)
@@ -767,7 +838,12 @@ var _ = Describe("Deletion Cleanup", func() {
 				Size: 0,
 			}, nil)
 
-		// Expect deletion call that fails
+		// Expect get resource to fail (resource already deleted)
+		mockIdpClient.EXPECT().
+			GetAuthorizationResource(gomock.Any(), "resource-456").
+			Return(nil, status.Error(codes.NotFound, "resource not found"))
+
+		// Expect resource deletion call that also fails
 		mockIdpClient.EXPECT().
 			DeleteAuthorizationResource(gomock.Any(), "resource-456").
 			Return(status.Error(codes.NotFound, "resource not found"))
