@@ -34,6 +34,32 @@ spec:
       overrides:
         authnMethod:
           value: jwt
+  metadata:
+    # Call Keycloak UMA to get permissions for the requested resource
+    uma-permissions:
+      when:
+        # Only call UMA for Projects methods that target specific resources
+        - selector: context.request.http.path
+          operator: matches
+          value: ^/osac\.public\.v1\.Projects/(Create|Get|Update|Delete)$
+      http:
+        url: "{{ required "auth.issuerUrl is required" .Values.auth.issuerUrl }}/protocol/openid-connect/token"
+        method: POST
+        contentType: application/x-www-form-urlencoded
+        body:
+          selector: |
+            "grant_type=urn:ietf:params:oauth:grant-type:uma-ticket" +
+            "&audience=osac-authorization" +
+            "&permission=" +
+            (context.request.http.path.@extract:{"sep":"/","pos":3} == "Create"
+              ? "PROJECT-" + context.request.http.body.@fromstr.object.metadata.tenant + "-" + context.request.http.body.@fromstr.object.metadata.name
+              : "PROJECT-" + auth.identity.organization + "-" + context.request.http.body.@fromstr.id) +
+            "#" +
+            (context.request.http.path.@extract:{"sep":"/","pos":3} == "Get" ? "VIEW_PROJECT" : "MANAGE_PROJECT") +
+            "&subject_token=" + context.request.http.headers.authorization.@extract:{"sep":" ","pos":1}
+        credentials:
+          name: osac-authorization-credentials
+          keySelector: client-secret
   authorization:
     default:
       opa:
@@ -211,6 +237,11 @@ spec:
               "/osac.public.v1.NetworkClasses/Get",
               "/osac.public.v1.NetworkClasses/List",
               "/osac.public.v1.NetworkClasses/Update",
+              "/osac.public.v1.Projects/Create",
+              "/osac.public.v1.Projects/Delete",
+              "/osac.public.v1.Projects/Get",
+              "/osac.public.v1.Projects/List",
+              "/osac.public.v1.Projects/Update",
               "/osac.public.v1.Subnets/Create",
               "/osac.public.v1.Subnets/Delete",
               "/osac.public.v1.Subnets/Get",
@@ -265,6 +296,19 @@ spec:
           # Allow everything to admins:
           allow if {
             is_admin
+          }
+
+          # Project resource authorization via Keycloak UMA
+          # Allow if UMA metadata call succeeded and returned access_token
+          allow if {
+            grpc_method in {
+              "/osac.public.v1.Projects/Create",
+              "/osac.public.v1.Projects/Get",
+              "/osac.public.v1.Projects/Update",
+              "/osac.public.v1.Projects/Delete",
+            }
+            input.auth.metadata["uma-permissions"]
+            input.auth.metadata["uma-permissions"].access_token
           }
   response:
     success:
