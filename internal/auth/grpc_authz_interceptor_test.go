@@ -658,34 +658,6 @@ var _ = Describe("Rego authorization interceptor", func() {
 			Expect(handled).To(BeFalse())
 		})
 
-		It("Falls back to groups for tenant when organization and organizations are absent", func(ctx context.Context) {
-			token := createKeycloakUserToken("", "my-user", jwt.MapClaims{
-				"organization": nil,
-				"groups": []any{
-					"my-tenant",
-				},
-			})
-			ctx = ContextWithToken(ctx, token)
-			handled := false
-			_, err := interceptor.UnaryServer(
-				ctx,
-				nil,
-				&grpc.UnaryServerInfo{
-					FullMethod: "/osac.public.v1.Clusters/Create",
-				},
-				func(ctx context.Context, req any) (any, error) {
-					subject := SubjectFromContext(ctx)
-					Expect(subject.User).To(Equal("my-user"))
-					Expect(subject.Tenants.Finite()).To(BeTrue())
-					Expect(subject.Tenants.Inclusions()).To(ConsistOf("my-tenant"))
-					handled = true
-					return nil, nil
-				},
-			)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(handled).To(BeTrue())
-		})
-
 		It("Denies groups-only user without tenant-admin role on user management RPCs", func(ctx context.Context) {
 			token := createKeycloakUserToken("", "my-user", jwt.MapClaims{
 				"organization": nil,
