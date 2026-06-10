@@ -117,16 +117,6 @@ message ProjectStatus {
   // Each condition has a type, status (True/False/Unknown), and optional reason and message.
   repeated ProjectCondition conditions = 3;
 
-  // The Keycloak authorization resource ID for this project.
-  //
-  // This field is set by the controller when the Keycloak authorization resource is created during
-  // project activation. The resource ID is used to manage fine-grained permissions for the project
-  // and is needed to clean up the authorization resource when the project is deleted.
-  //
-  // This field is system-managed and should not be modified by users.
-  //
-  // Example: "550e8400-e29b-41d4-a716-446655440000"
-  optional string keycloak_resource_id = 4;
 }
 
 // Lifecycle states for Project resources.
