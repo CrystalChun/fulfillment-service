@@ -204,20 +204,12 @@ var _ = Describe("Validation and Activation", func() {
 				}.Build(),
 			}.Build()
 
-			// Expect authorization resource creation
-			mockIdpClient.EXPECT().
-				CreateAuthorizationResource(gomock.Any(), gomock.Any()).
-				Return(&idp.AuthorizationResource{
-					ID:   "resource-123",
-					Name: "PROJECT-acme-test-project",
-				}, nil)
-
-			// Expect viewers group creation (new organization groups API)
+			// Expect viewers group creation
 			mockIdpClient.EXPECT().
 				CreateAuthorizationGroup(gomock.Any(), "acme", "viewers", "/test-project/viewers").
 				Return(nil)
 
-			// Expect managers group creation (new organization groups API)
+			// Expect managers group creation
 			mockIdpClient.EXPECT().
 				CreateAuthorizationGroup(gomock.Any(), "acme", "managers", "/test-project/managers").
 				Return(nil)
@@ -233,7 +225,7 @@ var _ = Describe("Validation and Activation", func() {
 			Expect(project.GetStatus().HasMessage()).To(BeFalse())
 		})
 
-		It("should store Keycloak resource ID in status", func() {
+		It("should set Keycloak sync condition to true on success", func() {
 			project := privatev1.Project_builder{
 				Id: "project-1",
 				Metadata: privatev1.Metadata_builder{
@@ -248,20 +240,12 @@ var _ = Describe("Validation and Activation", func() {
 				}.Build(),
 			}.Build()
 
-			// Expect authorization resource creation
-			mockIdpClient.EXPECT().
-				CreateAuthorizationResource(gomock.Any(), gomock.Any()).
-				Return(&idp.AuthorizationResource{
-					ID:   "resource-abc-123",
-					Name: "PROJECT-acme-test-project",
-				}, nil)
-
-			// Expect viewers group creation (new organization groups API)
+			// Expect viewers group creation
 			mockIdpClient.EXPECT().
 				CreateAuthorizationGroup(gomock.Any(), "acme", "viewers", "/test-project/viewers").
 				Return(nil)
 
-			// Expect managers group creation (new organization groups API)
+			// Expect managers group creation
 			mockIdpClient.EXPECT().
 				CreateAuthorizationGroup(gomock.Any(), "acme", "managers", "/test-project/managers").
 				Return(nil)
@@ -273,9 +257,18 @@ var _ = Describe("Validation and Activation", func() {
 
 			err := task.validateAndActivate(ctx)
 			Expect(err).ToNot(HaveOccurred())
-			// Verify resource ID is stored in status
-			Expect(project.GetStatus().HasKeycloakResourceId()).To(BeTrue())
-			Expect(project.GetStatus().GetKeycloakResourceId()).To(Equal("resource-abc-123"))
+
+			// Verify Keycloak sync condition is set to true
+			var syncCondition *privatev1.ProjectCondition
+			for _, cond := range project.GetStatus().GetConditions() {
+				if cond.GetType() == privatev1.ProjectConditionType_PROJECT_CONDITION_TYPE_KEYCLOAK_SYNC {
+					syncCondition = cond
+					break
+				}
+			}
+			Expect(syncCondition).ToNot(BeNil())
+			Expect(syncCondition.GetStatus()).To(Equal(privatev1.ConditionStatus_CONDITION_STATUS_TRUE))
+			Expect(syncCondition.GetReason()).To(Equal("GroupsCreated"))
 		})
 	})
 
@@ -311,20 +304,12 @@ var _ = Describe("Validation and Activation", func() {
 				Get(gomock.Any(), gomock.Any()).
 				Return(&privatev1.ProjectsGetResponse{Object: parentProject}, nil)
 
-			// Expect authorization resource creation
-			mockIdpClient.EXPECT().
-				CreateAuthorizationResource(gomock.Any(), gomock.Any()).
-				Return(&idp.AuthorizationResource{
-					ID:   "resource-456",
-					Name: "PROJECT-acme-child-project",
-				}, nil)
-
-			// Expect viewers group creation (new organization groups API)
+			// Expect viewers group creation
 			mockIdpClient.EXPECT().
 				CreateAuthorizationGroup(gomock.Any(), "acme", "viewers", "/child-project/viewers").
 				Return(nil)
 
-			// Expect managers group creation (new organization groups API)
+			// Expect managers group creation
 			mockIdpClient.EXPECT().
 				CreateAuthorizationGroup(gomock.Any(), "acme", "managers", "/child-project/managers").
 				Return(nil)
@@ -386,15 +371,7 @@ var _ = Describe("Validation and Activation", func() {
 				Get(gomock.Any(), gomock.Any()).
 				Return(&privatev1.ProjectsGetResponse{Object: rootProject}, nil)
 
-			// Expect authorization resource creation
-			mockIdpClient.EXPECT().
-				CreateAuthorizationResource(gomock.Any(), gomock.Any()).
-				Return(&idp.AuthorizationResource{
-					ID:   "resource-789",
-					Name: "PROJECT-acme-child-project",
-				}, nil)
-
-			// Expect viewers group creation (new organization groups API)
+			// Expect viewers group creation
 			mockIdpClient.EXPECT().
 				CreateAuthorizationGroup(gomock.Any(), "acme", "viewers", "/child-project/viewers").
 				Return(nil)
@@ -756,14 +733,13 @@ var _ = Describe("Deletion Cleanup", func() {
 		Expect(project.GetMetadata().GetFinalizers()).To(ContainElement(finalizers.Controller))
 	})
 
-	It("should delete Keycloak authorization resource when no children exist", func() {
+	It("should delete Keycloak groups when no children exist", func() {
 		project := privatev1.Project_builder{
 			Id: "project-1",
 			Metadata: privatev1.Metadata_builder{
+				Name:       "test-project",
+				Tenant:     "acme",
 				Finalizers: []string{finalizers.Controller},
-			}.Build(),
-			Status: privatev1.ProjectStatus_builder{
-				KeycloakResourceId: new("resource-123"),
 			}.Build(),
 		}.Build()
 
@@ -774,40 +750,24 @@ var _ = Describe("Deletion Cleanup", func() {
 				Size: 0,
 			}, nil)
 
-		// Expect get resource to extract name and tenant for group cleanup
-		mockIdpClient.EXPECT().
-			GetAuthorizationResource(gomock.Any(), "resource-123").
-			Return(&idp.AuthorizationResource{
-				ID:   "resource-123",
-				Name: "PROJECT-acme-test-project",
-				Attributes: map[string][]string{
-					"tenant": {"acme"},
-				},
-			}, nil)
-
-		// Expect viewers group ID lookup (new organization groups API with new paths)
+		// Expect viewers group ID lookup
 		mockIdpClient.EXPECT().
 			GetGroupIDByPath(gomock.Any(), "acme", "/test-project/viewers").
 			Return("viewers-group-id", nil)
 
-		// Expect viewers group deletion (new organization groups API)
+		// Expect viewers group deletion
 		mockIdpClient.EXPECT().
 			DeleteAuthorizationGroup(gomock.Any(), "acme", "viewers-group-id").
 			Return(nil)
 
-		// Expect managers group ID lookup (new organization groups API with new paths)
+		// Expect managers group ID lookup
 		mockIdpClient.EXPECT().
 			GetGroupIDByPath(gomock.Any(), "acme", "/test-project/managers").
 			Return("managers-group-id", nil)
 
-		// Expect managers group deletion (new organization groups API)
+		// Expect managers group deletion
 		mockIdpClient.EXPECT().
 			DeleteAuthorizationGroup(gomock.Any(), "acme", "managers-group-id").
-			Return(nil)
-
-		// Expect resource deletion
-		mockIdpClient.EXPECT().
-			DeleteAuthorizationResource(gomock.Any(), "resource-123").
 			Return(nil)
 
 		task := &task{
@@ -820,14 +780,13 @@ var _ = Describe("Deletion Cleanup", func() {
 		Expect(project.GetMetadata().GetFinalizers()).ToNot(ContainElement(finalizers.Controller))
 	})
 
-	It("should remove finalizer even if Keycloak deletion fails", func() {
+	It("should remove finalizer even if Keycloak group deletion fails", func() {
 		project := privatev1.Project_builder{
 			Id: "project-1",
 			Metadata: privatev1.Metadata_builder{
+				Name:       "test-project",
+				Tenant:     "acme",
 				Finalizers: []string{finalizers.Controller},
-			}.Build(),
-			Status: privatev1.ProjectStatus_builder{
-				KeycloakResourceId: new("resource-456"),
 			}.Build(),
 		}.Build()
 
@@ -838,15 +797,15 @@ var _ = Describe("Deletion Cleanup", func() {
 				Size: 0,
 			}, nil)
 
-		// Expect get resource to fail (resource already deleted)
+		// Expect viewers group ID lookup to fail
 		mockIdpClient.EXPECT().
-			GetAuthorizationResource(gomock.Any(), "resource-456").
-			Return(nil, status.Error(codes.NotFound, "resource not found"))
+			GetGroupIDByPath(gomock.Any(), "acme", "/test-project/viewers").
+			Return("", status.Error(codes.NotFound, "group not found"))
 
-		// Expect resource deletion call that also fails
+		// Expect managers group ID lookup to fail
 		mockIdpClient.EXPECT().
-			DeleteAuthorizationResource(gomock.Any(), "resource-456").
-			Return(status.Error(codes.NotFound, "resource not found"))
+			GetGroupIDByPath(gomock.Any(), "acme", "/test-project/managers").
+			Return("", status.Error(codes.NotFound, "group not found"))
 
 		task := &task{
 			r:       functionObj,
@@ -857,25 +816,15 @@ var _ = Describe("Deletion Cleanup", func() {
 		Expect(err).ToNot(HaveOccurred())
 		// Finalizer should still be removed even though Keycloak deletion failed
 		Expect(project.GetMetadata().GetFinalizers()).ToNot(ContainElement(finalizers.Controller))
-		// Condition should be updated to reflect failure
-		conditions := project.GetStatus().GetConditions()
-		var keycloakCondition *privatev1.ProjectCondition
-		for _, cond := range conditions {
-			if cond.GetType() == privatev1.ProjectConditionType_PROJECT_CONDITION_TYPE_KEYCLOAK_SYNC {
-				keycloakCondition = cond
-				break
-			}
-		}
-		Expect(keycloakCondition).ToNot(BeNil())
-		Expect(keycloakCondition.GetStatus()).To(Equal(privatev1.ConditionStatus_CONDITION_STATUS_FALSE))
-		Expect(keycloakCondition.GetReason()).To(Equal("DeletionFailed"))
 	})
 
-	It("should skip Keycloak deletion if no resource ID annotation exists", func() {
+	It("should handle missing tenant gracefully during deletion", func() {
 		project := privatev1.Project_builder{
 			Id: "project-1",
 			Metadata: privatev1.Metadata_builder{
+				Name:       "test-project",
 				Finalizers: []string{finalizers.Controller},
+				// Missing tenant
 			}.Build(),
 		}.Build()
 
@@ -886,7 +835,8 @@ var _ = Describe("Deletion Cleanup", func() {
 				Size: 0,
 			}, nil)
 
-		// No IDP client calls expected
+		// No IDP client calls expected - DeleteProjectGroups will return error for missing tenant
+		// but deletion continues
 
 		task := &task{
 			r:       functionObj,
@@ -898,13 +848,14 @@ var _ = Describe("Deletion Cleanup", func() {
 		Expect(project.GetMetadata().GetFinalizers()).ToNot(ContainElement(finalizers.Controller))
 	})
 
-	It("should skip Keycloak deletion if resource ID is not set", func() {
+	It("should handle missing project name gracefully during deletion", func() {
 		project := privatev1.Project_builder{
 			Id: "project-1",
 			Metadata: privatev1.Metadata_builder{
+				Tenant:     "acme",
 				Finalizers: []string{finalizers.Controller},
+				// Missing name
 			}.Build(),
-			Status: privatev1.ProjectStatus_builder{}.Build(),
 		}.Build()
 
 		// Expect query for children (returns 0)
@@ -914,7 +865,8 @@ var _ = Describe("Deletion Cleanup", func() {
 				Size: 0,
 			}, nil)
 
-		// No IDP client calls expected
+		// No IDP client calls expected - DeleteProjectGroups will return error for missing name
+		// but deletion continues
 
 		task := &task{
 			r:       functionObj,

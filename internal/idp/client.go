@@ -82,7 +82,7 @@ type Client interface {
 	// These methods control who can access which resources with what scopes.
 	// CreateAuthorizationGroup creates a Keycloak organization group for authorization purposes.
 	// Organization groups are scoped to a specific organization and support hierarchical paths.
-	// Recommended path format: "/{projects}/{project-name}/{viewers|managers}" for top-level projects.
+	// Recommended path format: "/{project-name}/{viewers|managers}" for top-level projects.
 	CreateAuthorizationGroup(ctx context.Context, organizationName, groupName, groupPath string) error
 	// DeleteAuthorizationGroup deletes a Keycloak organization group by ID.
 	DeleteAuthorizationGroup(ctx context.Context, organizationName, groupID string) error

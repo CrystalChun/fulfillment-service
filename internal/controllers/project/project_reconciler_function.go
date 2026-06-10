@@ -204,16 +204,40 @@ func (t *task) validateAndActivate(ctx context.Context) error {
 		}
 	}
 
-	// Create Keycloak Authorization Resource
-	if err := t.createKeycloakAuthorizationResource(ctx); err != nil {
-		// Transient error - return it to retry later
-		return fmt.Errorf("failed to create Keycloak authorization resource: %w", err)
+	// Create Keycloak groups for project authorization
+	if err := t.r.resourceManager.CreateProjectGroups(ctx,
+		t.project.GetMetadata().GetTenant(),
+		t.project.GetMetadata().GetName()); err != nil {
+		t.updateCondition(
+			privatev1.ProjectConditionType_PROJECT_CONDITION_TYPE_KEYCLOAK_SYNC,
+			privatev1.ConditionStatus_CONDITION_STATUS_FALSE,
+			"GroupCreationFailed",
+			fmt.Sprintf("Failed to create Keycloak groups: %v", err),
+		)
+		// Persist the condition update before returning the error
+		updateMask := t.r.maskCalculator.Calculate(&privatev1.Project{}, t.project)
+		if len(updateMask.GetPaths()) > 0 {
+			if _, updateErr := t.r.projectsClient.Update(ctx, privatev1.ProjectsUpdateRequest_builder{
+				Object:     t.project,
+				UpdateMask: updateMask,
+			}.Build()); updateErr != nil {
+				// Log update error but return the original group creation error
+				t.r.logger.ErrorContext(ctx, "Failed to persist Keycloak sync condition",
+					slog.String("project", t.project.GetMetadata().GetName()),
+					slog.Any("update_error", updateErr),
+				)
+			}
+		}
+		return fmt.Errorf("failed to create Keycloak groups: %w", err)
 	}
 
-	// Check if Keycloak resource creation set the state to FAILED
-	if t.project.GetStatus().GetState() == privatev1.ProjectState_PROJECT_STATE_FAILED {
-		return nil
-	}
+	// Update condition with success
+	t.updateCondition(
+		privatev1.ProjectConditionType_PROJECT_CONDITION_TYPE_KEYCLOAK_SYNC,
+		privatev1.ConditionStatus_CONDITION_STATUS_TRUE,
+		"GroupsCreated",
+		"Keycloak groups created successfully",
+	)
 
 	// All validations passed
 	t.project.GetStatus().SetState(privatev1.ProjectState_PROJECT_STATE_ACTIVE)
@@ -298,76 +322,20 @@ func (t *task) delete(ctx context.Context) error {
 		return nil
 	}
 
-	// Clean up Keycloak authorization resource if it exists
-	if t.project.HasStatus() && t.project.GetStatus().HasKeycloakResourceId() {
-		resourceID := t.project.GetStatus().GetKeycloakResourceId()
-		err := t.r.resourceManager.DeleteAuthorizationResource(ctx, resourceID)
-		if err != nil {
-			// Log warning but don't block deletion - resource might already be gone
-			t.r.logger.WarnContext(ctx, "Failed to delete Keycloak authorization resource",
-				slog.String("project_id", t.project.GetId()),
-				slog.String("resource_id", resourceID),
-				slog.Any("error", err),
-			)
-			// Update condition to reflect deletion failure
-			t.updateCondition(
-				privatev1.ProjectConditionType_PROJECT_CONDITION_TYPE_KEYCLOAK_SYNC,
-				privatev1.ConditionStatus_CONDITION_STATUS_FALSE,
-				"DeletionFailed",
-				fmt.Sprintf("Failed to delete Keycloak authorization resource: %v", err),
-			)
-		} else {
-			t.r.logger.InfoContext(ctx, "Deleted Keycloak authorization resource",
-				slog.String("project_id", t.project.GetId()),
-				slog.String("resource_id", resourceID),
-			)
-		}
+	// Clean up Keycloak groups
+	err = t.r.resourceManager.DeleteProjectGroups(ctx,
+		t.project.GetMetadata().GetTenant(),
+		t.project.GetMetadata().GetName())
+	if err != nil {
+		t.r.logger.WarnContext(ctx, "Failed to delete Keycloak groups",
+			slog.String("project_id", t.project.GetId()),
+			slog.String("tenant", t.project.GetMetadata().GetTenant()),
+			slog.String("project_name", t.project.GetMetadata().GetName()),
+			slog.Any("error", err),
+		)
 	}
 
 	t.removeFinalizer()
-	return nil
-}
-
-// createKeycloakAuthorizationResource creates a Keycloak Authorization Resource for the project.
-// This resource enables fine-grained permission management for project operations.
-func (t *task) createKeycloakAuthorizationResource(ctx context.Context) error {
-	// Create the resource via ResourceManager
-	resourceID, err := t.r.resourceManager.CreateProjectAuthorizationResource(
-		ctx,
-		t.project.GetId(),
-		t.project.GetMetadata().GetTenant(),
-		t.project.GetMetadata().GetName(),
-		[]string{
-			idp.ScopeViewProject,
-			idp.ScopeManageProject,
-		},
-	)
-	if err != nil {
-		// Update condition with failure
-		t.updateCondition(
-			privatev1.ProjectConditionType_PROJECT_CONDITION_TYPE_KEYCLOAK_SYNC,
-			privatev1.ConditionStatus_CONDITION_STATUS_FALSE,
-			"CreationFailed",
-			fmt.Sprintf("Failed to create Keycloak authorization resource: %v", err),
-		)
-		// Return error to trigger retry (could be transient)
-		return fmt.Errorf("failed to create Keycloak authorization resource: %w", err)
-	}
-
-	// Store resource ID in status for deletion cleanup
-	if !t.project.HasStatus() {
-		t.project.SetStatus(&privatev1.ProjectStatus{})
-	}
-	t.project.GetStatus().SetKeycloakResourceId(resourceID)
-
-	// Update condition with success
-	t.updateCondition(
-		privatev1.ProjectConditionType_PROJECT_CONDITION_TYPE_KEYCLOAK_SYNC,
-		privatev1.ConditionStatus_CONDITION_STATUS_TRUE,
-		"Created",
-		fmt.Sprintf("Keycloak authorization resource created: %s", resourceID),
-	)
-
 	return nil
 }
 
