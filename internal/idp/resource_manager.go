@@ -69,6 +69,7 @@ func (b *ResourceManagerBuilder) Build() (result *ResourceManager, err error) {
 }
 
 // DeleteProjectGroups deletes Keycloak organization groups for a project.
+// Deletes the parent project group, which cascades to delete the viewers and managers subgroups.
 func (m *ResourceManager) DeleteProjectGroups(ctx context.Context, tenant, projectName string) error {
 	if tenant == "" {
 		return fmt.Errorf("tenant is required")
@@ -77,43 +78,32 @@ func (m *ResourceManager) DeleteProjectGroups(ctx context.Context, tenant, proje
 		return fmt.Errorf("project name is required")
 	}
 
-	m.logger.DebugContext(ctx, "Deleting project groups",
-		slog.String("tenant", tenant),
+	// Delete the parent project group, which will cascade delete the viewers and managers subgroups
+	projectGroupPath := fmt.Sprintf("/%s", projectName)
+
+	projectGroupID, err := m.getGroupIDByPath(ctx, tenant, projectGroupPath)
+	if err != nil {
+		m.logger.WarnContext(ctx, "Failed to get project group ID",
+			slog.String("group_path", projectGroupPath),
+			slog.Any("error", err),
+		)
+		return nil // Don't fail the delete if the group doesn't exist
+	}
+
+	if err = m.client.DeleteAuthorizationGroup(ctx, tenant, projectGroupID); err != nil {
+		m.logger.WarnContext(ctx, "Failed to delete project group",
+			slog.String("group_id", projectGroupID),
+			slog.String("group_path", projectGroupPath),
+			slog.Any("error", err),
+		)
+		return nil // Don't fail the delete
+	}
+
+	m.logger.InfoContext(ctx, "Deleted project group and subgroups",
+		slog.String("group_path", projectGroupPath),
 		slog.String("project_name", projectName),
+		slog.String("tenant", tenant),
 	)
-
-	viewersGroupPath := fmt.Sprintf("/%s/%s", projectName, GroupNameViewers)
-	managersGroupPath := fmt.Sprintf("/%s/%s", projectName, GroupNameManagers)
-
-	viewersGroupID, err := m.getGroupIDByPath(ctx, tenant, viewersGroupPath)
-	if err != nil {
-		m.logger.WarnContext(ctx, "Failed to get viewers group ID",
-			slog.String("group_path", viewersGroupPath),
-			slog.Any("error", err),
-		)
-	} else if viewersGroupID != "" {
-		if err = m.client.DeleteAuthorizationGroup(ctx, tenant, viewersGroupID); err != nil {
-			m.logger.WarnContext(ctx, "Failed to delete viewers group",
-				slog.String("group_id", viewersGroupID),
-				slog.Any("error", err),
-			)
-		}
-	}
-
-	managersGroupID, err := m.getGroupIDByPath(ctx, tenant, managersGroupPath)
-	if err != nil {
-		m.logger.WarnContext(ctx, "Failed to get managers group ID",
-			slog.String("group_path", managersGroupPath),
-			slog.Any("error", err),
-		)
-	} else if managersGroupID != "" {
-		if err = m.client.DeleteAuthorizationGroup(ctx, tenant, managersGroupID); err != nil {
-			m.logger.WarnContext(ctx, "Failed to delete managers group",
-				slog.String("group_id", managersGroupID),
-				slog.Any("error", err),
-			)
-		}
-	}
 
 	return nil
 }
