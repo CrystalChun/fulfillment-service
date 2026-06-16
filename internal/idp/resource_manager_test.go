@@ -170,7 +170,38 @@ var _ = Describe("ResourceManager", func() {
 				DeleteAuthorizationGroup(gomock.Any(), "test-org", "viewers-group-id").
 				Return(nil)
 
-			err := manager.CreateProjectGroups(ctx, "test-org", "test-project")
+			err := manager.AddUserToProjectGroup(ctx, "test-org", "test-project", "user-456", GroupNameViewers)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should handle nested project paths", func() {
+			mockClient.EXPECT().
+				GetGroupIDByPath(gomock.Any(), "test-org", "/parent-project/child-project/managers").
+				Return("nested-managers-group-id", nil)
+
+			mockClient.EXPECT().
+				AddUserToGroup(gomock.Any(), "test-org", "user-789", "nested-managers-group-id").
+				Return(nil)
+
+			err := manager.AddUserToProjectGroup(ctx, "test-org", "parent-project/child-project", "user-789", GroupNameManagers)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should handle deeply nested project paths", func() {
+			mockClient.EXPECT().
+				GetGroupIDByPath(gomock.Any(), "test-org", "/platform/web-app/api/viewers").
+				Return("deep-viewers-group-id", nil)
+
+			mockClient.EXPECT().
+				AddUserToGroup(gomock.Any(), "test-org", "user-xyz", "deep-viewers-group-id").
+				Return(nil)
+
+			err := manager.AddUserToProjectGroup(ctx, "test-org", "platform/web-app/api", "user-xyz", GroupNameViewers)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should return error when tenant is empty", func() {
+			err := manager.AddUserToProjectGroup(ctx, "", "test-project", "user-123", GroupNameManagers)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to create managers group"))
 		})
@@ -183,6 +214,169 @@ var _ = Describe("ResourceManager", func() {
 			err := manager.CreateProjectGroups(ctx, "test-org", "test-project")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to create viewers group"))
+		})
+	})
+
+	Describe("RemoveUserFromProjectGroup", func() {
+		var manager *ResourceManager
+
+		BeforeEach(func() {
+			var err error
+			manager, err = NewResourceManager().
+				SetLogger(logger).
+				SetClient(mockClient).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should remove user from managers group", func() {
+			mockClient.EXPECT().
+				GetGroupIDByPath(gomock.Any(), "test-org", "/test-project/managers").
+				Return("managers-group-id", nil)
+
+			mockClient.EXPECT().
+				RemoveUserFromGroup(gomock.Any(), "test-org", "user-123", "managers-group-id").
+				Return(nil)
+
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "user-123", GroupNameManagers)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should remove user from viewers group", func() {
+			mockClient.EXPECT().
+				GetGroupIDByPath(gomock.Any(), "test-org", "/test-project/viewers").
+				Return("viewers-group-id", nil)
+
+			mockClient.EXPECT().
+				RemoveUserFromGroup(gomock.Any(), "test-org", "user-456", "viewers-group-id").
+				Return(nil)
+
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "user-456", GroupNameViewers)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should handle nested project paths", func() {
+			mockClient.EXPECT().
+				GetGroupIDByPath(gomock.Any(), "test-org", "/parent-project/child-project/managers").
+				Return("nested-managers-group-id", nil)
+
+			mockClient.EXPECT().
+				RemoveUserFromGroup(gomock.Any(), "test-org", "user-789", "nested-managers-group-id").
+				Return(nil)
+
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "parent-project/child-project", "user-789", GroupNameManagers)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should handle deeply nested project paths", func() {
+			mockClient.EXPECT().
+				GetGroupIDByPath(gomock.Any(), "test-org", "/platform/web-app/api/viewers").
+				Return("deep-viewers-group-id", nil)
+
+			mockClient.EXPECT().
+				RemoveUserFromGroup(gomock.Any(), "test-org", "user-xyz", "deep-viewers-group-id").
+				Return(nil)
+
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "platform/web-app/api", "user-xyz", GroupNameViewers)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should return error when tenant is empty", func() {
+			err := manager.RemoveUserFromProjectGroup(ctx, "", "test-project", "user-123", GroupNameManagers)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("tenant is required"))
+		})
+
+		It("should return error when project name is empty", func() {
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "", "user-123", GroupNameManagers)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("project name is required"))
+		})
+
+		It("should return error when username is empty", func() {
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "", GroupNameManagers)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("username is required"))
+		})
+
+		It("should return error for invalid group type", func() {
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "user-123", "invalid-group")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid group type"))
+		})
+
+		It("should return error when group lookup fails", func() {
+			mockClient.EXPECT().
+				GetGroupIDByPath(gomock.Any(), "test-org", "/test-project/managers").
+				Return("", errors.New("group not found"))
+
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "user-123", GroupNameManagers)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to get group ID"))
+		})
+
+		It("should return error when removing user from group fails", func() {
+			mockClient.EXPECT().
+				GetGroupIDByPath(gomock.Any(), "test-org", "/test-project/managers").
+				Return("managers-group-id", nil)
+
+			mockClient.EXPECT().
+				RemoveUserFromGroup(gomock.Any(), "test-org", "user-123", "managers-group-id").
+				Return(errors.New("keycloak error"))
+
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "user-123", GroupNameManagers)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to remove user from group"))
+		})
+	})
+
+	Describe("RemoveUserFromGroupByID", func() {
+		var manager *ResourceManager
+
+		BeforeEach(func() {
+			var err error
+			manager, err = NewResourceManager().
+				SetLogger(logger).
+				SetClient(mockClient).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should remove user from group by ID", func() {
+			mockClient.EXPECT().
+				RemoveUserFromGroup(gomock.Any(), "test-org", "user-123", "group-id-456").
+				Return(nil)
+
+			err := manager.RemoveUserFromGroupByID(ctx, "test-org", "user-123", "group-id-456")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should return error when tenant is empty", func() {
+			err := manager.RemoveUserFromGroupByID(ctx, "", "user-123", "group-id-456")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("tenant is required"))
+		})
+
+		It("should return error when username is empty", func() {
+			err := manager.RemoveUserFromGroupByID(ctx, "test-org", "", "group-id-456")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("username is required"))
+		})
+
+		It("should return error when group ID is empty", func() {
+			err := manager.RemoveUserFromGroupByID(ctx, "test-org", "user-123", "")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("group ID is required"))
+		})
+
+		It("should return error when removing user fails", func() {
+			mockClient.EXPECT().
+				RemoveUserFromGroup(gomock.Any(), "test-org", "user-123", "group-id-456").
+				Return(errors.New("keycloak error"))
+
+			err := manager.RemoveUserFromGroupByID(ctx, "test-org", "user-123", "group-id-456")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to remove user from group"))
 		})
 	})
 })

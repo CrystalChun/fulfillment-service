@@ -88,6 +88,11 @@ type Client interface {
 	DeleteAuthorizationGroup(ctx context.Context, organizationName, groupID string) error
 	// GetGroupIDByPath gets a Keycloak organization group ID by its path.
 	GetGroupIDByPath(ctx context.Context, organizationName, groupPath string) (string, error)
+	// AddUserToGroup adds a user to an organization group by group ID.
+	AddUserToGroup(ctx context.Context, organizationName, username, groupID string) error
+	// RemoveUserFromGroup removes a user from an organization group by group ID.
+	// The username will be looked up internally to find the user's UUID.
+	RemoveUserFromGroup(ctx context.Context, organizationName, username, groupID string) error
 
 	// Identity Provider operations
 	// GetIdentityProvider retrieves an external identity provider configuration by alias at the realm level.

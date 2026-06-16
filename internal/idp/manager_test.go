@@ -267,6 +267,16 @@ func (m *mockClient) GetGroupIDByPath(ctx context.Context, organizationName, gro
 	return "test-group-id", nil
 }
 
+func (m *mockClient) AddUserToGroup(ctx context.Context, organizationName, username, groupID string) error {
+	// Stub for testing - no-op
+	return nil
+}
+
+func (m *mockClient) RemoveUserFromGroup(ctx context.Context, organizationName, username, groupID string) error {
+	// Stub for testing - no-op
+	return nil
+}
+
 var _ = Describe("OrganizationManager", func() {
 	var (
 		ctx     context.Context

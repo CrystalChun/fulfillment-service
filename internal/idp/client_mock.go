@@ -433,3 +433,17 @@ func (mr *MockClientMockRecorder) RemoveOrganizationRolesFromUser(ctx, organizat
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveOrganizationRolesFromUser", reflect.TypeOf((*MockClient)(nil).RemoveOrganizationRolesFromUser), ctx, organizationName, userID, roles)
 }
+
+// RemoveUserFromGroup mocks base method.
+func (m *MockClient) RemoveUserFromGroup(ctx context.Context, organizationName, username, groupID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveUserFromGroup", ctx, organizationName, username, groupID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveUserFromGroup indicates an expected call of RemoveUserFromGroup.
+func (mr *MockClientMockRecorder) RemoveUserFromGroup(ctx, organizationName, username, groupID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveUserFromGroup", reflect.TypeOf((*MockClient)(nil).RemoveUserFromGroup), ctx, organizationName, username, groupID)
+}
