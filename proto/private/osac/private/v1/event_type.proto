@@ -26,6 +26,7 @@ import "osac/private/v1/compute_instance_template_type.proto";
 import "osac/private/v1/compute_instance_type.proto";
 import "osac/private/v1/host_type_type.proto";
 import "osac/private/v1/hub_type.proto";
+import "osac/private/v1/identity_provider_type.proto";
 import "osac/private/v1/instance_type_type.proto";
 import "osac/private/v1/network_class_type.proto";
 import "osac/private/v1/organization_type.proto";
@@ -74,6 +75,7 @@ message Event {
     BareMetalInstance bare_metal_instance = 27;
     BareMetalInstanceTemplate bare_metal_instance_template = 28;
     BareMetalInstanceCatalogItem bare_metal_instance_catalog_item = 29;
+    IdentityProvider identity_provider = 30;
   }
 }
 

@@ -891,6 +891,19 @@ func (s *GenericServer[O]) setPayload(event *privatev1.Event, object proto.Messa
 		event.SetBareMetalInstanceTemplate(object)
 	case *privatev1.BareMetalInstanceCatalogItem:
 		event.SetBareMetalInstanceCatalogItem(object)
+	case *privatev1.IdentityProvider:
+		// Redact sensitive fields (client secrets and bind credentials) before publishing
+		object = proto.Clone(object).(*privatev1.IdentityProvider)
+		spec := object.GetSpec()
+		if spec != nil {
+			if oidc := spec.GetOidc(); oidc != nil {
+				oidc.SetClientSecret("")
+			}
+			if ldap := spec.GetLdap(); ldap != nil {
+				ldap.SetBindCredential("")
+			}
+		}
+		event.SetIdentityProvider(object)
 	default:
 		return fmt.Errorf("unknown object type '%T'", object)
 	}
