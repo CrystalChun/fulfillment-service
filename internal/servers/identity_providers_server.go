@@ -170,11 +170,6 @@ func (s *IdentityProvidersServer) List(ctx context.Context,
 	return nil, errors.New("not implemented")
 }
 
-func (s *IdentityProvidersServer) ListAvailable(ctx context.Context,
-	request *publicv1.IdentityProvidersListAvailableRequest) (response *publicv1.IdentityProvidersListAvailableResponse, err error) {
-	return nil, errors.New("not implemented")
-}
-
 func (s *IdentityProvidersServer) Get(ctx context.Context,
 	request *publicv1.IdentityProvidersGetRequest) (response *publicv1.IdentityProvidersGetResponse, err error) {
 	return nil, errors.New("not implemented")
@@ -187,15 +182,5 @@ func (s *IdentityProvidersServer) Update(ctx context.Context,
 
 func (s *IdentityProvidersServer) Delete(ctx context.Context,
 	request *publicv1.IdentityProvidersDeleteRequest) (response *publicv1.IdentityProvidersDeleteResponse, err error) {
-	return nil, errors.New("not implemented")
-}
-
-func (s *IdentityProvidersServer) Assign(ctx context.Context,
-	request *publicv1.IdentityProvidersAssignRequest) (response *publicv1.IdentityProvidersAssignResponse, err error) {
-	return nil, errors.New("not implemented")
-}
-
-func (s *IdentityProvidersServer) Unassign(ctx context.Context,
-	request *publicv1.IdentityProvidersUnassignRequest) (response *publicv1.IdentityProvidersUnassignResponse, err error) {
 	return nil, errors.New("not implemented")
 }

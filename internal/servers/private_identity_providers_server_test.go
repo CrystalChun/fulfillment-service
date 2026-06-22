@@ -91,8 +91,8 @@ var _ = Describe("Private identity providers server", func() {
 		Expect(response.Object.Spec.GetLdap().ConnectionUrl).To(Equal("ldap://ldap.example.com:389"))
 	})
 
-	It("Sets tenant from the request context for identity providers", func() {
-		// Create request without specifying tenant:
+	It("Rejects creation when tenant is not explicitly set and defaults to 'system'", func() {
+		// Create request without specifying tenant (will default to "system" from mock):
 		request := privatev1.IdentityProvidersCreateRequest_builder{
 			Object: privatev1.IdentityProvider_builder{
 				Metadata: privatev1.Metadata_builder{
@@ -112,13 +112,13 @@ var _ = Describe("Private identity providers server", func() {
 			}.Build(),
 		}.Build()
 
-		// Create identity provider:
-		response, err := privateServer.Create(ctx, request)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(response).ToNot(BeNil())
-		Expect(response.Object).ToNot(BeNil())
-		// Tenant should be set from the context by the generic server
-		Expect(response.Object.Metadata.Tenant).ToNot(BeEmpty())
+		// Should fail because default tenant is "system":
+		_, err := privateServer.Create(ctx, request)
+		Expect(err).To(HaveOccurred())
+		status, ok := grpcstatus.FromError(err)
+		Expect(ok).To(BeTrue())
+		Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+		Expect(status.Message()).To(ContainSubstring("must be assigned to a specific organization tenant"))
 	})
 
 	It("Lists identity providers", func() {
@@ -126,7 +126,8 @@ var _ = Describe("Private identity providers server", func() {
 		createReq := privatev1.IdentityProvidersCreateRequest_builder{
 			Object: privatev1.IdentityProvider_builder{
 				Metadata: privatev1.Metadata_builder{
-					Name: "test-ldap",
+					Name:   "test-ldap",
+					Tenant: "test-org",
 				}.Build(),
 				Spec: privatev1.IdentityProviderSpec_builder{
 					Title:   "Test LDAP",
@@ -158,7 +159,8 @@ var _ = Describe("Private identity providers server", func() {
 		createReq := privatev1.IdentityProvidersCreateRequest_builder{
 			Object: privatev1.IdentityProvider_builder{
 				Metadata: privatev1.Metadata_builder{
-					Name: "test-ldap",
+					Name:   "test-ldap",
+					Tenant: "test-org",
 				}.Build(),
 				Spec: privatev1.IdentityProviderSpec_builder{
 					Title:   "Test LDAP",
@@ -189,7 +191,8 @@ var _ = Describe("Private identity providers server", func() {
 		createReq := privatev1.IdentityProvidersCreateRequest_builder{
 			Object: privatev1.IdentityProvider_builder{
 				Metadata: privatev1.Metadata_builder{
-					Name: "test-ldap",
+					Name:   "test-ldap",
+					Tenant: "test-org",
 				}.Build(),
 				Spec: privatev1.IdentityProviderSpec_builder{
 					Title:   "Test LDAP",
@@ -218,7 +221,8 @@ var _ = Describe("Private identity providers server", func() {
 		createReq := privatev1.IdentityProvidersCreateRequest_builder{
 			Object: privatev1.IdentityProvider_builder{
 				Metadata: privatev1.Metadata_builder{
-					Name: "test-ldap",
+					Name:   "test-ldap",
+					Tenant: "test-org",
 				}.Build(),
 				Spec: privatev1.IdentityProviderSpec_builder{
 					Title:   "Test LDAP",
@@ -258,6 +262,9 @@ var _ = Describe("Private identity providers server", func() {
 		// Identity providers can have empty names (name is not mandatory)
 		response, err := privateServer.Create(ctx, privatev1.IdentityProvidersCreateRequest_builder{
 			Object: privatev1.IdentityProvider_builder{
+				Metadata: privatev1.Metadata_builder{
+					Tenant: "test-org",
+				}.Build(),
 				Spec: privatev1.IdentityProviderSpec_builder{
 					Title:   "Test LDAP",
 					Enabled: true,
@@ -272,15 +279,15 @@ var _ = Describe("Private identity providers server", func() {
 		}.Build())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(response).ToNot(BeNil())
-		// Tenant should be set from the context by the generic server
-		Expect(response.Object.Metadata.Tenant).ToNot(BeEmpty())
+		Expect(response.Object.Metadata.Tenant).To(Equal("test-org"))
 	})
 
 	It("Rejects update of the name of an identity provider", func() {
 		createResponse, err := privateServer.Create(ctx, privatev1.IdentityProvidersCreateRequest_builder{
 			Object: privatev1.IdentityProvider_builder{
 				Metadata: privatev1.Metadata_builder{
-					Name: "test-ldap",
+					Name:   "test-ldap",
+					Tenant: "test-org",
 				}.Build(),
 				Spec: privatev1.IdentityProviderSpec_builder{
 					Title:   "Test LDAP",
@@ -324,7 +331,8 @@ var _ = Describe("Private identity providers server", func() {
 		createResponse, err := privateServer.Create(ctx, privatev1.IdentityProvidersCreateRequest_builder{
 			Object: privatev1.IdentityProvider_builder{
 				Metadata: privatev1.Metadata_builder{
-					Name: "test-ldap",
+					Name:   "test-ldap",
+					Tenant: "test-org",
 				}.Build(),
 				Spec: privatev1.IdentityProviderSpec_builder{
 					Title:   "Test LDAP",
@@ -369,7 +377,8 @@ var _ = Describe("Private identity providers server", func() {
 		request := privatev1.IdentityProvidersCreateRequest_builder{
 			Object: privatev1.IdentityProvider_builder{
 				Metadata: privatev1.Metadata_builder{
-					Name: "test-oidc",
+					Name:   "test-oidc",
+					Tenant: "test-org",
 				}.Build(),
 				Spec: privatev1.IdentityProviderSpec_builder{
 					Title:   "Test OIDC",
@@ -451,26 +460,6 @@ var _ = Describe("Private identity providers server", func() {
 			Expect(ok).To(BeTrue())
 			Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
 			Expect(status.Message()).To(ContainSubstring("cannot belong to 'system' tenant"))
-		})
-	})
-
-	Describe("Assign and Unassign", func() {
-		It("Returns not implemented for Assign", func() {
-			_, err := privateServer.Assign(ctx, &privatev1.IdentityProvidersAssignRequest{
-				Name:       "test-ldap",
-				TenantName: "my-tenant",
-			})
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("not implemented"))
-		})
-
-		It("Returns not implemented for Unassign", func() {
-			_, err := privateServer.Unassign(ctx, &privatev1.IdentityProvidersUnassignRequest{
-				Name:       "test-ldap",
-				TenantName: "my-tenant",
-			})
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("not implemented"))
 		})
 	})
 })
