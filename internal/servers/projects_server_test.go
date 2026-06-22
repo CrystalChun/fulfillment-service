@@ -30,7 +30,7 @@ var _ = Describe("Public projects server", func() {
 		var err error
 
 		// Create the tenants used in the tests:
-		tenantsDao, err := dao.NewGenericDAO[*privatev1.Organization]().
+		tenantsDao, err := dao.NewGenericDAO[*privatev1.Tenant]().
 			SetLogger(logger).
 			SetTableName("tenants").
 			SetTenancyLogic(tenancy).
@@ -38,7 +38,7 @@ var _ = Describe("Public projects server", func() {
 		Expect(err).ToNot(HaveOccurred())
 		createTenant := func(name string) {
 			_, err = tenantsDao.Create().
-				SetObject(privatev1.Organization_builder{
+				SetObject(privatev1.Tenant_builder{
 					Id: name,
 					Metadata: privatev1.Metadata_builder{
 						Name:   name,

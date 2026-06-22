@@ -338,6 +338,8 @@ func (s *EventsServer) extractMetadata(ctx context.Context, event *privatev1.Eve
 		return event.GetComputeInstance().GetMetadata()
 	case event.HasOrganization():
 		return event.GetOrganization().GetMetadata()
+	case event.HasTenant():
+		return event.GetTenant().GetMetadata()
 	case event.HasUser():
 		return event.GetUser().GetMetadata()
 	case event.HasRole():

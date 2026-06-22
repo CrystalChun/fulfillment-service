@@ -31,7 +31,7 @@ var _ = Describe("Immutable fields", func() {
 		ctrl    *gomock.Controller
 		tenancy *auth.MockTenancyLogic
 		tx      database.Tx
-		generic *GenericDAO[*privatev1.Organization]
+		generic *GenericDAO[*privatev1.Tenant]
 	)
 
 	BeforeEach(func() {
@@ -75,7 +75,7 @@ var _ = Describe("Immutable fields", func() {
 			AnyTimes()
 
 		// Create the DAO:
-		generic, err = NewGenericDAO[*privatev1.Organization]().
+		generic, err = NewGenericDAO[*privatev1.Tenant]().
 			SetLogger(logger).
 			SetTableName("tenants").
 			SetTenancyLogic(tenancy).
@@ -84,7 +84,7 @@ var _ = Describe("Immutable fields", func() {
 
 		// Create a test object:
 		_, err = generic.Create().
-			SetObject(privatev1.Organization_builder{
+			SetObject(privatev1.Tenant_builder{
 				Id: "my-tenant",
 				Metadata: privatev1.Metadata_builder{
 					Name:   "my-tenant",
@@ -97,7 +97,7 @@ var _ = Describe("Immutable fields", func() {
 
 	It("Rejects update that changes one immutable field", func() {
 		_, err := generic.Update().
-			SetObject(privatev1.Organization_builder{
+			SetObject(privatev1.Tenant_builder{
 				Id: "my-tenant",
 				Metadata: privatev1.Metadata_builder{
 					Name:   "your-name",
@@ -115,7 +115,7 @@ var _ = Describe("Immutable fields", func() {
 
 	It("Rejects update that changes two immutable field", func() {
 		_, err := generic.Update().
-			SetObject(privatev1.Organization_builder{
+			SetObject(privatev1.Tenant_builder{
 				Id: "my-tenant",
 				Metadata: privatev1.Metadata_builder{
 					Name:   "your-name",
@@ -134,7 +134,7 @@ var _ = Describe("Immutable fields", func() {
 
 	It("Allows update that includes but doesn't change an immutable field", func() {
 		_, err := generic.Update().
-			SetObject(privatev1.Organization_builder{
+			SetObject(privatev1.Tenant_builder{
 				Id: "my-tenant",
 				Metadata: privatev1.Metadata_builder{
 					Name:   "my-tenant",
@@ -147,7 +147,7 @@ var _ = Describe("Immutable fields", func() {
 
 	It("Allows update of other fields", func() {
 		_, err := generic.Update().
-			SetObject(privatev1.Organization_builder{
+			SetObject(privatev1.Tenant_builder{
 				Id: "my-tenant",
 				Metadata: privatev1.Metadata_builder{
 					Name:   "my-tenant",

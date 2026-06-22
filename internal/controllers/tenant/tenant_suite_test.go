@@ -11,7 +11,7 @@ Unless required by applicable law or agreed to in writing, software distributed 
 language governing permissions and limitations under the License.
 */
 
-package organization
+package tenant
 
 import (
 	"log/slog"
@@ -27,9 +27,9 @@ var (
 	logger *slog.Logger
 )
 
-func TestOrganizationReconciler(t *testing.T) {
+func TestTenantReconciler(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Organization controller")
+	RunSpecs(t, "Tenant controller")
 }
 
 var _ = BeforeSuite(func() {

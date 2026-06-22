@@ -1092,6 +1092,34 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 	}
 	privatev1.RegisterOrganizationsServer(grpcServer, privateOrganizationsServer)
 
+	// Create the public tenants server:
+	c.logger.InfoContext(ctx, "Creating public tenants server")
+	publicTenantsServer, err := servers.NewTenantsServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(publicAttributionLogic).
+		SetTenancyLogic(tenancyLogic).
+		SetMetricsRegisterer(metricsRegisterer).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create public tenants server: %w", err)
+	}
+	publicv1.RegisterTenantsServer(grpcServer, publicTenantsServer)
+
+	// Create the private tenants server:
+	c.logger.InfoContext(ctx, "Creating private tenants server")
+	privateTenantsServer, err := servers.NewPrivateTenantsServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(privateAttributionLogic).
+		SetTenancyLogic(tenancyLogic).
+		SetMetricsRegisterer(metricsRegisterer).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create private tenants server: %w", err)
+	}
+	privatev1.RegisterTenantsServer(grpcServer, privateTenantsServer)
+
 	// Create the public projects server:
 	c.logger.InfoContext(ctx, "Creating public projects server")
 	publicProjectsServer, err := servers.NewProjectsServer().

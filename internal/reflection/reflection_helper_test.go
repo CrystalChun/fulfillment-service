@@ -156,6 +156,7 @@ var _ = Describe("Reflection helper", func() {
 				"rolebinding",
 				"securitygroup",
 				"subnet",
+				"tenant",
 				"user",
 				"virtualnetwork",
 			))
@@ -186,6 +187,7 @@ var _ = Describe("Reflection helper", func() {
 				"rolebindings",
 				"securitygroups",
 				"subnets",
+				"tenants",
 				"users",
 				"virtualnetworks",
 			))

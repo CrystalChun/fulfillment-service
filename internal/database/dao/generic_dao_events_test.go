@@ -70,7 +70,7 @@ var _ = Describe("Generic DAO events", func() {
 			Return(collections.NewUniversalSet[string](), nil).
 			AnyTimes()
 		// Create the tenant used in the tests:
-		tenantsDao, err := NewGenericDAO[*privatev1.Organization]().
+		tenantsDao, err := NewGenericDAO[*privatev1.Tenant]().
 			SetLogger(logger).
 			SetTableName("tenants").
 			SetTenancyLogic(tenancy).
@@ -78,7 +78,7 @@ var _ = Describe("Generic DAO events", func() {
 		Expect(err).ToNot(HaveOccurred())
 		err = tm.Run(ctx, func(ctx context.Context) {
 			_, err = tenantsDao.Create().
-				SetObject(&privatev1.Organization{
+				SetObject(&privatev1.Tenant{
 					Id: "my-tenant",
 					Metadata: privatev1.Metadata_builder{
 						Name:   "my-tenant",

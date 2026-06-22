@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Red Hat, Inc.
+// Copyright (c) 2026 Red Hat, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
 // the License. You may obtain a copy of the License at
@@ -17,22 +17,16 @@ package osac.public.v1;
 
 import "osac/public/v1/metadata_type.proto";
 
-// Deprecated: Use Tenant instead.
-//
-// An organization groups tenants and resources for a customer or business unit.
-message Organization {
-  option deprecated = true;
-  // Unique identifier of the organization.
+// A tenant groups resources and users for a customer or business unit.
+message Tenant {
+  // Unique identifier of the tenant.
   string id = 1;
 
   Metadata metadata = 2;
 
-  OrganizationSpec spec = 3;
+  TenantSpec spec = 3;
 }
 
-// Deprecated: Use TenantSpec instead.
-message OrganizationSpec {
-  option deprecated = true;
-
-  // Reserved for future organization configuration fields.
+message TenantSpec {
+  // Reserved for future tenant configuration fields.
 }

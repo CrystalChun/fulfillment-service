@@ -44,7 +44,6 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/controllers/baremetalinstance"
 	"github.com/osac-project/fulfillment-service/internal/controllers/cluster"
 	"github.com/osac-project/fulfillment-service/internal/controllers/computeinstance"
-	"github.com/osac-project/fulfillment-service/internal/controllers/organization"
 	"github.com/osac-project/fulfillment-service/internal/controllers/project"
 	"github.com/osac-project/fulfillment-service/internal/controllers/publicip"
 	"github.com/osac-project/fulfillment-service/internal/controllers/publicipattachment"
@@ -53,6 +52,7 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/controllers/rolebinding"
 	"github.com/osac-project/fulfillment-service/internal/controllers/securitygroup"
 	"github.com/osac-project/fulfillment-service/internal/controllers/subnet"
+	"github.com/osac-project/fulfillment-service/internal/controllers/tenant"
 	"github.com/osac-project/fulfillment-service/internal/controllers/virtualnetwork"
 	internalhealth "github.com/osac-project/fulfillment-service/internal/health"
 	"github.com/osac-project/fulfillment-service/internal/idp"
@@ -781,38 +781,38 @@ func (r *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 		}
 	}()
 
-	// Create the organization reconciler:
-	r.logger.InfoContext(ctx, "Creating organization reconciler")
-	organizationReconcilerFunction, err := organization.NewFunction().
+	// Create the tenant reconciler:
+	r.logger.InfoContext(ctx, "Creating tenant reconciler")
+	tenantReconcilerFunction, err := tenant.NewFunction().
 		SetLogger(r.logger).
 		SetConnection(r.client).
 		SetIdpManager(idpManager).
 		Build()
 	if err != nil {
-		return fmt.Errorf("failed to create organization reconciler function: %w", err)
+		return fmt.Errorf("failed to create tenant reconciler function: %w", err)
 	}
-	organizationReconciler, err := controllers.NewReconciler[*privatev1.Organization]().
+	tenantReconciler, err := controllers.NewReconciler[*privatev1.Tenant]().
 		SetLogger(r.logger).
-		SetName("organization").
+		SetName("tenant").
 		SetClient(r.client).
-		SetFunction(organizationReconcilerFunction.Run).
-		SetEventFilter("has(event.organization)").
+		SetFunction(tenantReconcilerFunction.Run).
+		SetEventFilter("has(event.tenant)").
 		SetHealthReporter(healthAggregator).
 		Build()
 	if err != nil {
-		return fmt.Errorf("failed to create organization reconciler: %w", err)
+		return fmt.Errorf("failed to create tenant reconciler: %w", err)
 	}
 
-	// Start the organization reconciler:
-	r.logger.InfoContext(ctx, "Starting organization reconciler")
+	// Start the tenant reconciler:
+	r.logger.InfoContext(ctx, "Starting tenant reconciler")
 	go func() {
-		err := organizationReconciler.Start(ctx)
+		err := tenantReconciler.Start(ctx)
 		if err == nil || errors.Is(err, context.Canceled) {
-			r.logger.InfoContext(ctx, "Organization reconciler finished")
+			r.logger.InfoContext(ctx, "Tenant reconciler finished")
 		} else {
 			r.logger.InfoContext(
 				ctx,
-				"Organization reconciler failed",
+				"Tenant reconciler failed",
 				slog.Any("error", err),
 			)
 		}

@@ -43,6 +43,10 @@ const (
 // OrganizationsClient is the client API for Organizations service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Deprecated: Use Tenants service instead.
+//
+// Deprecated: Do not use.
 type OrganizationsClient interface {
 	List(ctx context.Context, in *OrganizationsListRequest, opts ...grpc.CallOption) (*OrganizationsListResponse, error)
 	Get(ctx context.Context, in *OrganizationsGetRequest, opts ...grpc.CallOption) (*OrganizationsGetResponse, error)
@@ -57,6 +61,7 @@ type organizationsClient struct {
 	cc grpc.ClientConnInterface
 }
 
+// Deprecated: Do not use.
 func NewOrganizationsClient(cc grpc.ClientConnInterface) OrganizationsClient {
 	return &organizationsClient{cc}
 }
@@ -124,6 +129,10 @@ func (c *organizationsClient) Signal(ctx context.Context, in *OrganizationsSigna
 // OrganizationsServer is the server API for Organizations service.
 // All implementations must embed UnimplementedOrganizationsServer
 // for forward compatibility.
+//
+// Deprecated: Use Tenants service instead.
+//
+// Deprecated: Do not use.
 type OrganizationsServer interface {
 	List(context.Context, *OrganizationsListRequest) (*OrganizationsListResponse, error)
 	Get(context.Context, *OrganizationsGetRequest) (*OrganizationsGetResponse, error)
@@ -170,6 +179,7 @@ type UnsafeOrganizationsServer interface {
 	mustEmbedUnimplementedOrganizationsServer()
 }
 
+// Deprecated: Do not use.
 func RegisterOrganizationsServer(s grpc.ServiceRegistrar, srv OrganizationsServer) {
 	// If the following call pancis, it indicates UnimplementedOrganizationsServer was
 	// embedded by pointer and is nil.  This will cause panics if an

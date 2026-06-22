@@ -873,6 +873,8 @@ func (s *GenericServer[O]) setPayload(event *privatev1.Event, object proto.Messa
 		event.SetPublicIpAttachment(object)
 	case *privatev1.Organization:
 		event.SetOrganization(object)
+	case *privatev1.Tenant:
+		event.SetTenant(object)
 	case *privatev1.User:
 		event.SetUser(object)
 	case *privatev1.Role:
