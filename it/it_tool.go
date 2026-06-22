@@ -115,6 +115,7 @@ type Tool struct {
 	externalView  *ToolView
 	secret        string
 	jqTool        *jq.Tool
+	cliBinaryPath string
 }
 
 // ToolView contains the gRPC connections and HTTP clients that can be used to connect to the cluster. This is a
@@ -319,6 +320,12 @@ func (t *Tool) Setup(ctx context.Context) error {
 
 	// Build the container image:
 	imageRef, err := t.buildImage(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Build the CLI binary:
+	err = t.buildCLI(ctx)
 	if err != nil {
 		return err
 	}
@@ -2115,6 +2122,112 @@ func (t *Tool) registerHub(ctx context.Context) error {
 		return fmt.Errorf("failed to create hub: %w", err)
 	}
 	return nil
+}
+
+// buildCLI builds the osac CLI binary and stores its path for use in CLI integration tests.
+func (t *Tool) buildCLI(ctx context.Context) error {
+	t.logger.DebugContext(ctx, "Building CLI binary")
+	t.cliBinaryPath = filepath.Join(t.tmpDir, "osac")
+	buildCmd, err := testing.NewCommand().
+		SetLogger(t.logger).
+		SetHome(t.projectDir).
+		SetDir(t.projectDir).
+		SetName("go").
+		SetArgs("build", "-o", t.cliBinaryPath, "./cmd/osac").
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create command to build CLI: %w", err)
+	}
+	err = buildCmd.Execute(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build CLI binary: %w", err)
+	}
+	return nil
+}
+
+// CLIBinaryPath returns the path to the built osac CLI binary.
+func (t *Tool) CLIBinaryPath() string {
+	return t.cliBinaryPath
+}
+
+// Secret returns the shared secret used for passwords and credentials in the test environment.
+func (t *Tool) Secret() string {
+	return t.secret
+}
+
+// NewCLIHomeDir creates an isolated temporary directory suitable for use as a HOME directory
+// during CLI tests. Each test should call this to get credential isolation. The caller is
+// responsible for cleaning up the directory (typically via DeferCleanup).
+func (t *Tool) NewCLIHomeDir() (string, error) {
+	return os.MkdirTemp("", "*.cli-home")
+}
+
+// RunCLI executes the osac CLI binary with the given arguments and a custom HOME directory
+// for credential isolation. Returns stdout, stderr, and the process exit code.
+func (t *Tool) RunCLI(ctx context.Context, homeDir string, args ...string) (stdout, stderr string, exitCode int) {
+	cmd := exec.CommandContext(ctx, t.cliBinaryPath, args...)
+	cmd.Env = append(os.Environ(), "HOME="+homeDir)
+	cmd.Dir = t.projectDir
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	err := cmd.Run()
+	exitCode = 0
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			exitCode = exitErr.ExitCode()
+		} else {
+			exitCode = -1
+		}
+	}
+	t.logger.DebugContext(ctx, "CLI command completed",
+		slog.String("binary", t.cliBinaryPath),
+		slog.Any("args", args),
+		slog.Int("exitCode", exitCode),
+	)
+	return outBuf.String(), errBuf.String(), exitCode
+}
+
+// RunCLIWithEnv executes the osac binary with additional environment variables beyond the HOME
+// override. Each entry in extraEnv should be in "KEY=VALUE" format. Use "KEY=" to unset a variable.
+func (t *Tool) RunCLIWithEnv(ctx context.Context, homeDir string, extraEnv []string, args ...string) (stdout, stderr string, exitCode int) {
+	cmd := exec.CommandContext(ctx, t.cliBinaryPath, args...)
+	env := append(os.Environ(), "HOME="+homeDir)
+	env = append(env, extraEnv...)
+	cmd.Env = env
+	cmd.Dir = t.projectDir
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	err := cmd.Run()
+	exitCode = 0
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			exitCode = exitErr.ExitCode()
+		} else {
+			exitCode = -1
+		}
+	}
+	t.logger.DebugContext(ctx, "CLI command completed",
+		slog.String("binary", t.cliBinaryPath),
+		slog.Any("args", args),
+		slog.Int("exitCode", exitCode),
+	)
+	return outBuf.String(), errBuf.String(), exitCode
+}
+
+// LoginCLI authenticates the CLI using the password flow against the external API with the
+// given user credentials. The homeDir parameter provides credential isolation between tests.
+func (t *Tool) LoginCLI(ctx context.Context, homeDir, user, password string) (stdout, stderr string, exitCode int) {
+	return t.RunCLI(ctx, homeDir,
+		"login", fmt.Sprintf("https://%s", externalServiceAddr),
+		"--flow=password",
+		"--user="+user,
+		"--password="+password,
+		"--insecure",
+	)
 }
 
 func (t *Tool) Cleanup(ctx context.Context) error {
