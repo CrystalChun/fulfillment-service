@@ -14,5 +14,6 @@
 #
 
 from .formatter import *
+from .update import *
 from .lint import *
 from .setup import *
