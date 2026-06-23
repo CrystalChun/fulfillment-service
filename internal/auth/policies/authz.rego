@@ -260,10 +260,29 @@ allow if {
   }
 }
 
-# Tenant-scoped IdP management (when APIs are added, e.g., IdentityProviders/*, RoleBindings/*)
-# For now, no IdP management APIs exist, so no rules needed yet
-# TODO: Add allow rules for (is_tenant_admin or is_tenant_idp_manager) when IdP APIs are implemented
-# Both tenant admins (full permissions) and tenant IdP managers (IdP-only) should be allowed
+# Tenant-scoped IdP management for both tenant admins and IdP managers
+# Both roles can perform CRUD operations on identity providers within their tenant.
+# The application layer (generic server) enforces that the tenant field is set from caller identity.
+allow if {
+  is_tenant_admin
+  grpc_method in {
+    "/osac.public.v1.IdentityProviders/Create",
+    "/osac.public.v1.IdentityProviders/Get",
+    "/osac.public.v1.IdentityProviders/List",
+    "/osac.public.v1.IdentityProviders/Update",
+    "/osac.public.v1.IdentityProviders/Delete",
+  }
+}
+allow if {
+  is_tenant_idp_manager
+  grpc_method in {
+    "/osac.public.v1.IdentityProviders/Create",
+    "/osac.public.v1.IdentityProviders/Get",
+    "/osac.public.v1.IdentityProviders/List",
+    "/osac.public.v1.IdentityProviders/Update",
+    "/osac.public.v1.IdentityProviders/Delete",
+  }
+}
 
 # Allow everything to admins:
 allow if {
