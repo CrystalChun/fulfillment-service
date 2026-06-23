@@ -197,7 +197,7 @@ var _ = Describe("mutateBMI", func() {
 		Expect(obj.Spec.RunStrategy).To(Equal(bmfov1alpha1.RunStrategyUnspecified))
 	})
 
-	It("should include sshKey and userDataSecret in templateParameters", func() {
+	It("should include sshPublicKey and userDataSecret in templateParameters", func() {
 		catalogItemsClient := defaultFakeCatalogItemsClient()
 
 		t := &task{
@@ -221,13 +221,13 @@ var _ = Describe("mutateBMI", func() {
 
 		var params map[string]string
 		Expect(json.Unmarshal([]byte(obj.Spec.TemplateParameters), &params)).To(Succeed())
-		Expect(params["sshKey"]).To(Equal("ssh-ed25519 AAAA... test@example.com"))
+		Expect(params["sshPublicKey"]).To(Equal("ssh-ed25519 AAAA... test@example.com"))
 		Expect(params["userDataSecret"]).To(Equal("bmi-test-user-data"))
 	})
 
-	It("should include only sshKey when no user data", func() {
+	It("should include only sshPublicKey when no user data", func() {
 		catalogItemsClient := defaultFakeCatalogItemsClient()
-		sshKey := "ssh-ed25519 AAAA... test@example.com"
+		sshPublicKey := "ssh-ed25519 AAAA... test@example.com"
 
 		t := &task{
 			r: &function{
@@ -238,7 +238,7 @@ var _ = Describe("mutateBMI", func() {
 				Id: "bmi-test",
 				Spec: privatev1.BareMetalInstanceSpec_builder{
 					CatalogItem:  "catalog-1",
-					SshPublicKey: new(sshKey),
+					SshPublicKey: new(sshPublicKey),
 				}.Build(),
 			}.Build(),
 		}
@@ -249,8 +249,8 @@ var _ = Describe("mutateBMI", func() {
 
 		var params map[string]string
 		Expect(json.Unmarshal([]byte(obj.Spec.TemplateParameters), &params)).To(Succeed())
-		Expect(params).To(HaveKey("sshKey"))
-		Expect(params["sshKey"]).To(Equal(sshKey))
+		Expect(params).To(HaveKey("sshPublicKey"))
+		Expect(params["sshPublicKey"]).To(Equal(sshPublicKey))
 		Expect(params).ToNot(HaveKey("userDataSecret"))
 	})
 
