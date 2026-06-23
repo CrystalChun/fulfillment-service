@@ -18,9 +18,9 @@ package osac.private.v1;
 import "osac/private/v1/metadata_type.proto";
 import "osac/private/v1/break_glass_credentials_type.proto";
 
-// Deprecated: Use Tenant instead.
+// Organization is superseded by Tenant.
 message Organization {
-  option deprecated = true;
+
 
   string id = 1;
   Metadata metadata = 2;
@@ -28,21 +28,21 @@ message Organization {
   OrganizationStatus status = 4;
 }
 
-// Deprecated: Use TenantSpec instead.
+// OrganizationSpec is superseded by TenantSpec.
 message OrganizationSpec {
-  option deprecated = true;
+
 
   // Reserved for future organization configuration fields.
 }
 
-// Deprecated: Use TenantStatus instead.
+// OrganizationStatus is superseded by TenantStatus.
 //
 // Represents the current operational state of an Organization.
 //
 // Status is system-provided and read-only. Users cannot modify status fields directly; the system updates them
 // based on the reconciliation with the identity provider.
 message OrganizationStatus {
-  option deprecated = true;
+
   // Break-glass account credentials.
   // Only populated on successful creation. These credentials must be stored securely.
   // This field is not persisted and will be empty when reading existing organizations.
@@ -78,14 +78,14 @@ message OrganizationStatus {
   string break_glass_user_id = 5;
 }
 
-// Deprecated: Use TenantState instead.
+// OrganizationState is superseded by TenantState.
 //
 // Lifecycle states for Organization resources.
 //
 // State transitions typically follow: UNSPECIFIED -> PENDING -> SYNCED, with FAILED as a terminal error state
 // that may require user intervention or resource recreation.
 enum OrganizationState {
-  option deprecated = true;
+
   // State is unknown or has not been determined yet. This is the default state before initialization.
   ORGANIZATION_STATE_UNSPECIFIED = 0;
 

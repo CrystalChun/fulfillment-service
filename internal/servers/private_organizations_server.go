@@ -25,7 +25,7 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/events"
 )
 
-// Deprecated: Use PrivateTenantsServerBuilder instead.
+// PrivateOrganizationsServerBuilder is superseded by PrivateTenantsServerBuilder.
 type PrivateOrganizationsServerBuilder struct {
 	logger            *slog.Logger
 	notifier          events.Notifier
@@ -36,7 +36,7 @@ type PrivateOrganizationsServerBuilder struct {
 
 var _ privatev1.OrganizationsServer = (*PrivateOrganizationsServer)(nil)
 
-// Deprecated: Use PrivateTenantsServer instead.
+// PrivateOrganizationsServer is superseded by PrivateTenantsServer.
 type PrivateOrganizationsServer struct {
 	privatev1.UnimplementedOrganizationsServer
 	logger    *slog.Logger
@@ -45,7 +45,7 @@ type PrivateOrganizationsServer struct {
 	outMapper *GenericMapper[*privatev1.Tenant, *privatev1.Organization]
 }
 
-// Deprecated: Use NewPrivateTenantsServer instead.
+// NewPrivateOrganizationsServer is superseded by NewPrivateTenantsServer.
 func NewPrivateOrganizationsServer() *PrivateOrganizationsServerBuilder {
 	return &PrivateOrganizationsServerBuilder{}
 }

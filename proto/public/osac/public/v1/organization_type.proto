@@ -17,11 +17,10 @@ package osac.public.v1;
 
 import "osac/public/v1/metadata_type.proto";
 
-// Deprecated: Use Tenant instead.
+// Organization is superseded by Tenant.
 //
 // An organization groups tenants and resources for a customer or business unit.
 message Organization {
-  option deprecated = true;
   // Unique identifier of the organization.
   string id = 1;
 
@@ -30,9 +29,8 @@ message Organization {
   OrganizationSpec spec = 3;
 }
 
-// Deprecated: Use TenantSpec instead.
+// OrganizationSpec is superseded by TenantSpec.
 message OrganizationSpec {
-  option deprecated = true;
 
   // Reserved for future organization configuration fields.
 }

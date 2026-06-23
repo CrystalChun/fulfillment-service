@@ -73,9 +73,8 @@ message OrganizationsSignalRequest {
 
 message OrganizationsSignalResponse {}
 
-// Deprecated: Use Tenants service instead.
+// Organizations service is superseded by Tenants.
 service Organizations {
-  option deprecated = true;
 
   rpc List(OrganizationsListRequest) returns (OrganizationsListResponse) {
     option (google.api.http) = {get: "/api/private/v1/organizations"};

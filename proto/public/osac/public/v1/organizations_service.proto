@@ -93,9 +93,8 @@ message OrganizationsDeleteRequest {
 
 message OrganizationsDeleteResponse {}
 
-// Deprecated: Use Tenants service instead.
+// Organizations service is superseded by Tenants.
 service Organizations {
-  option deprecated = true;
 
   // Retrieves the list of organizations.
   rpc List(OrganizationsListRequest) returns (OrganizationsListResponse) {
