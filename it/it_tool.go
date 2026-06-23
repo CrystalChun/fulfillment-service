@@ -1088,6 +1088,8 @@ func (t *Tool) deployKeycloak(ctx context.Context) error {
 				"manage-users",
 				"view-realm",
 				"view-users",
+				"manage-identity-providers",
+				"view-identity-providers",
 			},
 		},
 	})
