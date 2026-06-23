@@ -74,9 +74,9 @@ var _ = Describe("Public role bindings server", func() {
 					}.Build(),
 					Spec: publicv1.RoleBindingSpec_builder{
 						Role: "my-role-id",
-						Groups: []string{
-							"group-a",
-							"group-b",
+						Users: []string{
+							"user-a",
+							"user-b",
 						},
 					}.Build(),
 				}.Build(),
@@ -89,7 +89,7 @@ var _ = Describe("Public role bindings server", func() {
 			Expect(response.GetObject().GetId()).ToNot(BeEmpty())
 			Expect(response.GetObject().GetMetadata().GetName()).To(Equal("test-binding"))
 			Expect(response.GetObject().GetSpec().GetRole()).To(Equal("my-role-id"))
-			Expect(response.GetObject().GetSpec().GetGroups()).To(ConsistOf("group-a", "group-b"))
+			Expect(response.GetObject().GetSpec().GetUsers()).To(ConsistOf("user-a", "user-b"))
 		})
 
 		It("Lists role bindings", func() {
@@ -100,8 +100,8 @@ var _ = Describe("Public role bindings server", func() {
 					}.Build(),
 					Spec: publicv1.RoleBindingSpec_builder{
 						Role: "role-1",
-						Groups: []string{
-							"group-x",
+						Users: []string{
+							"user-x",
 						},
 					}.Build(),
 				}.Build(),
@@ -123,8 +123,8 @@ var _ = Describe("Public role bindings server", func() {
 					}.Build(),
 					Spec: publicv1.RoleBindingSpec_builder{
 						Role: "role-1",
-						Groups: []string{
-							"group-a",
+						Users: []string{
+							"user-a",
 						},
 					}.Build(),
 				}.Build(),
@@ -137,7 +137,7 @@ var _ = Describe("Public role bindings server", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(getResponse.GetObject().GetId()).To(Equal(createResponse.GetObject().GetId()))
 			Expect(getResponse.GetObject().GetSpec().GetRole()).To(Equal("role-1"))
-			Expect(getResponse.GetObject().GetSpec().GetGroups()).To(ConsistOf("group-a"))
+			Expect(getResponse.GetObject().GetSpec().GetUsers()).To(ConsistOf("user-a"))
 		})
 
 		It("Updates a role binding", func() {
@@ -148,8 +148,8 @@ var _ = Describe("Public role bindings server", func() {
 					}.Build(),
 					Spec: publicv1.RoleBindingSpec_builder{
 						Role: "role-1",
-						Groups: []string{
-							"group-a",
+						Users: []string{
+							"user-a",
 						},
 					}.Build(),
 				}.Build(),
@@ -160,20 +160,20 @@ var _ = Describe("Public role bindings server", func() {
 				Object: publicv1.RoleBinding_builder{
 					Id: createResponse.GetObject().GetId(),
 					Spec: publicv1.RoleBindingSpec_builder{
-						Groups: []string{
-							"group-a",
-							"group-b",
+						Users: []string{
+							"user-a",
+							"user-b",
 						},
 					}.Build(),
 				}.Build(),
 				UpdateMask: &fieldmaskpb.FieldMask{
 					Paths: []string{
-						"spec.groups",
+						"spec.users",
 					},
 				},
 			}.Build())
 			Expect(err).ToNot(HaveOccurred())
-			Expect(updateResponse.GetObject().GetSpec().GetGroups()).To(ConsistOf("group-a", "group-b"))
+			Expect(updateResponse.GetObject().GetSpec().GetUsers()).To(ConsistOf("user-a", "user-b"))
 		})
 
 		It("Ignores fields not included in the update mask", func() {
@@ -184,9 +184,9 @@ var _ = Describe("Public role bindings server", func() {
 					}.Build(),
 					Spec: publicv1.RoleBindingSpec_builder{
 						Role: "role-1",
-						Groups: []string{
-							"group-a",
-							"group-b",
+						Users: []string{
+							"user-a",
+							"user-b",
 						},
 					}.Build(),
 				}.Build(),
@@ -198,8 +198,8 @@ var _ = Describe("Public role bindings server", func() {
 					Id: createResponse.GetObject().GetId(),
 					Spec: publicv1.RoleBindingSpec_builder{
 						Role: "role-2",
-						Groups: []string{
-							"group-x",
+						Users: []string{
+							"user-x",
 						},
 					}.Build(),
 				}.Build(),
@@ -211,7 +211,7 @@ var _ = Describe("Public role bindings server", func() {
 			}.Build())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(updateResponse.GetObject().GetSpec().GetRole()).To(Equal("role-2"))
-			Expect(updateResponse.GetObject().GetSpec().GetGroups()).To(ConsistOf("group-a", "group-b"))
+			Expect(updateResponse.GetObject().GetSpec().GetUsers()).To(ConsistOf("user-a", "user-b"))
 		})
 
 		It("Deletes a role binding", func() {
@@ -222,8 +222,8 @@ var _ = Describe("Public role bindings server", func() {
 					}.Build(),
 					Spec: publicv1.RoleBindingSpec_builder{
 						Role: "role-1",
-						Groups: []string{
-							"group-a",
+						Users: []string{
+							"user-a",
 						},
 					}.Build(),
 				}.Build(),

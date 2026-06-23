@@ -48,8 +48,8 @@ var _ = Describe("Role binding reconciler", func() {
 				}.Build(),
 				Spec: privatev1.RoleBindingSpec_builder{
 					Role: "my-role",
-					Groups: []string{
-						"my-group",
+					Users: []string{
+						"my-user",
 					},
 				}.Build(),
 			}.Build(),
@@ -89,8 +89,8 @@ var _ = Describe("Role binding reconciler", func() {
 				}.Build(),
 				Spec: privatev1.RoleBindingSpec_builder{
 					Role: "my-role",
-					Groups: []string{
-						"my-group",
+					Users: []string{
+						"my-user",
 					},
 				}.Build(),
 			}.Build(),
