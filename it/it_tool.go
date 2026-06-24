@@ -2166,7 +2166,7 @@ func (t *Tool) NewCLIHomeDir() (string, error) {
 // for credential isolation. Returns stdout, stderr, and the process exit code.
 func (t *Tool) RunCLI(ctx context.Context, homeDir string, args ...string) (stdout, stderr string, exitCode int) {
 	cmd := exec.CommandContext(ctx, t.cliBinaryPath, args...)
-	cmd.Env = append(os.Environ(), "HOME="+homeDir)
+	cmd.Env = cliEnv(homeDir)
 	cmd.Dir = t.projectDir
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
@@ -2183,7 +2183,7 @@ func (t *Tool) RunCLI(ctx context.Context, homeDir string, args ...string) (stdo
 	}
 	t.logger.DebugContext(ctx, "CLI command completed",
 		slog.String("binary", t.cliBinaryPath),
-		slog.Any("args", args),
+		slog.Any("args", redactCLIArgs(args)),
 		slog.Int("exitCode", exitCode),
 	)
 	return outBuf.String(), errBuf.String(), exitCode
@@ -2193,9 +2193,7 @@ func (t *Tool) RunCLI(ctx context.Context, homeDir string, args ...string) (stdo
 // override. Each entry in extraEnv should be in "KEY=VALUE" format. Use "KEY=" to unset a variable.
 func (t *Tool) RunCLIWithEnv(ctx context.Context, homeDir string, extraEnv []string, args ...string) (stdout, stderr string, exitCode int) {
 	cmd := exec.CommandContext(ctx, t.cliBinaryPath, args...)
-	env := append(os.Environ(), "HOME="+homeDir)
-	env = append(env, extraEnv...)
-	cmd.Env = env
+	cmd.Env = append(cliEnv(homeDir), extraEnv...)
 	cmd.Dir = t.projectDir
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
@@ -2212,10 +2210,45 @@ func (t *Tool) RunCLIWithEnv(ctx context.Context, homeDir string, extraEnv []str
 	}
 	t.logger.DebugContext(ctx, "CLI command completed",
 		slog.String("binary", t.cliBinaryPath),
-		slog.Any("args", args),
+		slog.Any("args", redactCLIArgs(args)),
 		slog.Int("exitCode", exitCode),
 	)
 	return outBuf.String(), errBuf.String(), exitCode
+}
+
+// cliEnv builds a sandboxed environment for CLI subprocess execution. It inherits the host
+// environment but strips HOME, OSAC_CONFIG, and OSAC_CACHE to prevent leaking host state
+// into the isolated test HOME directory.
+func cliEnv(homeDir string) []string {
+	env := make([]string, 0, len(os.Environ())+2)
+	for _, kv := range os.Environ() {
+		if strings.HasPrefix(kv, "HOME=") ||
+			strings.HasPrefix(kv, "OSAC_CONFIG=") ||
+			strings.HasPrefix(kv, "OSAC_CACHE=") {
+			continue
+		}
+		env = append(env, kv)
+	}
+	env = append(env,
+		"HOME="+homeDir,
+		"OSAC_CONFIG="+filepath.Join(homeDir, ".config", "osac"),
+	)
+	return env
+}
+
+// redactCLIArgs returns a copy of args with sensitive flag values masked.
+func redactCLIArgs(args []string) []string {
+	out := make([]string, len(args))
+	copy(out, args)
+	for i, a := range out {
+		switch {
+		case strings.HasPrefix(a, "--password="):
+			out[i] = "--password=<redacted>"
+		case strings.HasPrefix(a, "--client-secret="):
+			out[i] = "--client-secret=<redacted>"
+		}
+	}
+	return out
 }
 
 // LoginCLI authenticates the CLI using the password flow against the external API with the
