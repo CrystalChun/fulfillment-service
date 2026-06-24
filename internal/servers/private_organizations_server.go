@@ -17,8 +17,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
 	"github.com/osac-project/fulfillment-service/internal/auth"
@@ -128,10 +130,28 @@ func (b *PrivateOrganizationsServerBuilder) Build() (result *PrivateOrganization
 	return
 }
 
-func (s *PrivateOrganizationsServer) copyRenamedFields(tenant *privatev1.Tenant, org *privatev1.Organization) {
+func (s *PrivateOrganizationsServer) copyRenamedFieldsOut(tenant *privatev1.Tenant, org *privatev1.Organization) {
 	if status := tenant.GetStatus(); status != nil {
 		org.GetStatus().IdpOrganizationName = status.GetIdpTenantName()
 	}
+}
+
+func (s *PrivateOrganizationsServer) copyRenamedFieldsIn(org *privatev1.Organization, tenant *privatev1.Tenant) {
+	if status := org.GetStatus(); status != nil {
+		tenant.GetStatus().IdpTenantName = status.GetIdpOrganizationName()
+	}
+}
+
+func (s *PrivateOrganizationsServer) translateUpdateMask(mask *fieldmaskpb.FieldMask) *fieldmaskpb.FieldMask {
+	if mask == nil {
+		return nil
+	}
+	paths := mask.GetPaths()
+	translated := make([]string, len(paths))
+	for i, path := range paths {
+		translated[i] = strings.Replace(path, "idp_organization_name", "idp_tenant_name", 1)
+	}
+	return &fieldmaskpb.FieldMask{Paths: translated}
 }
 
 func (s *PrivateOrganizationsServer) List(ctx context.Context,
@@ -162,7 +182,7 @@ func (s *PrivateOrganizationsServer) List(ctx context.Context,
 			)
 			return nil, err
 		}
-		s.copyRenamedFields(tenantItem, orgItem)
+		s.copyRenamedFieldsOut(tenantItem, orgItem)
 		orgItems[i] = orgItem
 	}
 
@@ -197,7 +217,7 @@ func (s *PrivateOrganizationsServer) Get(ctx context.Context,
 		)
 		return nil, err
 	}
-	s.copyRenamedFields(tenantResponse.GetObject(), orgObject)
+	s.copyRenamedFieldsOut(tenantResponse.GetObject(), orgObject)
 
 	// Build and return the response:
 	response = &privatev1.OrganizationsGetResponse{}
@@ -213,6 +233,7 @@ func (s *PrivateOrganizationsServer) Create(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+	s.copyRenamedFieldsIn(request.GetObject(), tenantObject)
 
 	// Delegate to tenant server (validation happens there):
 	tenantRequest := &privatev1.TenantsCreateRequest{}
@@ -228,7 +249,7 @@ func (s *PrivateOrganizationsServer) Create(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	s.copyRenamedFields(tenantResponse.GetObject(), orgObject)
+	s.copyRenamedFieldsOut(tenantResponse.GetObject(), orgObject)
 
 	response = &privatev1.OrganizationsCreateResponse{}
 	response.SetObject(orgObject)
@@ -243,11 +264,12 @@ func (s *PrivateOrganizationsServer) Update(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+	s.copyRenamedFieldsIn(request.GetObject(), tenantObject)
 
 	// Delegate to tenant server:
 	tenantRequest := &privatev1.TenantsUpdateRequest{}
 	tenantRequest.SetObject(tenantObject)
-	tenantRequest.SetUpdateMask(request.GetUpdateMask())
+	tenantRequest.SetUpdateMask(s.translateUpdateMask(request.GetUpdateMask()))
 	tenantRequest.SetLock(request.GetLock())
 	tenantResponse, err := s.tenants.Update(ctx, tenantRequest)
 	if err != nil {
@@ -260,7 +282,7 @@ func (s *PrivateOrganizationsServer) Update(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	s.copyRenamedFields(tenantResponse.GetObject(), orgObject)
+	s.copyRenamedFieldsOut(tenantResponse.GetObject(), orgObject)
 
 	response = &privatev1.OrganizationsUpdateResponse{}
 	response.SetObject(orgObject)
