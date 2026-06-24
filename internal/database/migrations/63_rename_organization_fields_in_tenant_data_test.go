@@ -34,7 +34,7 @@ var _ = DescribeMigration("Rename organization fields in tenant data", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Run the migration:
-			err = tool.Migrate(ctx, 62)
+			err = tool.Migrate(ctx, 63)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Fetch the migrated data:
@@ -149,7 +149,7 @@ var _ = DescribeMigration("Rename organization fields in tenant data", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Run the migration:
-		err = tool.Migrate(ctx, 62)
+		err = tool.Migrate(ctx, 63)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify the archived tenant was migrated:
