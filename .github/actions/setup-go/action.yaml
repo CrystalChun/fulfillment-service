@@ -26,7 +26,7 @@ runs:
   - id: ginkgo-cache
     uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
     with:
-      key: ginkgo
+      key: ginkgo-${{ hashFiles('go.mod') }}
       path: ~/go/bin/ginkgo
   - if: steps.ginkgo-cache.outputs.cache-hit != 'true'
     shell: bash
