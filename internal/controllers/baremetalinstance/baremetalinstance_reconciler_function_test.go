@@ -794,7 +794,7 @@ var _ = Describe("syncStatus", func() {
 			Equal(privatev1.BareMetalInstanceState_BARE_METAL_INSTANCE_STATE_DELETING))
 	})
 
-	It("should map Allocated condition to PROVISIONED", func() {
+	It("should map Allocated condition to PROVISIONED with sanitized message", func() {
 		t := newTask(0)
 		object := &bmfov1alpha1.BareMetalInstance{
 			Status: bmfov1alpha1.BareMetalInstanceStatus{
@@ -803,7 +803,7 @@ var _ = Describe("syncStatus", func() {
 						Type:    string(bmfov1alpha1.HostConditionAllocated),
 						Status:  metav1.ConditionTrue,
 						Reason:  "HostAllocated",
-						Message: "Host was allocated",
+						Message: "BareMetalInstance allocated a host (osac/fake-bm-host-2) from metal3",
 					},
 				},
 			},
@@ -814,10 +814,10 @@ var _ = Describe("syncStatus", func() {
 		Expect(cond).ToNot(BeNil())
 		Expect(cond.GetStatus()).To(Equal(privatev1.ConditionStatus_CONDITION_STATUS_TRUE))
 		Expect(cond.GetReason()).To(Equal("HostAllocated"))
-		Expect(cond.GetMessage()).To(Equal("Host was allocated"))
+		Expect(cond.GetMessage()).To(Equal("BareMetalInstance successfully provisioned"))
 	})
 
-	It("should map ProvisionTemplateComplete condition to CONFIGURATION_APPLIED", func() {
+	It("should map ProvisionTemplateComplete condition to CONFIGURATION_APPLIED with sanitized message", func() {
 		t := newTask(0)
 		object := &bmfov1alpha1.BareMetalInstance{
 			Status: bmfov1alpha1.BareMetalInstanceStatus{
@@ -836,9 +836,10 @@ var _ = Describe("syncStatus", func() {
 			privatev1.BareMetalInstanceConditionType_BARE_METAL_INSTANCE_CONDITION_TYPE_CONFIGURATION_APPLIED)
 		Expect(cond).ToNot(BeNil())
 		Expect(cond.GetStatus()).To(Equal(privatev1.ConditionStatus_CONDITION_STATUS_TRUE))
+		Expect(cond.GetMessage()).To(Equal("Configuration successfully applied"))
 	})
 
-	It("should map Available condition to READY", func() {
+	It("should map Available condition to READY with sanitized message", func() {
 		t := newTask(0)
 		object := &bmfov1alpha1.BareMetalInstance{
 			Status: bmfov1alpha1.BareMetalInstanceStatus{
@@ -857,6 +858,7 @@ var _ = Describe("syncStatus", func() {
 			privatev1.BareMetalInstanceConditionType_BARE_METAL_INSTANCE_CONDITION_TYPE_READY)
 		Expect(cond).ToNot(BeNil())
 		Expect(cond.GetStatus()).To(Equal(privatev1.ConditionStatus_CONDITION_STATUS_TRUE))
+		Expect(cond.GetMessage()).To(Equal("BareMetalInstance is ready"))
 	})
 
 	It("should set RESTART_IN_PROGRESS when PowerSynced is False with Progressing reason", func() {
@@ -878,6 +880,7 @@ var _ = Describe("syncStatus", func() {
 			privatev1.BareMetalInstanceConditionType_BARE_METAL_INSTANCE_CONDITION_TYPE_RESTART_IN_PROGRESS)
 		Expect(cond).ToNot(BeNil())
 		Expect(cond.GetStatus()).To(Equal(privatev1.ConditionStatus_CONDITION_STATUS_TRUE))
+		Expect(cond.GetMessage()).To(Equal("Restart in progress"))
 	})
 
 	It("should set RESTART_FAILED when PowerSynced is False with IronicAPIFailure reason", func() {
@@ -899,6 +902,7 @@ var _ = Describe("syncStatus", func() {
 			privatev1.BareMetalInstanceConditionType_BARE_METAL_INSTANCE_CONDITION_TYPE_RESTART_FAILED)
 		Expect(cond).ToNot(BeNil())
 		Expect(cond.GetStatus()).To(Equal(privatev1.ConditionStatus_CONDITION_STATUS_TRUE))
+		Expect(cond.GetMessage()).To(Equal("Restart failed"))
 	})
 
 	It("should clear restart conditions and sync restart trigger when PowerSynced is True", func() {
@@ -998,6 +1002,51 @@ var _ = Describe("syncStatus", func() {
 			privatev1.BareMetalInstanceConditionType_BARE_METAL_INSTANCE_CONDITION_TYPE_READY)
 		Expect(ready).ToNot(BeNil())
 		Expect(ready.GetStatus()).To(Equal(privatev1.ConditionStatus_CONDITION_STATUS_TRUE))
+	})
+
+	It("should not leak internal details from bare-metal-fulfillment-operator messages", func() {
+		t := newTask(0)
+		object := &bmfov1alpha1.BareMetalInstance{
+			Status: bmfov1alpha1.BareMetalInstanceStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:    string(bmfov1alpha1.HostConditionAllocated),
+						Status:  metav1.ConditionTrue,
+						Reason:  "Allocated",
+						Message: "BareMetalInstance allocated a host (osac/fake-bm-host-2) from metal3",
+					},
+				},
+			},
+		}
+		t.syncStatus(object)
+		cond := findProtoCondition(t.bareMetalInstance,
+			privatev1.BareMetalInstanceConditionType_BARE_METAL_INSTANCE_CONDITION_TYPE_PROVISIONED)
+		Expect(cond).ToNot(BeNil())
+		Expect(cond.GetMessage()).ToNot(ContainSubstring("osac/"))
+		Expect(cond.GetMessage()).ToNot(ContainSubstring("metal3"))
+		Expect(cond.GetMessage()).ToNot(ContainSubstring("fake-bm-host"))
+	})
+})
+
+var _ = Describe("sanitizeConditionMessage", func() {
+	It("should return tenant-facing message for Allocated condition when True", func() {
+		msg := sanitizeConditionMessage(bmfov1alpha1.HostConditionAllocated, metav1.ConditionTrue)
+		Expect(msg).To(Equal("BareMetalInstance successfully provisioned"))
+	})
+
+	It("should return tenant-facing message for ProvisionTemplateComplete condition when True", func() {
+		msg := sanitizeConditionMessage(bmfov1alpha1.HostConditionProvisionTemplateComplete, metav1.ConditionTrue)
+		Expect(msg).To(Equal("Configuration successfully applied"))
+	})
+
+	It("should return tenant-facing message for Available condition when True", func() {
+		msg := sanitizeConditionMessage(bmfov1alpha1.HostConditionAvailable, metav1.ConditionTrue)
+		Expect(msg).To(Equal("BareMetalInstance is ready"))
+	})
+
+	It("should return empty message for conditions with False status", func() {
+		msg := sanitizeConditionMessage(bmfov1alpha1.HostConditionAllocated, metav1.ConditionFalse)
+		Expect(msg).To(BeEmpty())
 	})
 })
 

@@ -438,31 +438,33 @@ func (t *task) syncStatus(object *bmfov1alpha1.BareMetalInstance) {
 		case bmfov1alpha1.HostConditionAllocated:
 			t.updateCondition(
 				privatev1.BareMetalInstanceConditionType_BARE_METAL_INSTANCE_CONDITION_TYPE_PROVISIONED,
-				status, cond.Reason, cond.Message)
+				status, cond.Reason, sanitizeConditionMessage(condType, cond.Status))
 		case bmfov1alpha1.HostConditionProvisionTemplateComplete:
 			t.updateCondition(
 				privatev1.BareMetalInstanceConditionType_BARE_METAL_INSTANCE_CONDITION_TYPE_CONFIGURATION_APPLIED,
-				status, cond.Reason, cond.Message)
+				status, cond.Reason, sanitizeConditionMessage(condType, cond.Status))
 		case bmfov1alpha1.HostConditionAvailable:
 			t.updateCondition(
 				privatev1.BareMetalInstanceConditionType_BARE_METAL_INSTANCE_CONDITION_TYPE_READY,
-				status, cond.Reason, cond.Message)
+				status, cond.Reason, sanitizeConditionMessage(condType, cond.Status))
 		case bmfov1alpha1.HostConditionPowerSynced:
 			if cond.Status == metav1.ConditionFalse && cond.Reason == bmfov1alpha1.HostConditionReasonProgressing {
 				t.updateCondition(
 					privatev1.BareMetalInstanceConditionType_BARE_METAL_INSTANCE_CONDITION_TYPE_RESTART_IN_PROGRESS,
-					privatev1.ConditionStatus_CONDITION_STATUS_TRUE, cond.Reason, cond.Message)
+					privatev1.ConditionStatus_CONDITION_STATUS_TRUE, cond.Reason,
+					"Restart in progress")
 			} else if cond.Status == metav1.ConditionFalse && cond.Reason == bmfov1alpha1.HostConditionReasonIronicAPIFailure {
 				t.updateCondition(
 					privatev1.BareMetalInstanceConditionType_BARE_METAL_INSTANCE_CONDITION_TYPE_RESTART_FAILED,
-					privatev1.ConditionStatus_CONDITION_STATUS_TRUE, cond.Reason, cond.Message)
+					privatev1.ConditionStatus_CONDITION_STATUS_TRUE, cond.Reason,
+					"Restart failed")
 			} else if cond.Status == metav1.ConditionTrue {
 				t.updateCondition(
 					privatev1.BareMetalInstanceConditionType_BARE_METAL_INSTANCE_CONDITION_TYPE_RESTART_IN_PROGRESS,
-					privatev1.ConditionStatus_CONDITION_STATUS_FALSE, cond.Reason, cond.Message)
+					privatev1.ConditionStatus_CONDITION_STATUS_FALSE, cond.Reason, "")
 				t.updateCondition(
 					privatev1.BareMetalInstanceConditionType_BARE_METAL_INSTANCE_CONDITION_TYPE_RESTART_FAILED,
-					privatev1.ConditionStatus_CONDITION_STATUS_FALSE, cond.Reason, cond.Message)
+					privatev1.ConditionStatus_CONDITION_STATUS_FALSE, cond.Reason, "")
 				t.bareMetalInstance.GetStatus().SetRestartTrigger(
 					t.bareMetalInstance.GetSpec().GetRestartTrigger())
 			}
@@ -479,6 +481,23 @@ func mapConditionStatus(status metav1.ConditionStatus) privatev1.ConditionStatus
 	default:
 		return privatev1.ConditionStatus_CONDITION_STATUS_UNSPECIFIED
 	}
+}
+
+// sanitizeConditionMessage returns a tenant-facing message for a given condition type and status,
+// replacing internal implementation details from the bare-metal-fulfillment-operator.
+func sanitizeConditionMessage(condType bmfov1alpha1.BareMetalInstanceConditionType,
+	status metav1.ConditionStatus) string {
+	if status == metav1.ConditionTrue {
+		switch condType {
+		case bmfov1alpha1.HostConditionAllocated:
+			return "BareMetalInstance successfully provisioned"
+		case bmfov1alpha1.HostConditionProvisionTemplateComplete:
+			return "Configuration successfully applied"
+		case bmfov1alpha1.HostConditionAvailable:
+			return "BareMetalInstance is ready"
+		}
+	}
+	return ""
 }
 
 // mutateBMI sets the fulfillment-service-owned metadata and spec fields, leaving
