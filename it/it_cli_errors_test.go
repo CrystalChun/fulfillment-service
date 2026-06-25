@@ -29,7 +29,8 @@ var _ = Describe("CLI Error Handling", Label("cli", "errors"), func() {
 		homeDir, err = tool.NewCLIHomeDir()
 		Expect(err).ToNot(HaveOccurred())
 		DeferCleanup(func() {
-			os.RemoveAll(homeDir)
+			err := os.RemoveAll(homeDir)
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 

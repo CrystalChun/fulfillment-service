@@ -2165,33 +2165,20 @@ func (t *Tool) NewCLIHomeDir() (string, error) {
 // RunCLI executes the osac CLI binary with the given arguments and a custom HOME directory
 // for credential isolation. Returns stdout, stderr, and the process exit code.
 func (t *Tool) RunCLI(ctx context.Context, homeDir string, args ...string) (stdout, stderr string, exitCode int) {
-	cmd := exec.CommandContext(ctx, t.cliBinaryPath, args...)
-	cmd.Env = cliEnv(homeDir)
-	cmd.Dir = t.projectDir
-	var outBuf, errBuf bytes.Buffer
-	cmd.Stdout = &outBuf
-	cmd.Stderr = &errBuf
-	err := cmd.Run()
-	exitCode = 0
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			exitCode = exitErr.ExitCode()
-		} else {
-			exitCode = -1
-		}
-	}
-	t.logger.DebugContext(ctx, "CLI command completed",
-		slog.String("binary", t.cliBinaryPath),
-		slog.Any("args", redactCLIArgs(args)),
-		slog.Int("exitCode", exitCode),
-	)
-	return outBuf.String(), errBuf.String(), exitCode
+	return t.runCLI(ctx, homeDir, nil, args...)
 }
 
 // RunCLIWithEnv executes the osac binary with additional environment variables beyond the HOME
 // override. Each entry in extraEnv should be in "KEY=VALUE" format. Use "KEY=" to unset a variable.
 func (t *Tool) RunCLIWithEnv(ctx context.Context, homeDir string, extraEnv []string, args ...string) (stdout, stderr string, exitCode int) {
+	return t.runCLI(ctx, homeDir, extraEnv, args...)
+}
+
+// runCLI is the shared implementation for RunCLI and RunCLIWithEnv. We intentionally use
+// exec.CommandContext directly rather than testing.Command because the CLI tests need custom
+// environment sandboxing and explicit exit-code extraction for non-zero exits (expected
+// behavior, not errors).
+func (t *Tool) runCLI(ctx context.Context, homeDir string, extraEnv []string, args ...string) (stdout, stderr string, exitCode int) {
 	cmd := exec.CommandContext(ctx, t.cliBinaryPath, args...)
 	cmd.Env = append(cliEnv(homeDir), extraEnv...)
 	cmd.Dir = t.projectDir
@@ -2206,34 +2193,31 @@ func (t *Tool) RunCLIWithEnv(ctx context.Context, homeDir string, extraEnv []str
 			exitCode = exitErr.ExitCode()
 		} else {
 			exitCode = -1
+			t.logger.ErrorContext(ctx, "CLI command failed with unexpected error",
+				slog.String("binary", t.cliBinaryPath),
+				slog.Any("args", redactCLIArgs(args)),
+				slog.String("error", err.Error()),
+			)
 		}
 	}
 	t.logger.DebugContext(ctx, "CLI command completed",
 		slog.String("binary", t.cliBinaryPath),
 		slog.Any("args", redactCLIArgs(args)),
-		slog.Int("exitCode", exitCode),
+		slog.Int("code", exitCode),
 	)
 	return outBuf.String(), errBuf.String(), exitCode
 }
 
-// cliEnv builds a sandboxed environment for CLI subprocess execution. It inherits the host
-// environment but strips HOME, OSAC_CONFIG, and OSAC_CACHE to prevent leaking host state
-// into the isolated test HOME directory.
+// cliEnv builds a minimal sandboxed environment for CLI subprocess execution. Only the
+// variables strictly required by the CLI binary are set; everything else from the host
+// is excluded to guarantee full test isolation.
 func cliEnv(homeDir string) []string {
-	env := make([]string, 0, len(os.Environ())+2)
-	for _, kv := range os.Environ() {
-		if strings.HasPrefix(kv, "HOME=") ||
-			strings.HasPrefix(kv, "OSAC_CONFIG=") ||
-			strings.HasPrefix(kv, "OSAC_CACHE=") {
-			continue
-		}
-		env = append(env, kv)
+	return []string{
+		"HOME=" + homeDir,
+		"PATH=" + os.Getenv("PATH"),
+		"OSAC_CONFIG=" + filepath.Join(homeDir, ".config", "osac"),
+		"OSAC_CACHE=" + filepath.Join(homeDir, ".cache", "osac"),
 	}
-	env = append(env,
-		"HOME="+homeDir,
-		"OSAC_CONFIG="+filepath.Join(homeDir, ".config", "osac"),
-	)
-	return env
 }
 
 // redactCLIArgs returns a copy of args with sensitive flag values masked.

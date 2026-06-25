@@ -30,7 +30,8 @@ var _ = Describe("CLI Authentication", Label("cli", "auth"), func() {
 		homeDir, err = tool.NewCLIHomeDir()
 		Expect(err).ToNot(HaveOccurred())
 		DeferCleanup(func() {
-			os.RemoveAll(homeDir)
+			err := os.RemoveAll(homeDir)
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
