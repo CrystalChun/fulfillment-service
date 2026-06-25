@@ -141,18 +141,18 @@ func (mr *MockClientMockRecorder) CreateAuthorizationResource(ctx, resource any)
 }
 
 // CreateIdentityProvider mocks base method.
-func (m *MockClient) CreateIdentityProvider(ctx context.Context, idp *IdentityProvider) (*IdentityProvider, error) {
+func (m *MockClient) CreateIdentityProvider(ctx context.Context, organizationName string, idp *IdentityProvider) (*IdentityProvider, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateIdentityProvider", ctx, idp)
+	ret := m.ctrl.Call(m, "CreateIdentityProvider", ctx, organizationName, idp)
 	ret0, _ := ret[0].(*IdentityProvider)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateIdentityProvider indicates an expected call of CreateIdentityProvider.
-func (mr *MockClientMockRecorder) CreateIdentityProvider(ctx, idp any) *gomock.Call {
+func (mr *MockClientMockRecorder) CreateIdentityProvider(ctx, organizationName, idp any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateIdentityProvider", reflect.TypeOf((*MockClient)(nil).CreateIdentityProvider), ctx, idp)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateIdentityProvider", reflect.TypeOf((*MockClient)(nil).CreateIdentityProvider), ctx, organizationName, idp)
 }
 
 // CreateOrganization mocks base method.
@@ -211,6 +211,20 @@ func (m *MockClient) DeleteAuthorizationResource(ctx context.Context, resourceID
 func (mr *MockClientMockRecorder) DeleteAuthorizationResource(ctx, resourceID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAuthorizationResource", reflect.TypeOf((*MockClient)(nil).DeleteAuthorizationResource), ctx, resourceID)
+}
+
+// DeleteIdentityProvider mocks base method.
+func (m *MockClient) DeleteIdentityProvider(ctx context.Context, organizationName, alias string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteIdentityProvider", ctx, organizationName, alias)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteIdentityProvider indicates an expected call of DeleteIdentityProvider.
+func (mr *MockClientMockRecorder) DeleteIdentityProvider(ctx, organizationName, alias any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteIdentityProvider", reflect.TypeOf((*MockClient)(nil).DeleteIdentityProvider), ctx, organizationName, alias)
 }
 
 // DeleteOrganization mocks base method.
@@ -272,18 +286,18 @@ func (mr *MockClientMockRecorder) GetGroupIDByPath(ctx, organizationName, groupP
 }
 
 // GetIdentityProvider mocks base method.
-func (m *MockClient) GetIdentityProvider(ctx context.Context, alias string) (*IdentityProvider, error) {
+func (m *MockClient) GetIdentityProvider(ctx context.Context, organizationName, alias string) (*IdentityProvider, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetIdentityProvider", ctx, alias)
+	ret := m.ctrl.Call(m, "GetIdentityProvider", ctx, organizationName, alias)
 	ret0, _ := ret[0].(*IdentityProvider)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetIdentityProvider indicates an expected call of GetIdentityProvider.
-func (mr *MockClientMockRecorder) GetIdentityProvider(ctx, alias any) *gomock.Call {
+func (mr *MockClientMockRecorder) GetIdentityProvider(ctx, organizationName, alias any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIdentityProvider", reflect.TypeOf((*MockClient)(nil).GetIdentityProvider), ctx, alias)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIdentityProvider", reflect.TypeOf((*MockClient)(nil).GetIdentityProvider), ctx, organizationName, alias)
 }
 
 // GetOrganization mocks base method.
@@ -299,21 +313,6 @@ func (m *MockClient) GetOrganization(ctx context.Context, name string) (*Organiz
 func (mr *MockClientMockRecorder) GetOrganization(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrganization", reflect.TypeOf((*MockClient)(nil).GetOrganization), ctx, name)
-}
-
-// GetOrganizationIdentityProvider mocks base method.
-func (m *MockClient) GetOrganizationIdentityProvider(ctx context.Context, organizationName, alias string) (*IdentityProvider, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetOrganizationIdentityProvider", ctx, organizationName, alias)
-	ret0, _ := ret[0].(*IdentityProvider)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetOrganizationIdentityProvider indicates an expected call of GetOrganizationIdentityProvider.
-func (mr *MockClientMockRecorder) GetOrganizationIdentityProvider(ctx, organizationName, alias any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrganizationIdentityProvider", reflect.TypeOf((*MockClient)(nil).GetOrganizationIdentityProvider), ctx, organizationName, alias)
 }
 
 // GetUser mocks base method.
@@ -359,21 +358,6 @@ func (m *MockClient) GetUserOrganizationRoles(ctx context.Context, organizationN
 func (mr *MockClientMockRecorder) GetUserOrganizationRoles(ctx, organizationName, userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserOrganizationRoles", reflect.TypeOf((*MockClient)(nil).GetUserOrganizationRoles), ctx, organizationName, userID)
-}
-
-// ListAllIdentityProviders mocks base method.
-func (m *MockClient) ListAllIdentityProviders(ctx context.Context) ([]*IdentityProvider, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListAllIdentityProviders", ctx)
-	ret0, _ := ret[0].([]*IdentityProvider)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListAllIdentityProviders indicates an expected call of ListAllIdentityProviders.
-func (mr *MockClientMockRecorder) ListAllIdentityProviders(ctx any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAllIdentityProviders", reflect.TypeOf((*MockClient)(nil).ListAllIdentityProviders), ctx)
 }
 
 // ListClientRoles mocks base method.

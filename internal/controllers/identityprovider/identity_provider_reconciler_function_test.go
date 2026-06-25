@@ -225,7 +225,7 @@ var _ = Describe("Provider Type Detection", func() {
 			identityProvider: identityProvider,
 		}
 
-		providerType := task.determineProviderType()
+		providerType := task.determineProviderTypeFromIdp(identityProvider)
 		Expect(providerType).To(Equal("ldap"))
 	})
 
@@ -242,7 +242,7 @@ var _ = Describe("Provider Type Detection", func() {
 			identityProvider: identityProvider,
 		}
 
-		providerType := task.determineProviderType()
+		providerType := task.determineProviderTypeFromIdp(identityProvider)
 		Expect(providerType).To(Equal("oidc"))
 	})
 
@@ -255,7 +255,7 @@ var _ = Describe("Provider Type Detection", func() {
 			identityProvider: identityProvider,
 		}
 
-		providerType := task.determineProviderType()
+		providerType := task.determineProviderTypeFromIdp(identityProvider)
 		Expect(providerType).To(BeEmpty())
 	})
 
@@ -275,7 +275,7 @@ var _ = Describe("Provider Type Detection", func() {
 			identityProvider: identityProvider,
 		}
 
-		providerType := task.determineProviderType()
+		providerType := task.determineProviderTypeFromIdp(identityProvider)
 		Expect(providerType).To(Equal("ldap"))
 	})
 })
@@ -297,7 +297,7 @@ var _ = Describe("Config Building", func() {
 			identityProvider: identityProvider,
 		}
 
-		config := task.buildConfig()
+		config := task.buildConfigFromIdp(identityProvider)
 		Expect(config).To(HaveKeyWithValue("connectionUrl", "ldap://example.com:389"))
 		Expect(config).To(HaveKeyWithValue("bindDn", "cn=admin,dc=example,dc=com"))
 		Expect(config).To(HaveKeyWithValue("bindCredential", "secret"))
@@ -321,7 +321,7 @@ var _ = Describe("Config Building", func() {
 			identityProvider: identityProvider,
 		}
 
-		config := task.buildConfig()
+		config := task.buildConfigFromIdp(identityProvider)
 		Expect(config).To(HaveKeyWithValue("authorizationUrl", "https://example.com/auth"))
 		Expect(config).To(HaveKeyWithValue("tokenUrl", "https://example.com/token"))
 		Expect(config).To(HaveKeyWithValue("clientId", "client-123"))
@@ -338,7 +338,7 @@ var _ = Describe("Config Building", func() {
 			identityProvider: identityProvider,
 		}
 
-		config := task.buildConfig()
+		config := task.buildConfigFromIdp(identityProvider)
 		Expect(config).To(BeEmpty())
 	})
 })
@@ -385,8 +385,9 @@ var _ = Describe("IDP Sync", func() {
 		}.Build()
 
 		mockClient.EXPECT().
-			CreateIdentityProvider(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(ctx context.Context, idpProvider *idp.IdentityProvider) (*idp.IdentityProvider, error) {
+			CreateIdentityProvider(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, organizationName string, idpProvider *idp.IdentityProvider) (*idp.IdentityProvider, error) {
+				Expect(organizationName).To(Equal("tenant-1"))
 				Expect(idpProvider.Alias).To(Equal("tenant-1-corporate-ldap"))
 				Expect(idpProvider.DisplayName).To(Equal("Corporate LDAP"))
 				Expect(idpProvider.Type).To(Equal("ldap"))
@@ -432,8 +433,9 @@ var _ = Describe("IDP Sync", func() {
 		}.Build()
 
 		mockClient.EXPECT().
-			CreateIdentityProvider(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(ctx context.Context, idpProvider *idp.IdentityProvider) (*idp.IdentityProvider, error) {
+			CreateIdentityProvider(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, organizationName string, idpProvider *idp.IdentityProvider) (*idp.IdentityProvider, error) {
+				Expect(organizationName).To(Equal("tenant-2"))
 				Expect(idpProvider.Alias).To(Equal("tenant-2-google-sso"))
 				Expect(idpProvider.DisplayName).To(Equal("Google SSO"))
 				Expect(idpProvider.Type).To(Equal("oidc"))
@@ -471,8 +473,9 @@ var _ = Describe("IDP Sync", func() {
 		}.Build()
 
 		mockClient.EXPECT().
-			CreateIdentityProvider(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(ctx context.Context, idpProvider *idp.IdentityProvider) (*idp.IdentityProvider, error) {
+			CreateIdentityProvider(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, organizationName string, idpProvider *idp.IdentityProvider) (*idp.IdentityProvider, error) {
+				Expect(organizationName).To(Equal("my-tenant"))
 				Expect(idpProvider.Alias).To(Equal("my-tenant-test-idp"))
 				return idpProvider, nil
 			}).
@@ -503,7 +506,7 @@ var _ = Describe("IDP Sync", func() {
 		}.Build()
 
 		mockClient.EXPECT().
-			CreateIdentityProvider(gomock.Any(), gomock.Any()).
+			CreateIdentityProvider(gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil, fmt.Errorf("IDP connection timeout")).
 			Times(1)
 
@@ -535,7 +538,7 @@ var _ = Describe("IDP Sync", func() {
 		}.Build()
 
 		mockClient.EXPECT().
-			CreateIdentityProvider(gomock.Any(), gomock.Any()).
+			CreateIdentityProvider(gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil, fmt.Errorf("identity provider already exists")).
 			Times(1)
 
@@ -565,8 +568,9 @@ var _ = Describe("IDP Sync", func() {
 		}.Build()
 
 		mockClient.EXPECT().
-			CreateIdentityProvider(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(ctx context.Context, idpProvider *idp.IdentityProvider) (*idp.IdentityProvider, error) {
+			CreateIdentityProvider(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, organizationName string, idpProvider *idp.IdentityProvider) (*idp.IdentityProvider, error) {
+				Expect(organizationName).To(Equal("tenant-1"))
 				Expect(idpProvider.Enabled).To(BeFalse())
 				return idpProvider, nil
 			}).
@@ -692,12 +696,13 @@ var _ = Describe("Deletion", func() {
 		Expect(identityProvider.GetMetadata().GetFinalizers()).ToNot(ContainElement(finalizers.Controller))
 	})
 
-	It("should log warning when deleting READY identity provider", func() {
+	It("should delete from IDP and remove finalizer when deleting READY identity provider", func() {
 		deletionTimestamp := timestamppb.New(time.Now())
 		identityProvider := privatev1.IdentityProvider_builder{
 			Id: "idp-123",
 			Metadata: privatev1.Metadata_builder{
 				Name:              "test-idp",
+				Tenant:            "tenant-1",
 				Finalizers:        []string{finalizers.Controller},
 				DeletionTimestamp: deletionTimestamp,
 			}.Build(),
@@ -705,6 +710,11 @@ var _ = Describe("Deletion", func() {
 				Phase: privatev1.IdentityProviderPhase_IDENTITY_PROVIDER_PHASE_READY,
 			}.Build(),
 		}.Build()
+
+		mockClient.EXPECT().
+			DeleteIdentityProvider(gomock.Any(), "tenant-1", "tenant-1-test-idp").
+			Return(nil).
+			Times(1)
 
 		task := &task{
 			r:                reconciler,

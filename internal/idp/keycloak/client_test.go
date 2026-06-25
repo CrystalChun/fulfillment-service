@@ -1409,7 +1409,26 @@ var _ = Describe("Keycloak Client", func() {
 		Describe("CreateIdentityProvider", func() {
 			It("creates an identity provider in Keycloak", func() {
 				var receivedIdp *keycloakIdentityProvider
+				var createdResponse keycloakIdentityProvider
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == http.MethodGet && r.URL.Path == "/admin/realms/osac/organizations" {
+						// Organization lookup
+						orgs := []keycloakOrganization{{
+							ID:   "org-123",
+							Name: "test-org",
+						}}
+						w.Header().Set("Content-Type", "application/json")
+						if err := json.NewEncoder(w).Encode(orgs); err != nil {
+							http.Error(w, err.Error(), http.StatusInternalServerError)
+							return
+						}
+						return
+					}
+					if r.Method == http.MethodPost && r.URL.Path == "/admin/realms/osac/organizations/org-123/identity-providers" {
+						// Link IdP to organization
+						w.WriteHeader(http.StatusNoContent)
+						return
+					}
 					if r.Method == http.MethodPost && r.URL.Path == "/admin/realms/osac/identity-provider/instances" {
 						// Create request
 						receivedIdp = &keycloakIdentityProvider{}
@@ -1419,8 +1438,8 @@ var _ = Describe("Keycloak Client", func() {
 							return
 						}
 
-						// Return the created IdP
-						response := keycloakIdentityProvider{
+						// Store the created IdP for subsequent GET
+						createdResponse = keycloakIdentityProvider{
 							Alias:       receivedIdp.Alias,
 							DisplayName: receivedIdp.DisplayName,
 							InternalID:  "idp-uuid-123",
@@ -1428,9 +1447,13 @@ var _ = Describe("Keycloak Client", func() {
 							Enabled:     receivedIdp.Enabled,
 							Config:      receivedIdp.Config,
 						}
-						w.Header().Set("Content-Type", "application/json")
 						w.WriteHeader(http.StatusCreated)
-						if err := json.NewEncoder(w).Encode(response); err != nil {
+						return
+					}
+					if r.Method == http.MethodGet && r.URL.Path == "/admin/realms/osac/organizations/org-123/identity-providers/corporate-ldap" {
+						// Get request after creation (via organization)
+						w.Header().Set("Content-Type", "application/json")
+						if err := json.NewEncoder(w).Encode(createdResponse); err != nil {
 							http.Error(w, err.Error(), http.StatusInternalServerError)
 							return
 						}
@@ -1451,7 +1474,7 @@ var _ = Describe("Keycloak Client", func() {
 						"bindDn":        "cn=admin,dc=example,dc=com",
 					},
 				}
-				createdIdp, err := client.CreateIdentityProvider(ctx, idpProvider)
+				createdIdp, err := client.CreateIdentityProvider(ctx, "test-org", idpProvider)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(receivedIdp).ToNot(BeNil(), "server handler should have set receivedIdp")
 				Expect(receivedIdp.Alias).To(Equal("corporate-ldap"))
@@ -1465,12 +1488,31 @@ var _ = Describe("Keycloak Client", func() {
 			})
 
 			It("creates an OIDC identity provider", func() {
+				var createdResponse keycloakIdentityProvider
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == http.MethodGet && r.URL.Path == "/admin/realms/osac/organizations" {
+						// Organization lookup
+						orgs := []keycloakOrganization{{
+							ID:   "org-123",
+							Name: "test-org",
+						}}
+						w.Header().Set("Content-Type", "application/json")
+						if err := json.NewEncoder(w).Encode(orgs); err != nil {
+							http.Error(w, err.Error(), http.StatusInternalServerError)
+							return
+						}
+						return
+					}
+					if r.Method == http.MethodPost && r.URL.Path == "/admin/realms/osac/organizations/org-123/identity-providers" {
+						// Link IdP to organization
+						w.WriteHeader(http.StatusNoContent)
+						return
+					}
 					if r.Method == http.MethodPost && r.URL.Path == "/admin/realms/osac/identity-provider/instances" {
 						var receivedIdp keycloakIdentityProvider
 						json.NewDecoder(r.Body).Decode(&receivedIdp)
 
-						response := keycloakIdentityProvider{
+						createdResponse = keycloakIdentityProvider{
 							Alias:       receivedIdp.Alias,
 							DisplayName: receivedIdp.DisplayName,
 							InternalID:  "idp-uuid-456",
@@ -1478,9 +1520,13 @@ var _ = Describe("Keycloak Client", func() {
 							Enabled:     receivedIdp.Enabled,
 							Config:      receivedIdp.Config,
 						}
-						w.Header().Set("Content-Type", "application/json")
 						w.WriteHeader(http.StatusCreated)
-						if err := json.NewEncoder(w).Encode(response); err != nil {
+						return
+					}
+					if r.Method == http.MethodGet && r.URL.Path == "/admin/realms/osac/organizations/org-123/identity-providers/google-sso" {
+						// Get request after creation (via organization)
+						w.Header().Set("Content-Type", "application/json")
+						if err := json.NewEncoder(w).Encode(createdResponse); err != nil {
 							http.Error(w, err.Error(), http.StatusInternalServerError)
 							return
 						}
@@ -1503,7 +1549,7 @@ var _ = Describe("Keycloak Client", func() {
 						"clientSecret":     "my-client-secret",
 					},
 				}
-				createdIdp, err := client.CreateIdentityProvider(ctx, idpProvider)
+				createdIdp, err := client.CreateIdentityProvider(ctx, "test-org", idpProvider)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(createdIdp).ToNot(BeNil())
 				Expect(createdIdp.Alias).To(Equal("google-sso"))
@@ -1524,7 +1570,7 @@ var _ = Describe("Keycloak Client", func() {
 					Type:    "ldap",
 					Enabled: true,
 				}
-				_, err := client.CreateIdentityProvider(ctx, idpProvider)
+				_, err := client.CreateIdentityProvider(ctx, "test-org", idpProvider)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to create identity provider"))
 			})
@@ -1533,7 +1579,20 @@ var _ = Describe("Keycloak Client", func() {
 		Describe("GetIdentityProvider", func() {
 			It("retrieves an identity provider by alias", func() {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.Method == http.MethodGet && r.URL.Path == "/admin/realms/osac/identity-provider/instances/corporate-ldap" {
+					if r.Method == http.MethodGet && r.URL.Path == "/admin/realms/osac/organizations" {
+						// Organization lookup
+						orgs := []keycloakOrganization{{
+							ID:   "org-123",
+							Name: "org-1",
+						}}
+						w.Header().Set("Content-Type", "application/json")
+						if err := json.NewEncoder(w).Encode(orgs); err != nil {
+							http.Error(w, err.Error(), http.StatusInternalServerError)
+							return
+						}
+						return
+					}
+					if r.Method == http.MethodGet && r.URL.Path == "/admin/realms/osac/organizations/org-123/identity-providers/corporate-ldap" {
 						response := keycloakIdentityProvider{
 							Alias:       "corporate-ldap",
 							DisplayName: "Corporate LDAP",
@@ -1558,7 +1617,7 @@ var _ = Describe("Keycloak Client", func() {
 
 				client = createTestClient(server.URL)
 
-				idpProvider, err := client.GetIdentityProvider(ctx, "corporate-ldap")
+				idpProvider, err := client.GetIdentityProvider(ctx, "org-1", "corporate-ldap")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(idpProvider).ToNot(BeNil())
 				Expect(idpProvider.Alias).To(Equal("corporate-ldap"))
@@ -1575,79 +1634,8 @@ var _ = Describe("Keycloak Client", func() {
 
 				client = createTestClient(server.URL)
 
-				_, err := client.GetIdentityProvider(ctx, "nonexistent")
+				_, err := client.GetIdentityProvider(ctx, "org-1", "nonexistent")
 				Expect(err).To(HaveOccurred())
-			})
-		})
-
-		Describe("ListAllIdentityProviders", func() {
-			It("lists all identity providers in the realm", func() {
-				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.Method == http.MethodGet && r.URL.Path == "/admin/realms/osac/identity-provider/instances" {
-						response := []keycloakIdentityProvider{
-							{
-								Alias:       "corporate-ldap",
-								DisplayName: "Corporate LDAP",
-								ProviderID:  "ldap",
-								Enabled:     true,
-							},
-							{
-								Alias:       "okta-sso",
-								DisplayName: "Okta SSO",
-								ProviderID:  "oidc",
-								Enabled:     true,
-							},
-							{
-								Alias:       "disabled-saml",
-								DisplayName: "Disabled SAML",
-								ProviderID:  "saml",
-								Enabled:     false,
-							},
-						}
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusOK)
-						if err := json.NewEncoder(w).Encode(response); err != nil {
-							http.Error(w, err.Error(), http.StatusInternalServerError)
-							return
-						}
-						return
-					}
-					w.WriteHeader(http.StatusNotFound)
-				}))
-
-				client = createTestClient(server.URL)
-
-				idps, err := client.ListAllIdentityProviders(ctx)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(idps).To(HaveLen(3))
-				Expect(idps[0].Alias).To(Equal("corporate-ldap"))
-				Expect(idps[0].Type).To(Equal("ldap"))
-				Expect(idps[1].Alias).To(Equal("okta-sso"))
-				Expect(idps[1].Type).To(Equal("oidc"))
-				Expect(idps[2].Alias).To(Equal("disabled-saml"))
-				Expect(idps[2].Enabled).To(BeFalse())
-			})
-
-			It("returns empty list when no IdPs configured", func() {
-				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.Method == http.MethodGet && r.URL.Path == "/admin/realms/osac/identity-provider/instances" {
-						response := []keycloakIdentityProvider{}
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusOK)
-						if err := json.NewEncoder(w).Encode(response); err != nil {
-							http.Error(w, err.Error(), http.StatusInternalServerError)
-							return
-						}
-						return
-					}
-					w.WriteHeader(http.StatusNotFound)
-				}))
-
-				client = createTestClient(server.URL)
-
-				idps, err := client.ListAllIdentityProviders(ctx)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(idps).To(BeEmpty())
 			})
 		})
 
@@ -1694,7 +1682,7 @@ var _ = Describe("Keycloak Client", func() {
 
 				client = createTestClient(server.URL)
 
-				idpProvider, err := client.GetOrganizationIdentityProvider(ctx, "test-org", "corporate-ldap")
+				idpProvider, err := client.GetIdentityProvider(ctx, "test-org", "corporate-ldap")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(idpProvider).ToNot(BeNil())
 				Expect(idpProvider.Alias).To(Equal("corporate-ldap"))
@@ -1730,9 +1718,9 @@ var _ = Describe("Keycloak Client", func() {
 
 				client = createTestClient(server.URL)
 
-				_, err := client.GetOrganizationIdentityProvider(ctx, "test-org", "nonexistent")
+				_, err := client.GetIdentityProvider(ctx, "test-org", "nonexistent")
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to get organization identity provider"))
+				Expect(err.Error()).To(ContainSubstring("failed to get identity provider"))
 			})
 
 			It("returns error when organization not found", func() {
@@ -1753,7 +1741,7 @@ var _ = Describe("Keycloak Client", func() {
 
 				client = createTestClient(server.URL)
 
-				_, err := client.GetOrganizationIdentityProvider(ctx, "nonexistent-org", "corporate-ldap")
+				_, err := client.GetIdentityProvider(ctx, "nonexistent-org", "corporate-ldap")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("organization"))
 			})

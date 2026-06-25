@@ -900,7 +900,7 @@ func (s *GenericServer[O]) setPayload(event *privatev1.Event, object proto.Messa
 		}
 		event.SetStorageBackend(object)
 	case *privatev1.IdentityProvider:
-		// Redact sensitive fields (client secrets and bind credentials) before publishing
+		// Redact sensitive fields before publishing - controller will fetch them separately via API
 		object = proto.Clone(object).(*privatev1.IdentityProvider)
 		spec := object.GetSpec()
 		if spec != nil {

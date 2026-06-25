@@ -757,18 +757,21 @@ func (c *Client) DeleteAuthorizationResource(ctx context.Context, resourceID str
 }
 
 // CreateIdentityProvider creates a new identity provider at the realm level.
-func (c *Client) CreateIdentityProvider(ctx context.Context, idpProvider *idp.IdentityProvider) (*idp.IdentityProvider, error) {
+// CreateIdentityProvider creates an identity provider for a specific organization.
+// In Keycloak, this creates the IdP at realm level and links it to the organization.
+func (c *Client) CreateIdentityProvider(ctx context.Context, organizationName string, idpProvider *idp.IdentityProvider) (*idp.IdentityProvider, error) {
 	if idpProvider == nil {
 		return nil, fmt.Errorf("identity provider is nil")
 	}
 	c.logger.InfoContext(ctx, "Creating identity provider",
 		slog.String("realm", c.realmName),
+		slog.String("organization", organizationName),
 		slog.String("alias", idpProvider.Alias),
 		slog.String("type", idpProvider.Type),
 	)
 
+	// Step 1: Create at realm level
 	path := fmt.Sprintf("/admin/realms/%s/identity-provider/instances", url.PathEscape(c.realmName))
-
 	kcIdp := toKeycloakIdentityProvider(idpProvider)
 
 	response, err := c.httpClient.DoRequest(ctx, http.MethodPost, path, kcIdp)
@@ -777,24 +780,36 @@ func (c *Client) CreateIdentityProvider(ctx context.Context, idpProvider *idp.Id
 	}
 	defer response.Body.Close()
 
-	// Keycloak returns 201 Created with the created object in the response body
-	var createdKcIdp keycloakIdentityProvider
-	if err := json.NewDecoder(response.Body).Decode(&createdKcIdp); err != nil {
-		return nil, fmt.Errorf("failed to decode created identity provider response: %w", err)
+	// Step 2: Link to organization
+	err = c.linkIdentityProviderToOrganization(ctx, organizationName, idpProvider.Alias)
+	if err != nil {
+		// Try to clean up the realm-level IdP if linking fails
+		_ = c.deleteIdentityProviderFromRealm(ctx, idpProvider.Alias)
+		return nil, fmt.Errorf("failed to link identity provider to organization: %w", err)
 	}
 
-	return fromKeycloakIdentityProvider(&createdKcIdp), nil
+	// Step 3: Fetch and return (Keycloak returns empty body on creation)
+	return c.GetIdentityProvider(ctx, organizationName, idpProvider.Alias)
 }
 
-// GetIdentityProvider retrieves an identity provider configuration by alias at the realm level.
-func (c *Client) GetIdentityProvider(ctx context.Context, alias string) (*idp.IdentityProvider, error) {
+// GetIdentityProvider retrieves an identity provider for a specific organization.
+func (c *Client) GetIdentityProvider(ctx context.Context, organizationName, alias string) (*idp.IdentityProvider, error) {
 	c.logger.InfoContext(ctx, "Getting identity provider",
 		slog.String("realm", c.realmName),
+		slog.String("organization", organizationName),
 		slog.String("alias", alias),
 	)
 
-	path := fmt.Sprintf("/admin/realms/%s/identity-provider/instances/%s",
+	// Get the organization to obtain its ID
+	org, err := c.GetOrganization(ctx, organizationName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get organization: %w", err)
+	}
+
+	// Get the IdP from the organization endpoint
+	path := fmt.Sprintf("/admin/realms/%s/organizations/%s/identity-providers/%s",
 		url.PathEscape(c.realmName),
+		url.PathEscape(org.ID),
 		url.PathEscape(alias),
 	)
 
@@ -812,37 +827,38 @@ func (c *Client) GetIdentityProvider(ctx context.Context, alias string) (*idp.Id
 	return fromKeycloakIdentityProvider(&kcIdp), nil
 }
 
-// ListAllIdentityProviders lists all identity providers configured at the realm level.
-// These are all IdPs.
-func (c *Client) ListAllIdentityProviders(ctx context.Context) ([]*idp.IdentityProvider, error) {
-	c.logger.InfoContext(ctx, "Listing all identity providers",
+// DeleteIdentityProvider deletes an identity provider for a specific organization.
+// In Keycloak, this deletes the IdP at realm level (which auto-removes from all organizations).
+func (c *Client) DeleteIdentityProvider(ctx context.Context, organizationName, alias string) error {
+	c.logger.InfoContext(ctx, "Deleting identity provider",
 		slog.String("realm", c.realmName),
+		slog.String("organization", organizationName),
+		slog.String("alias", alias),
 	)
 
-	path := fmt.Sprintf("/admin/realms/%s/identity-provider/instances", url.PathEscape(c.realmName))
+	// Delete at realm level - this automatically removes from all organizations
+	return c.deleteIdentityProviderFromRealm(ctx, alias)
+}
 
-	response, err := c.httpClient.DoRequest(ctx, http.MethodGet, path, nil)
+// deleteIdentityProviderFromRealm is an internal helper that deletes at realm level.
+func (c *Client) deleteIdentityProviderFromRealm(ctx context.Context, alias string) error {
+	path := fmt.Sprintf("/admin/realms/%s/identity-provider/instances/%s",
+		url.PathEscape(c.realmName),
+		url.PathEscape(alias),
+	)
+
+	response, err := c.httpClient.DoRequest(ctx, http.MethodDelete, path, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list identity providers: %w", err)
+		return fmt.Errorf("failed to delete identity provider: %w", err)
 	}
 	defer response.Body.Close()
 
-	var kcIdps []keycloakIdentityProvider
-	if err := json.NewDecoder(response.Body).Decode(&kcIdps); err != nil {
-		return nil, fmt.Errorf("failed to decode identity providers response: %w", err)
-	}
-
-	idps := make([]*idp.IdentityProvider, 0, len(kcIdps))
-	for i := range kcIdps {
-		idps = append(idps, fromKeycloakIdentityProvider(&kcIdps[i]))
-	}
-
-	return idps, nil
+	return nil
 }
 
-// GetOrganizationIdentityProvider retrieves an IdP by alias and verifies it's assigned to the organization.
-func (c *Client) GetOrganizationIdentityProvider(ctx context.Context, organizationName, alias string) (*idp.IdentityProvider, error) {
-	c.logger.InfoContext(ctx, "Getting organization identity provider",
+// linkIdentityProviderToOrganization is an internal helper that links an IdP to an organization.
+func (c *Client) linkIdentityProviderToOrganization(ctx context.Context, organizationName, alias string) error {
+	c.logger.InfoContext(ctx, "Linking identity provider to organization",
 		slog.String("organization", organizationName),
 		slog.String("alias", alias),
 	)
@@ -850,31 +866,27 @@ func (c *Client) GetOrganizationIdentityProvider(ctx context.Context, organizati
 	// Get the organization to obtain its ID
 	org, err := c.GetOrganization(ctx, organizationName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get organization: %w", err)
+		return fmt.Errorf("failed to get organization: %w", err)
 	}
 
-	// Get the IdP directly from the organization endpoint
-	path := fmt.Sprintf("/admin/realms/%s/organizations/%s/identity-providers/%s",
+	// Link the IdP to the organization
+	path := fmt.Sprintf("/admin/realms/%s/organizations/%s/identity-providers",
 		url.PathEscape(c.realmName),
 		url.PathEscape(org.ID),
-		url.PathEscape(alias),
 	)
 
-	response, err := c.httpClient.DoRequest(ctx, http.MethodGet, path, nil)
+	// The body is just the alias as a JSON string (Keycloak expects "alias" not {"alias": "value"})
+	response, err := c.httpClient.DoRequest(ctx, http.MethodPost, path, alias)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get organization identity provider: %w", err)
+		return fmt.Errorf("failed to link identity provider to organization: %w", err)
 	}
 	defer response.Body.Close()
 
-	var kcIdp keycloakIdentityProvider
-	if err := json.NewDecoder(response.Body).Decode(&kcIdp); err != nil {
-		return nil, fmt.Errorf("failed to decode identity provider response: %w", err)
-	}
-
-	return fromKeycloakIdentityProvider(&kcIdp), nil
+	return nil
 }
 
-// ListIdentityProviders lists all identity providers assigned to an organization.
+// GetOrganizationIdentityProvider retrieves an IdP by alias and verifies it's assigned to the organization.
+// ListIdentityProviders lists all identity providers for a specific organization.
 func (c *Client) ListIdentityProviders(ctx context.Context, organizationName string) ([]*idp.IdentityProvider, error) {
 	c.logger.InfoContext(ctx, "Listing organization identity providers",
 		slog.String("organization", organizationName),

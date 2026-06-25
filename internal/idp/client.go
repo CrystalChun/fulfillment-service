@@ -95,24 +95,17 @@ type Client interface {
 	RemoveUserFromGroup(ctx context.Context, organizationName, username, groupID string) error
 
 	// Identity Provider operations
-	// CreateIdentityProvider creates a new external identity provider at the realm level.
-	// The IdP is created but not yet assigned to any organization.
-	CreateIdentityProvider(ctx context.Context, idp *IdentityProvider) (*IdentityProvider, error)
+	// CreateIdentityProvider creates a new external identity provider for a specific organization.
+	// Implementation details (e.g., Keycloak's realm-level creation + organization linking) are hidden.
+	CreateIdentityProvider(ctx context.Context, organizationName string, idp *IdentityProvider) (*IdentityProvider, error)
 
-	// GetIdentityProvider retrieves an external identity provider configuration by alias at the realm level.
-	// This returns the IdP without verifying organization assignment.
-	GetIdentityProvider(ctx context.Context, alias string) (*IdentityProvider, error)
+	// GetIdentityProvider retrieves an identity provider by alias for a specific organization.
+	GetIdentityProvider(ctx context.Context, organizationName, alias string) (*IdentityProvider, error)
 
-	// ListAllIdentityProviders lists all external identity providers configured at the realm level.
-	// These are the IdPs available for assignment to organizations.
-	// Returns an empty slice if no IdPs are configured in the realm.
-	ListAllIdentityProviders(ctx context.Context) ([]*IdentityProvider, error)
-
-	// GetOrganizationIdentityProvider retrieves an IdP by alias and verifies it's assigned to the organization.
-	// Returns an error if the IdP is not assigned to the organization.
-	GetOrganizationIdentityProvider(ctx context.Context, organizationName, alias string) (*IdentityProvider, error)
-
-	// ListIdentityProviders lists all external identity providers assigned to a specific organization.
-	// Returns an empty slice if no IdPs are assigned to the organization.
+	// ListIdentityProviders lists all identity providers for a specific organization.
+	// Returns an empty slice if no IdPs are configured for the organization.
 	ListIdentityProviders(ctx context.Context, organizationName string) ([]*IdentityProvider, error)
+
+	// DeleteIdentityProvider deletes an identity provider for a specific organization.
+	DeleteIdentityProvider(ctx context.Context, organizationName, alias string) error
 }

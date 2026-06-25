@@ -159,18 +159,34 @@ func (t *task) update(ctx context.Context) error {
 
 // syncToIDP synchronizes the identity provider to the IDP backend (Keycloak).
 func (t *task) syncToIDP(ctx context.Context) error {
-	// Build the IDP provider object from the spec
-	// Use tenant-prefixed alias to ensure uniqueness across tenants in Keycloak
-	alias := fmt.Sprintf("%s-%s", t.identityProvider.GetMetadata().GetTenant(), t.identityProvider.GetMetadata().GetName())
-	idpProvider := &idp.IdentityProvider{
-		Alias:       alias,
-		DisplayName: t.identityProvider.GetSpec().GetTitle(),
-		Type:        t.determineProviderType(),
-		Enabled:     t.identityProvider.GetSpec().GetEnabled(),
-		Config:      t.buildConfig(),
+	// Fetch the full identity provider with secrets from the API if available
+	// (events have secrets redacted for security, but tests may provide full objects directly)
+	fullIdp := t.identityProvider
+	if t.r.identityProvidersClient != nil {
+		response, err := t.r.identityProvidersClient.Get(ctx, privatev1.IdentityProvidersGetRequest_builder{
+			Id: t.identityProvider.GetId(),
+		}.Build())
+		if err != nil {
+			t.identityProvider.GetStatus().SetPhase(privatev1.IdentityProviderPhase_IDENTITY_PROVIDER_PHASE_ERROR)
+			t.identityProvider.GetStatus().SetMessage(fmt.Sprintf("Failed to fetch identity provider: %v", err))
+			return nil
+		}
+		fullIdp = response.GetObject()
 	}
 
-	createdIdp, err := t.r.idpClient.CreateIdentityProvider(ctx, idpProvider)
+	// Build the IDP provider object from the spec
+	// Use tenant-prefixed alias to ensure uniqueness across tenants in Keycloak
+	alias := fmt.Sprintf("%s-%s", fullIdp.GetMetadata().GetTenant(), fullIdp.GetMetadata().GetName())
+	idpProvider := &idp.IdentityProvider{
+		Alias:       alias,
+		DisplayName: fullIdp.GetSpec().GetTitle(),
+		Type:        t.determineProviderTypeFromIdp(fullIdp),
+		Enabled:     fullIdp.GetSpec().GetEnabled(),
+		Config:      t.buildConfigFromIdp(fullIdp),
+	}
+
+	organizationName := t.identityProvider.GetMetadata().GetTenant()
+	createdIdp, err := t.r.idpClient.CreateIdentityProvider(ctx, organizationName, idpProvider)
 	if err != nil {
 		t.identityProvider.GetStatus().SetPhase(privatev1.IdentityProviderPhase_IDENTITY_PROVIDER_PHASE_ERROR)
 		t.identityProvider.GetStatus().SetMessage(fmt.Sprintf("Identity provider creation in IDP failed: %v", err))
@@ -188,9 +204,9 @@ func (t *task) syncToIDP(ctx context.Context) error {
 	return nil
 }
 
-// determineProviderType returns the provider type based on which config is set.
-func (t *task) determineProviderType() string {
-	spec := t.identityProvider.GetSpec()
+// determineProviderTypeFromIdp returns the provider type based on which config is set.
+func (t *task) determineProviderTypeFromIdp(idp *privatev1.IdentityProvider) string {
+	spec := idp.GetSpec()
 	if spec.HasLdap() {
 		return "ldap"
 	}
@@ -200,10 +216,10 @@ func (t *task) determineProviderType() string {
 	return ""
 }
 
-// buildConfig builds the provider-specific configuration map.
-func (t *task) buildConfig() map[string]string {
+// buildConfigFromIdp builds the provider-specific configuration map from any identity provider object.
+func (t *task) buildConfigFromIdp(idp *privatev1.IdentityProvider) map[string]string {
 	config := make(map[string]string)
-	spec := t.identityProvider.GetSpec()
+	spec := idp.GetSpec()
 
 	if ldap := spec.GetLdap(); ldap != nil {
 		config["connectionUrl"] = ldap.GetConnectionUrl()
@@ -218,6 +234,8 @@ func (t *task) buildConfig() map[string]string {
 		config["clientId"] = oidc.GetClientId()
 		config["clientSecret"] = oidc.GetClientSecret()
 		config["issuer"] = oidc.GetIssuer()
+		// Keycloak requires clientAuthMethod to be set for OIDC providers
+		config["clientAuthMethod"] = "client_secret_post"
 	}
 
 	return config
@@ -283,11 +301,26 @@ func (t *task) delete(ctx context.Context) error {
 		return nil
 	}
 
-	// TODO: Add DeleteIdentityProvider method to idp.Client interface and implement deletion
-	// For now, we just remove the finalizer to allow the object to be deleted from the database
-	t.r.logger.WarnContext(ctx, "Identity provider deletion from IDP not yet implemented",
-		slog.String("identity_provider_id", t.identityProvider.GetId()),
-	)
+	// Delete the identity provider from Keycloak
+	// Use tenant-prefixed alias (same as in syncToIDP)
+	organizationName := t.identityProvider.GetMetadata().GetTenant()
+	alias := fmt.Sprintf("%s-%s", organizationName, t.identityProvider.GetMetadata().GetName())
+
+	err := t.r.idpClient.DeleteIdentityProvider(ctx, organizationName, alias)
+	if err != nil {
+		t.r.logger.ErrorContext(ctx, "Failed to delete identity provider from IDP",
+			slog.String("identity_provider_id", t.identityProvider.GetId()),
+			slog.String("alias", alias),
+			slog.Any("error", err),
+		)
+		// Don't return error - still remove finalizer to allow database deletion
+		// The IdP might already be deleted in Keycloak
+	} else {
+		t.r.logger.InfoContext(ctx, "Identity provider deleted from IDP",
+			slog.String("identity_provider_id", t.identityProvider.GetId()),
+			slog.String("alias", alias),
+		)
+	}
 
 	t.removeFinalizer()
 	return nil
