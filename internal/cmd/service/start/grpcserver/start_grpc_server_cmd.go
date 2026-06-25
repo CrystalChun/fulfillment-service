@@ -308,19 +308,7 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 		return fmt.Errorf("failed to create authentication interceptor: %w", err)
 	}
 
-	// Prepare the authorization interceptor:
-	c.logger.InfoContext(ctx, "Creating Rego authorization interceptor")
-	authzInterceptor, err := auth.NewGrpcAuthzInterceptor().
-		SetLogger(c.logger).
-		AddAnonymousMethodRegex(anonymousMethodsRegex).
-		SetMetadataFetcher(metadataFetcher).
-		AddEmergencyServiceAccounts(c.args.emergencyServiceAccounts...).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to create Rego authorization interceptor: %w", err)
-	}
-
-	// Create the tenancy logic:
+	// Create the tenancy logic (needed by both authz interceptor and DAO):
 	c.logger.InfoContext(
 		ctx,
 		"Creating tenancy logic",
@@ -332,6 +320,38 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 		Build()
 	if err != nil {
 		return fmt.Errorf("failed to create default tenancy logic: %w", err)
+	}
+
+	// Create the users DAO and user provisioner for just-in-time user provisioning:
+	c.logger.InfoContext(ctx, "Creating users DAO for JIT provisioning")
+	usersDAO, err := dao.NewGenericDAO[*privatev1.User]().
+		SetLogger(c.logger).
+		SetTenancyLogic(tenancyLogic).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create users DAO: %w", err)
+	}
+
+	c.logger.InfoContext(ctx, "Creating user provisioner for JIT provisioning")
+	userProvisioner, err := dao.NewDAOUserProvisioner().
+		SetLogger(c.logger).
+		SetUsersDAO(usersDAO).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create user provisioner: %w", err)
+	}
+
+	// Prepare the authorization interceptor:
+	c.logger.InfoContext(ctx, "Creating Rego authorization interceptor")
+	authzInterceptor, err := auth.NewGrpcAuthzInterceptor().
+		SetLogger(c.logger).
+		AddAnonymousMethodRegex(anonymousMethodsRegex).
+		SetMetadataFetcher(metadataFetcher).
+		AddEmergencyServiceAccounts(c.args.emergencyServiceAccounts...).
+		SetUserProvisioner(userProvisioner).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create Rego authorization interceptor: %w", err)
 	}
 
 	// Prepare the transactions manager:
