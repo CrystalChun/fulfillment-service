@@ -230,12 +230,8 @@ var _ = Describe("Authentication interceptor behaviour", func() {
 		Expect(handled).To(BeTrue())
 	})
 
-	It("Rejects invalid token for anonymous method", func(ctx context.Context) {
-		errValidation := errors.New("my reason")
+	It("Ignores invalid token for anonymous method", func(ctx context.Context) {
 		jwtValidator := NewMockJwtValidator(ctrl)
-		jwtValidator.EXPECT().
-			Validate(gomock.Any(), gomock.Any()).
-			Return(nil, errValidation)
 		interceptor, err := NewGrpcAuthnInterceptor().
 			SetLogger(logger).
 			SetJwtValidator(jwtValidator).
@@ -252,35 +248,29 @@ var _ = Describe("Authentication interceptor behaviour", func() {
 				FullMethod: "/my_package/MyMethod",
 			},
 			func(ctx context.Context, req any) (any, error) {
+				stored := TokenFromContext(ctx)
+				Expect(stored).To(BeNil())
 				handled = true
 				return nil, nil
 			},
 		)
-		Expect(err).To(HaveOccurred())
-		status, ok := grpcstatus.FromError(err)
-		Expect(ok).To(BeTrue())
-		Expect(status.Code()).To(Equal(grpccodes.Unauthenticated))
-		Expect(status.Message()).To(Equal("my reason"))
-		Expect(handled).To(BeFalse())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(handled).To(BeTrue())
 	})
 
-	It("Stores valid token for anonymous method", func(ctx context.Context) {
-		token := MakeTokenObject(nil, jwt.MapClaims{
-			"iss": issuerUrl,
-			"sub": "user-123",
-		})
-		bearer := token.Raw
+	It("Ignores valid token for anonymous method", func(ctx context.Context) {
 		jwtValidator := NewMockJwtValidator(ctrl)
-		jwtValidator.EXPECT().
-			Validate(gomock.Any(), bearer).
-			Return(token, nil)
 		interceptor, err := NewGrpcAuthnInterceptor().
 			SetLogger(logger).
 			SetJwtValidator(jwtValidator).
 			AddAnonymousMethodRegex(`^/my_package/.*$`).
 			Build()
 		Expect(err).ToNot(HaveOccurred())
-		ctx = metadata.NewIncomingContext(ctx, metadata.Pairs(Authorization, "Bearer "+bearer))
+		token := MakeTokenObject(nil, jwt.MapClaims{
+			"iss": issuerUrl,
+			"sub": "user-123",
+		})
+		ctx = metadata.NewIncomingContext(ctx, metadata.Pairs(Authorization, "Bearer "+token.Raw))
 		handled := false
 		_, err = interceptor.UnaryServer(
 			ctx,
@@ -290,7 +280,37 @@ var _ = Describe("Authentication interceptor behaviour", func() {
 			},
 			func(ctx context.Context, req any) (any, error) {
 				stored := TokenFromContext(ctx)
-				Expect(stored).To(BeIdenticalTo(token))
+				Expect(stored).To(BeNil())
+				handled = true
+				return nil, nil
+			},
+		)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(handled).To(BeTrue())
+	})
+
+	It("Ignores non-JWT authorization header for anonymous method", func(ctx context.Context) {
+		jwtValidator := NewMockJwtValidator(ctrl)
+		interceptor, err := NewGrpcAuthnInterceptor().
+			SetLogger(logger).
+			SetJwtValidator(jwtValidator).
+			AddAnonymousMethodRegex(`^/my_package/.*$`).
+			Build()
+		Expect(err).ToNot(HaveOccurred())
+		// JWE tokens have 5 dot-separated segments, which the JWT parser rejects.
+		// Anonymous methods must pass through regardless.
+		jweTicket := "header.key.iv.ciphertext.tag"
+		ctx = metadata.NewIncomingContext(ctx, metadata.Pairs(Authorization, "Bearer "+jweTicket))
+		handled := false
+		_, err = interceptor.UnaryServer(
+			ctx,
+			nil,
+			&grpc.UnaryServerInfo{
+				FullMethod: "/my_package/MyMethod",
+			},
+			func(ctx context.Context, req any) (any, error) {
+				stored := TokenFromContext(ctx)
+				Expect(stored).To(BeNil())
 				handled = true
 				return nil, nil
 			},

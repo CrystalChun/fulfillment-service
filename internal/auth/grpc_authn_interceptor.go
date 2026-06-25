@@ -161,13 +161,20 @@ func (s *grpcAuthnStream) SetTrailer(md metadata.MD) {
 }
 
 // authenticate extracts and validates the bearer token from the gRPC metadata, then stores the parsed token in the
-// context.
+// context. Anonymous methods skip authentication entirely, regardless of whether an authorization header is present.
+// This matches the behavior of the previous external auth interceptor and is required because some clients (e.g.
+// grpcurl) send non-JWT bearer tokens (such as JWE console tickets) on all requests, including anonymous methods
+// like reflection.
 func (i *GrpcAuthnInterceptor) authenticate(ctx context.Context, method string) (result context.Context, err error) {
+	if i.isAnonymous(method) {
+		result = ctx
+		return
+	}
 	values := metadata.ValueFromIncomingContext(ctx, Authorization)
 	length := len(values)
 	switch length {
 	case 0:
-		result, err = i.withoutHeader(ctx, method)
+		err = grpcstatus.Errorf(grpccodes.Unauthenticated, "method '%s' requires authentication", method)
 	case 1:
 		header := values[0]
 		result, err = i.withHeader(ctx, header)
@@ -192,16 +199,6 @@ func (i *GrpcAuthnInterceptor) withHeader(ctx context.Context, header string) (r
 		return
 	}
 	result = ContextWithToken(ctx, token)
-	return
-}
-
-func (i *GrpcAuthnInterceptor) withoutHeader(ctx context.Context, method string) (result context.Context,
-	err error) {
-	if i.isAnonymous(method) {
-		result = ctx
-		return
-	}
-	err = grpcstatus.Errorf(grpccodes.Unauthenticated, "method '%s' requires authentication", method)
 	return
 }
 
