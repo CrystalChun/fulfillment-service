@@ -362,12 +362,14 @@ func (i *GrpcAuthzInterceptor) authorizeWithToken(ctx context.Context, method st
 		return
 	}
 
+	// Store subject in context
+	result = ContextWithSubject(ctx, subject)
+
 	logger.DebugContext(
-		ctx,
+		result,
 		"Permission granted by authorization policy",
 		slog.String("user", subject.User),
 	)
-	result = ContextWithSubject(ctx, subject)
 	return
 }
 
