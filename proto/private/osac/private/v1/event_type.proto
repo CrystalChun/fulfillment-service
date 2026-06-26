@@ -30,6 +30,7 @@ import "osac/private/v1/identity_provider_type.proto";
 import "osac/private/v1/instance_type_type.proto";
 import "osac/private/v1/network_class_type.proto";
 import "osac/private/v1/organization_type.proto";
+import "osac/private/v1/project_membership_type.proto";
 import "osac/private/v1/project_type.proto";
 import "osac/private/v1/tenant_type.proto";
 import "osac/private/v1/public_ip_attachment_type.proto";
@@ -72,6 +73,7 @@ message Event {
     ClusterCatalogItem cluster_catalog_item = 22;
     ComputeInstanceCatalogItem compute_instance_catalog_item = 23;
     Project project = 24;
+    ProjectMembership project_membership = 33;
     PublicIPAttachment public_ip_attachment = 25;
     InstanceType instance_type = 26;
     BareMetalInstance bare_metal_instance = 27;
