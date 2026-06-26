@@ -347,6 +347,7 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 
 	c.logger.InfoContext(ctx, "Creating user provisioner for JIT provisioning")
 	userProvisioner, err := provisioners.NewUserProvisioner().
+		SetLogger(c.logger).
 		SetUsersDAO(usersDAO).
 		Build()
 	if err != nil {
