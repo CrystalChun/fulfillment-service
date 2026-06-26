@@ -16,6 +16,7 @@ package provisioners
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -27,17 +28,25 @@ import (
 
 // UserProvisionerBuilder builds a UserProvisioner.
 type UserProvisionerBuilder struct {
+	logger   *slog.Logger
 	usersDAO *dao.GenericDAO[*privatev1.User]
 }
 
 // UserProvisioner implements auth.UserProvisioner using a GenericDAO.
 type UserProvisioner struct {
+	logger   *slog.Logger
 	usersDAO *dao.GenericDAO[*privatev1.User]
 }
 
 // NewUserProvisioner creates a new builder.
 func NewUserProvisioner() *UserProvisionerBuilder {
 	return &UserProvisionerBuilder{}
+}
+
+// SetLogger sets the logger.
+func (b *UserProvisionerBuilder) SetLogger(value *slog.Logger) *UserProvisionerBuilder {
+	b.logger = value
+	return b
 }
 
 // SetUsersDAO sets the users DAO.
@@ -48,10 +57,14 @@ func (b *UserProvisionerBuilder) SetUsersDAO(value *dao.GenericDAO[*privatev1.Us
 
 // Build creates the provisioner.
 func (b *UserProvisionerBuilder) Build() (result *UserProvisioner, err error) {
+	if b.logger == nil {
+		return nil, fmt.Errorf("logger is mandatory")
+	}
 	if b.usersDAO == nil {
 		return nil, fmt.Errorf("users DAO is mandatory")
 	}
 	result = &UserProvisioner{
+		logger:   b.logger,
 		usersDAO: b.usersDAO,
 	}
 	return result, nil
@@ -69,15 +82,22 @@ func (p *UserProvisioner) Provision(ctx context.Context, username, tenant string
 		return fmt.Errorf("failed to check if user exists: %w", err)
 	}
 
-	// User already exists
-	if listResponse.GetSize() > 0 {
-		return nil
-	}
-
 	// Extract claims
 	email, _ := claims["email"].(string)
 	emailVerified, _ := claims["email_verified"].(bool)
 	name, _ := claims["name"].(string)
+
+	p.logger.InfoContext(ctx, "Provisioning user",
+		slog.String("username", username),
+		slog.String("tenant", tenant),
+		slog.String("keycloak_user_id", sub),
+		slog.String("email", email),
+	)
+
+	// User already exists
+	if listResponse.GetSize() > 0 {
+		return nil
+	}
 
 	// Parse name into first/last
 	var firstName, lastName string
