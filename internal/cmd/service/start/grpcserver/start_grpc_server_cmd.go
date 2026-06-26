@@ -1000,6 +1000,34 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 	}
 	privatev1.RegisterRoleBindingsServer(grpcServer, privateRoleBindingsServer)
 
+	// Create the project memberships server:
+	c.logger.InfoContext(ctx, "Creating project memberships server")
+	projectMembershipsServer, err := servers.NewProjectMembershipsServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(publicAttributionLogic).
+		SetTenancyLogic(tenancyLogic).
+		SetMetricsRegisterer(metricsRegisterer).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create project memberships server: %w", err)
+	}
+	publicv1.RegisterProjectMembershipsServer(grpcServer, projectMembershipsServer)
+
+	// Create the private project memberships server:
+	c.logger.InfoContext(ctx, "Creating private project memberships server")
+	privateProjectMembershipsServer, err := servers.NewPrivateProjectMembershipsServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(privateAttributionLogic).
+		SetTenancyLogic(tenancyLogic).
+		SetMetricsRegisterer(metricsRegisterer).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create private project memberships server: %w", err)
+	}
+	privatev1.RegisterProjectMembershipsServer(grpcServer, privateProjectMembershipsServer)
+
 	// Create the public IPs server:
 	c.logger.InfoContext(ctx, "Creating public IPs server")
 	publicIPsServer, err := servers.NewPublicIPsServer().

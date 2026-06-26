@@ -883,6 +883,8 @@ func (s *GenericServer[O]) setPayload(event *privatev1.Event, object proto.Messa
 		event.SetRoleBinding(object)
 	case *privatev1.Project:
 		event.SetProject(object)
+	case *privatev1.ProjectMembership:
+		event.SetProjectMembership(object)
 	case *privatev1.ClusterCatalogItem:
 		event.SetClusterCatalogItem(object)
 	case *privatev1.ComputeInstanceCatalogItem:
