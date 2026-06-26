@@ -48,6 +48,7 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/logging"
 	"github.com/osac-project/fulfillment-service/internal/metrics"
 	"github.com/osac-project/fulfillment-service/internal/network"
+	"github.com/osac-project/fulfillment-service/internal/provisioners"
 	"github.com/osac-project/fulfillment-service/internal/recovery"
 	"github.com/osac-project/fulfillment-service/internal/servers"
 	shtdwn "github.com/osac-project/fulfillment-service/internal/shutdown"
@@ -322,6 +323,18 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 		return fmt.Errorf("failed to create default tenancy logic: %w", err)
 	}
 
+	// Prepare the authorization interceptor:
+	c.logger.InfoContext(ctx, "Creating Rego authorization interceptor")
+	authzInterceptor, err := auth.NewGrpcAuthzInterceptor().
+		SetLogger(c.logger).
+		AddAnonymousMethodRegex(anonymousMethodsRegex).
+		SetMetadataFetcher(metadataFetcher).
+		AddEmergencyServiceAccounts(c.args.emergencyServiceAccounts...).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create Rego authorization interceptor: %w", err)
+	}
+
 	// Create the users DAO and user provisioner for just-in-time user provisioning:
 	c.logger.InfoContext(ctx, "Creating users DAO for JIT provisioning")
 	usersDAO, err := dao.NewGenericDAO[*privatev1.User]().
@@ -333,25 +346,20 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 	}
 
 	c.logger.InfoContext(ctx, "Creating user provisioner for JIT provisioning")
-	userProvisioner, err := dao.NewDAOUserProvisioner().
-		SetLogger(c.logger).
+	userProvisioner, err := provisioners.NewDAOUserProvisioner().
 		SetUsersDAO(usersDAO).
 		Build()
 	if err != nil {
 		return fmt.Errorf("failed to create user provisioner: %w", err)
 	}
 
-	// Prepare the authorization interceptor:
-	c.logger.InfoContext(ctx, "Creating Rego authorization interceptor")
-	authzInterceptor, err := auth.NewGrpcAuthzInterceptor().
+	c.logger.InfoContext(ctx, "Creating JIT provisioning interceptor")
+	jitProvisioningInterceptor, err := auth.NewGrpcJitProvisioningInterceptor().
 		SetLogger(c.logger).
-		AddAnonymousMethodRegex(anonymousMethodsRegex).
-		SetMetadataFetcher(metadataFetcher).
-		AddEmergencyServiceAccounts(c.args.emergencyServiceAccounts...).
-		SetUserProvisioner(userProvisioner).
+		SetProvisioner(userProvisioner).
 		Build()
 	if err != nil {
-		return fmt.Errorf("failed to create Rego authorization interceptor: %w", err)
+		return fmt.Errorf("failed to create JIT provisioning interceptor: %w", err)
 	}
 
 	// Prepare the transactions manager:
@@ -417,6 +425,7 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 			txInterceptor.UnaryServer,
 			authnInterceptor.UnaryServer,
 			authzInterceptor.UnaryServer,
+			jitProvisioningInterceptor.UnaryInterceptor(),
 		),
 		grpc.ChainStreamInterceptor(
 			panicInterceptor.StreamServer,

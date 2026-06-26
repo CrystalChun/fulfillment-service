@@ -37,13 +37,6 @@ import (
 	k8sfiles "github.com/osac-project/fulfillment-service/internal/kubernetes/files"
 )
 
-// UserProvisioner is an interface for just-in-time user provisioning. Implementations can create users from JWT claims.
-type UserProvisioner interface {
-	// EnsureUserExists checks if a user exists and creates them if not. This is best-effort and should not return
-	// errors - failures are logged but don't block authentication.
-	EnsureUserExists(ctx context.Context, username, tenant string, claims jwt.MapClaims)
-}
-
 //go:embed policies/authz.rego
 var authzPolicy string
 
@@ -60,7 +53,6 @@ type GrpcAuthzInterceptorBuilder struct {
 	inputCallback            func(ctx context.Context, input map[string]any) error
 	metadataFetcher          MetadataFetcher
 	emergencyServiceAccounts []string
-	userProvisioner          UserProvisioner
 }
 
 // GrpcAuthzInterceptor is a gRPC interceptor that evaluates an embedded Rego policy for authorization. It reads the
@@ -73,7 +65,6 @@ type GrpcAuthzInterceptor struct {
 	inputCallback    func(ctx context.Context, input map[string]any) error
 	query            rego.PreparedEvalQuery
 	metadataFetcher  MetadataFetcher
-	userProvisioner  UserProvisioner
 }
 
 // NewGrpcAuthzInterceptor creates a builder that can then be used to configure and create a new authorization
@@ -121,14 +112,6 @@ func (b *GrpcAuthzInterceptorBuilder) SetMetadataFetcher(value MetadataFetcher) 
 func (b *GrpcAuthzInterceptorBuilder) AddEmergencyServiceAccounts(
 	values ...string) *GrpcAuthzInterceptorBuilder {
 	b.emergencyServiceAccounts = append(b.emergencyServiceAccounts, values...)
-	return b
-}
-
-// SetUserProvisioner sets the UserProvisioner used for just-in-time user provisioning. When a JWT-authenticated user
-// makes their first request, the interceptor will automatically create a user record in the database if one doesn't
-// exist. This is optional - if not set, JIT provisioning is disabled.
-func (b *GrpcAuthzInterceptorBuilder) SetUserProvisioner(value UserProvisioner) *GrpcAuthzInterceptorBuilder {
-	b.userProvisioner = value
 	return b
 }
 
@@ -224,7 +207,6 @@ func (b *GrpcAuthzInterceptorBuilder) Build() (result *GrpcAuthzInterceptor, err
 		metadataFetcher:  b.metadataFetcher,
 		inputCallback:    b.inputCallback,
 		query:            query,
-		userProvisioner:  b.userProvisioner,
 	}
 	return
 }
@@ -380,11 +362,8 @@ func (i *GrpcAuthzInterceptor) authorizeWithToken(ctx context.Context, method st
 		return
 	}
 
-	// Store subject in context BEFORE JIT provisioning so downstream code always has it
+	// Store subject in context
 	result = ContextWithSubject(ctx, subject)
-
-	// Perform just-in-time user provisioning if needed (best-effort, doesn't affect authorization)
-	i.ensureUserExists(result, subject, token)
 
 	logger.DebugContext(
 		result,
@@ -594,40 +573,6 @@ func (i *GrpcAuthzInterceptor) buildSubject(authzData map[string]any) (result *S
 		Tenants: collections.NewSet(tenantNames...),
 	}
 	return
-}
-
-// ensureUserExists performs just-in-time user provisioning for JWT-authenticated users by delegating to the
-// configured UserProvisioner. This function never returns an error - failures are logged but don't block the request.
-func (i *GrpcAuthzInterceptor) ensureUserExists(ctx context.Context, subject *Subject, token *jwt.Token) {
-	// Skip JIT provisioning if no user provisioner is configured
-	if i.userProvisioner == nil {
-		return
-	}
-
-	// Extract JWT claims
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		i.logger.ErrorContext(ctx, "Failed to extract claims from JWT token for JIT provisioning")
-		return
-	}
-
-	// Skip JIT provisioning for service accounts (they don't need user records)
-	if _, isServiceAccount := claims["kubernetes.io"]; isServiceAccount {
-		return
-	}
-
-	// Determine the tenant - use the first one from the subject's tenant set
-	var tenant string
-	if subject.Tenants.Finite() && len(subject.Tenants.Inclusions()) > 0 {
-		tenant = subject.Tenants.Inclusions()[0]
-	}
-	if tenant == "" || tenant == SystemTenant || tenant == SharedTenant {
-		// Don't create users for system/shared tenants or users without a tenant
-		return
-	}
-
-	// Delegate to the provisioner
-	i.userProvisioner.EnsureUserExists(ctx, subject.User, tenant, claims)
 }
 
 // k8sTokenFile is the value of the 'namespace' external data item passed to the Rego policy when we aren't running
