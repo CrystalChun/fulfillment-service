@@ -25,7 +25,7 @@ import (
 var _ = DescribeMigration("Create project memberships tables", func() {
 	It("Creates the project_memberships table", func(ctx context.Context) {
 		// Run the migration:
-		err := tool.Migrate(ctx, 65)
+		err := tool.Migrate(ctx, 67)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify the project_memberships table exists:
@@ -56,7 +56,7 @@ var _ = DescribeMigration("Create project memberships tables", func() {
 
 	It("Can insert and query a project membership", func(ctx context.Context) {
 		// Run the migration:
-		err := tool.Migrate(ctx, 65)
+		err := tool.Migrate(ctx, 67)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Create organization first (required by foreign key):
@@ -92,7 +92,7 @@ var _ = DescribeMigration("Create project memberships tables", func() {
 
 	It("Creates indexes on project_memberships table", func(ctx context.Context) {
 		// Run the migration:
-		err := tool.Migrate(ctx, 65)
+		err := tool.Migrate(ctx, 67)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify indexes exist:
@@ -153,7 +153,7 @@ var _ = DescribeMigration("Create project memberships tables", func() {
 
 	It("Enforces foreign key constraint on tenant", func(ctx context.Context) {
 		// Run the migration:
-		err := tool.Migrate(ctx, 65)
+		err := tool.Migrate(ctx, 67)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Attempt to insert a project membership with non-existent tenant (should fail):
@@ -179,7 +179,7 @@ var _ = DescribeMigration("Create project memberships tables", func() {
 
 	It("Allows project memberships with same name in different tenants", func(ctx context.Context) {
 		// Run the migration:
-		err := tool.Migrate(ctx, 65)
+		err := tool.Migrate(ctx, 67)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Create organizations first (required by foreign key):
@@ -217,7 +217,7 @@ var _ = DescribeMigration("Create project memberships tables", func() {
 
 	It("Has all required columns with correct types", func(ctx context.Context) {
 		// Run the migration:
-		err := tool.Migrate(ctx, 65)
+		err := tool.Migrate(ctx, 67)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Query column information:
@@ -293,7 +293,7 @@ var _ = DescribeMigration("Create project memberships tables", func() {
 
 	It("Has correct default values", func(ctx context.Context) {
 		// Run the migration:
-		err := tool.Migrate(ctx, 65)
+		err := tool.Migrate(ctx, 67)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Create organization first (required by foreign key):
@@ -326,10 +326,10 @@ var _ = DescribeMigration("Create project memberships tables", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify default values:
-		Expect(name).To(Equal(""))                // default ''
-		Expect(creator).To(Equal(""))             // default ''
-		Expect(version).To(Equal(0))              // default 0
-		Expect(finalizers).To(BeEmpty())          // default '{}'
+		Expect(name).To(Equal(""))       // default ''
+		Expect(creator).To(Equal(""))    // default ''
+		Expect(version).To(Equal(0))     // default 0
+		Expect(finalizers).To(BeEmpty()) // default '{}'
 	})
 
 })
