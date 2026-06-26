@@ -343,9 +343,14 @@ var _ = Describe("Project Group Path Building", func() {
 				}.Build(),
 			}.Build()
 
+			// getProjectByNameOrID will try Get first, then List
 			mockProjectsClient.EXPECT().
 				Get(gomock.Any(), gomock.Any()).
 				Return(nil, status.Error(codes.NotFound, "parent not found"))
+
+			mockProjectsClient.EXPECT().
+				List(gomock.Any(), gomock.Any()).
+				Return(&privatev1.ProjectsListResponse{Items: []*privatev1.Project{}}, nil)
 
 			task := &task{
 				r: functionObj,
@@ -427,6 +432,9 @@ var _ = Describe("Synchronization", func() {
 				Spec: privatev1.UserSpec_builder{
 					Username: "alice",
 				}.Build(),
+				Status: privatev1.UserStatus_builder{
+					KeycloakUserId: "keycloak-alice-id",
+				}.Build(),
 			}.Build()
 
 			project := privatev1.Project_builder{
@@ -461,7 +469,7 @@ var _ = Describe("Synchronization", func() {
 				Return("group-id", nil)
 
 			mockIdpClient.EXPECT().
-				AddUserToGroup(gomock.Any(), "acme", "alice", "group-id").
+				AddUserToGroup(gomock.Any(), "acme", "keycloak-alice-id", "group-id").
 				Return(nil)
 
 			task := &task{
@@ -481,6 +489,9 @@ var _ = Describe("Synchronization", func() {
 			user := privatev1.User_builder{
 				Spec: privatev1.UserSpec_builder{
 					Username: "alice",
+				}.Build(),
+				Status: privatev1.UserStatus_builder{
+					KeycloakUserId: "keycloak-alice-id",
 				}.Build(),
 			}.Build()
 
@@ -530,7 +541,7 @@ var _ = Describe("Synchronization", func() {
 				Return("group-id", nil)
 
 			mockIdpClient.EXPECT().
-				AddUserToGroup(gomock.Any(), "acme", "alice", "group-id").
+				AddUserToGroup(gomock.Any(), "acme", "keycloak-alice-id", "group-id").
 				Return(nil)
 
 			task := &task{
@@ -577,6 +588,9 @@ var _ = Describe("Synchronization", func() {
 				Spec: privatev1.UserSpec_builder{
 					Username: "alice",
 				}.Build(),
+				Status: privatev1.UserStatus_builder{
+					KeycloakUserId: "keycloak-alice-id",
+				}.Build(),
 			}.Build()
 
 			membership := privatev1.ProjectMembership_builder{
@@ -594,9 +608,14 @@ var _ = Describe("Synchronization", func() {
 				Get(gomock.Any(), gomock.Any()).
 				Return(&privatev1.UsersGetResponse{Object: user}, nil)
 
+			// getProjectByNameOrID will try Get first, then List
 			mockProjectsClient.EXPECT().
 				Get(gomock.Any(), gomock.Any()).
 				Return(nil, status.Error(codes.NotFound, "project not found"))
+
+			mockProjectsClient.EXPECT().
+				List(gomock.Any(), gomock.Any()).
+				Return(&privatev1.ProjectsListResponse{Items: []*privatev1.Project{}}, nil)
 
 			task := &task{
 				r:          functionObj,
@@ -613,6 +632,9 @@ var _ = Describe("Synchronization", func() {
 			user := privatev1.User_builder{
 				Spec: privatev1.UserSpec_builder{
 					Username: "alice",
+				}.Build(),
+				Status: privatev1.UserStatus_builder{
+					KeycloakUserId: "keycloak-alice-id",
 				}.Build(),
 			}.Build()
 
@@ -697,6 +719,9 @@ var _ = Describe("Deletion Cleanup", func() {
 			Spec: privatev1.UserSpec_builder{
 				Username: "alice",
 			}.Build(),
+			Status: privatev1.UserStatus_builder{
+				KeycloakUserId: "keycloak-alice-id",
+			}.Build(),
 		}.Build()
 
 		project := privatev1.Project_builder{
@@ -731,7 +756,7 @@ var _ = Describe("Deletion Cleanup", func() {
 			Return("group-id", nil)
 
 		mockIdpClient.EXPECT().
-			RemoveUserFromGroup(gomock.Any(), "acme", "alice", "group-id").
+			RemoveUserFromGroup(gomock.Any(), "acme", "keycloak-alice-id", "group-id").
 			Return(nil)
 
 		task := &task{
@@ -748,6 +773,9 @@ var _ = Describe("Deletion Cleanup", func() {
 		user := privatev1.User_builder{
 			Spec: privatev1.UserSpec_builder{
 				Username: "alice",
+			}.Build(),
+			Status: privatev1.UserStatus_builder{
+				KeycloakUserId: "keycloak-alice-id",
 			}.Build(),
 		}.Build()
 
@@ -797,7 +825,7 @@ var _ = Describe("Deletion Cleanup", func() {
 			Return("group-id", nil)
 
 		mockIdpClient.EXPECT().
-			RemoveUserFromGroup(gomock.Any(), "acme", "alice", "group-id").
+			RemoveUserFromGroup(gomock.Any(), "acme", "keycloak-alice-id", "group-id").
 			Return(nil)
 
 		task := &task{

@@ -158,6 +158,41 @@ func (t *task) update(ctx context.Context) error {
 	return t.syncProjectMembership(ctx)
 }
 
+// getProjectByNameOrID fetches a project by ID or name. If the provided value is not found as an ID,
+// it attempts to find the project by name.
+func (t *task) getProjectByNameOrID(ctx context.Context, nameOrID string) (*privatev1.Project, error) {
+	// Try fetching by ID first
+	projectResponse, err := t.r.projectsClient.Get(ctx, privatev1.ProjectsGetRequest_builder{
+		Id: nameOrID,
+	}.Build())
+	if err == nil {
+		return projectResponse.GetObject(), nil
+	}
+
+	// If not found by ID, try listing by name
+	t.r.logger.DebugContext(ctx, "Project not found by ID, trying by name",
+		slog.String("name_or_id", nameOrID),
+	)
+
+	filter := fmt.Sprintf("this.metadata.name == '%s'", nameOrID)
+	listResponse, err := t.r.projectsClient.List(ctx, privatev1.ProjectsListRequest_builder{
+		Filter: &filter,
+	}.Build())
+	if err != nil {
+		return nil, fmt.Errorf("failed to list projects by name: %w", err)
+	}
+
+	projects := listResponse.GetItems()
+	if len(projects) == 0 {
+		return nil, fmt.Errorf("project with name or ID '%s' not found", nameOrID)
+	}
+	if len(projects) > 1 {
+		return nil, fmt.Errorf("multiple projects found with name '%s'", nameOrID)
+	}
+
+	return projects[0], nil
+}
+
 func (t *task) addFinalizer() bool {
 	metadata := t.membership.GetMetadata()
 	finalizerName := finalizers.ProjectMembershipFinalizer
@@ -200,22 +235,19 @@ func (t *task) syncProjectMembership(ctx context.Context) error {
 	user := userResponse.GetObject()
 
 	// Get the project
-	projectID := t.membership.GetSpec().GetProject()
-	if projectID == "" {
+	projectNameOrID := t.membership.GetSpec().GetProject()
+	if projectNameOrID == "" {
 		t.membership.GetStatus().SetState(privatev1.ProjectMembershipState_PROJECT_MEMBERSHIP_STATE_FAILED)
-		t.membership.GetStatus().SetMessage("Project ID is required")
+		t.membership.GetStatus().SetMessage("Project is required")
 		return nil
 	}
 
-	projectResponse, err := t.r.projectsClient.Get(ctx, privatev1.ProjectsGetRequest_builder{
-		Id: projectID,
-	}.Build())
+	project, err := t.getProjectByNameOrID(ctx, projectNameOrID)
 	if err != nil {
 		t.membership.GetStatus().SetState(privatev1.ProjectMembershipState_PROJECT_MEMBERSHIP_STATE_FAILED)
 		t.membership.GetStatus().SetMessage(fmt.Sprintf("Failed to fetch project: %v", err))
 		return nil
 	}
-	project := projectResponse.GetObject()
 
 	// Determine the authorization group based on the membership role
 	role := t.membership.GetSpec().GetRole()
@@ -234,8 +266,15 @@ func (t *task) syncProjectMembership(ctx context.Context) error {
 		return nil
 	}
 
+	// Get the IDP user ID from the user status
+	idpUserID := user.GetStatus().GetKeycloakUserId()
+	if idpUserID == "" {
+		t.membership.GetStatus().SetState(privatev1.ProjectMembershipState_PROJECT_MEMBERSHIP_STATE_FAILED)
+		t.membership.GetStatus().SetMessage("User has no IDP user ID")
+		return nil
+	}
+
 	// Build the full hierarchical group path for this project + role
-	username := user.GetSpec().GetUsername()
 	groupPath, err := t.buildProjectGroupPath(ctx, project, groupSuffix)
 	if err != nil {
 		t.membership.GetStatus().SetState(privatev1.ProjectMembershipState_PROJECT_MEMBERSHIP_STATE_FAILED)
@@ -252,7 +291,7 @@ func (t *task) syncProjectMembership(ctx context.Context) error {
 	}
 
 	// Add the user to the authorization group
-	err = t.r.idpClient.AddUserToGroup(ctx, organizationName, username, groupID)
+	err = t.r.idpClient.AddUserToGroup(ctx, organizationName, idpUserID, groupID)
 	if err != nil {
 		t.membership.GetStatus().SetState(privatev1.ProjectMembershipState_PROJECT_MEMBERSHIP_STATE_FAILED)
 		t.membership.GetStatus().SetMessage(fmt.Sprintf("Failed to add user to authorization group: %v", err))
@@ -295,14 +334,12 @@ func (t *task) buildProjectGroupPath(ctx context.Context, project *privatev1.Pro
 		}
 
 		// Fetch the parent project
-		parentID := currentProject.GetSpec().GetParent()
-		parentResponse, err := t.r.projectsClient.Get(ctx, privatev1.ProjectsGetRequest_builder{
-			Id: parentID,
-		}.Build())
+		parentNameOrID := currentProject.GetSpec().GetParent()
+		var err error
+		currentProject, err = t.getProjectByNameOrID(ctx, parentNameOrID)
 		if err != nil {
-			return "", fmt.Errorf("failed to fetch parent project %s: %w", parentID, err)
+			return "", fmt.Errorf("failed to fetch parent project %s: %w", parentNameOrID, err)
 		}
-		currentProject = parentResponse.GetObject()
 	}
 
 	if len(pathParts) >= maxDepth {
@@ -374,19 +411,16 @@ func (t *task) cleanupProjectMembership(ctx context.Context) error {
 	user := userResponse.GetObject()
 
 	// Get the project
-	projectID := t.membership.GetSpec().GetProject()
-	if projectID == "" {
+	projectNameOrID := t.membership.GetSpec().GetProject()
+	if projectNameOrID == "" {
 		return nil
 	}
 
-	projectResponse, err := t.r.projectsClient.Get(ctx, privatev1.ProjectsGetRequest_builder{
-		Id: projectID,
-	}.Build())
+	project, err := t.getProjectByNameOrID(ctx, projectNameOrID)
 	if err != nil {
 		t.r.logger.WarnContext(ctx, "Failed to fetch project during cleanup", slog.Any("error", err))
 		return nil
 	}
-	project := projectResponse.GetObject()
 
 	// Determine the authorization group
 	role := t.membership.GetSpec().GetRole()
@@ -396,7 +430,14 @@ func (t *task) cleanupProjectMembership(ctx context.Context) error {
 	}
 
 	organizationName := project.GetMetadata().GetTenant()
-	username := user.GetSpec().GetUsername()
+
+	// Get the IDP user ID from the user status
+	idpUserID := user.GetStatus().GetKeycloakUserId()
+	if idpUserID == "" {
+		t.r.logger.WarnContext(ctx, "User has no IDP user ID during cleanup")
+		return nil
+	}
+
 	groupPath, err := t.buildProjectGroupPath(ctx, project, groupSuffix)
 	if err != nil {
 		t.r.logger.WarnContext(ctx, "Failed to build project hierarchy path during cleanup", slog.Any("error", err))
@@ -413,7 +454,7 @@ func (t *task) cleanupProjectMembership(ctx context.Context) error {
 	}
 
 	// Remove the user from the authorization group
-	err = t.r.idpClient.RemoveUserFromGroup(ctx, organizationName, username, groupID)
+	err = t.r.idpClient.RemoveUserFromGroup(ctx, organizationName, idpUserID, groupID)
 	if err != nil {
 		t.r.logger.WarnContext(ctx, "Failed to remove user from authorization group during cleanup", slog.Any("error", err))
 	}
