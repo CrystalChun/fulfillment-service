@@ -21,48 +21,44 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
+	"github.com/osac-project/fulfillment-service/internal/auth"
 	"github.com/osac-project/fulfillment-service/internal/database/dao"
 )
 
-// UserProvisioner provisions user records in the database.
-type UserProvisioner interface {
-	Provision(ctx context.Context, username, tenant string, claims jwt.MapClaims) error
-}
-
-// DAOUserProvisionerBuilder builds a DAOUserProvisioner.
-type DAOUserProvisionerBuilder struct {
+// UserProvisionerBuilder builds a UserProvisioner.
+type UserProvisionerBuilder struct {
 	usersDAO *dao.GenericDAO[*privatev1.User]
 }
 
-// DAOUserProvisioner implements UserProvisioner using a GenericDAO.
-type DAOUserProvisioner struct {
+// UserProvisioner implements auth.UserProvisioner using a GenericDAO.
+type UserProvisioner struct {
 	usersDAO *dao.GenericDAO[*privatev1.User]
 }
 
-// NewDAOUserProvisioner creates a new builder.
-func NewDAOUserProvisioner() *DAOUserProvisionerBuilder {
-	return &DAOUserProvisionerBuilder{}
+// NewUserProvisioner creates a new builder.
+func NewUserProvisioner() *UserProvisionerBuilder {
+	return &UserProvisionerBuilder{}
 }
 
 // SetUsersDAO sets the users DAO.
-func (b *DAOUserProvisionerBuilder) SetUsersDAO(value *dao.GenericDAO[*privatev1.User]) *DAOUserProvisionerBuilder {
+func (b *UserProvisionerBuilder) SetUsersDAO(value *dao.GenericDAO[*privatev1.User]) *UserProvisionerBuilder {
 	b.usersDAO = value
 	return b
 }
 
 // Build creates the provisioner.
-func (b *DAOUserProvisionerBuilder) Build() (result *DAOUserProvisioner, err error) {
+func (b *UserProvisionerBuilder) Build() (result *UserProvisioner, err error) {
 	if b.usersDAO == nil {
 		return nil, fmt.Errorf("users DAO is mandatory")
 	}
-	result = &DAOUserProvisioner{
+	result = &UserProvisioner{
 		usersDAO: b.usersDAO,
 	}
 	return result, nil
 }
 
 // Provision creates a user record if it doesn't exist.
-func (p *DAOUserProvisioner) Provision(ctx context.Context, username, tenant string, claims jwt.MapClaims) error {
+func (p *UserProvisioner) Provision(ctx context.Context, username, tenant string, claims jwt.MapClaims) error {
 	// Check if user exists
 	filter := fmt.Sprintf("this.spec.username=='%s'", username)
 	listResponse, err := p.usersDAO.List().
@@ -82,6 +78,7 @@ func (p *DAOUserProvisioner) Provision(ctx context.Context, username, tenant str
 	email, _ := claims["email"].(string)
 	emailVerified, _ := claims["email_verified"].(bool)
 	name, _ := claims["name"].(string)
+	sub, _ := claims["sub"].(string) // Keycloak user ID
 
 	// Parse name into first/last
 	var firstName, lastName string
@@ -110,6 +107,9 @@ func (p *DAOUserProvisioner) Provision(ctx context.Context, username, tenant str
 			LastName:      lastName,
 			Organization:  tenant,
 		}.Build(),
+		Status: privatev1.UserStatus_builder{
+			KeycloakUserId: sub,
+		}.Build(),
 	}.Build()
 
 	_, err = p.usersDAO.Create().
@@ -122,4 +122,4 @@ func (p *DAOUserProvisioner) Provision(ctx context.Context, username, tenant str
 	return nil
 }
 
-var _ UserProvisioner = (*DAOUserProvisioner)(nil)
+var _ auth.UserProvisioner = (*UserProvisioner)(nil)

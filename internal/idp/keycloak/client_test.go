@@ -1888,7 +1888,7 @@ var _ = Describe("Keycloak Client", func() {
 					}
 					// Create parent group: /web-app
 					if r.Method == http.MethodPost && r.URL.Path == "/admin/realms/osac/organizations/org-123/groups" {
-						var payload map[string]interface{}
+						var payload map[string]any
 						if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 							http.Error(w, err.Error(), http.StatusBadRequest)
 							return
@@ -1902,7 +1902,7 @@ var _ = Describe("Keycloak Client", func() {
 					}
 					// Create child group: viewers under /web-app
 					if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/children") {
-						var payload map[string]interface{}
+						var payload map[string]any
 						if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 							http.Error(w, err.Error(), http.StatusBadRequest)
 							return
@@ -1990,7 +1990,7 @@ var _ = Describe("Keycloak Client", func() {
 					}
 					// Create child group under existing parent
 					if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/children") {
-						var payload map[string]interface{}
+						var payload map[string]any
 						if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 							http.Error(w, err.Error(), http.StatusBadRequest)
 							return

@@ -183,7 +183,7 @@ func (c *Client) createOrganizationGroupWithParent(ctx context.Context, orgID, n
 		)
 	}
 
-	groupPayload := map[string]interface{}{
+	groupPayload := map[string]any{
 		"name": name,
 	}
 

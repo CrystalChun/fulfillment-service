@@ -346,7 +346,7 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 	}
 
 	c.logger.InfoContext(ctx, "Creating user provisioner for JIT provisioning")
-	userProvisioner, err := provisioners.NewDAOUserProvisioner().
+	userProvisioner, err := provisioners.NewUserProvisioner().
 		SetUsersDAO(usersDAO).
 		Build()
 	if err != nil {
@@ -425,7 +425,7 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 			txInterceptor.UnaryServer,
 			authnInterceptor.UnaryServer,
 			authzInterceptor.UnaryServer,
-			jitProvisioningInterceptor.UnaryInterceptor(),
+			jitProvisioningInterceptor.UnaryServer,
 		),
 		grpc.ChainStreamInterceptor(
 			panicInterceptor.StreamServer,
@@ -433,6 +433,7 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 			loggingInterceptor.StreamServer,
 			authnInterceptor.StreamServer,
 			authzInterceptor.StreamServer,
+			jitProvisioningInterceptor.StreamServer,
 		),
 	)
 	shutdown.AddGrpcServer(network.GrpcListenerName, 0, grpcServer)

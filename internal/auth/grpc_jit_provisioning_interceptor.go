@@ -26,6 +26,8 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/reflection"
 )
 
+//go:generate mockgen -source=$GOFILE -destination=grpc_jit_provisioning_interceptor_mock.go -package=$GOPACKAGE UserProvisioner
+
 // UserProvisioner provisions user records in the database.
 type UserProvisioner interface {
 	Provision(ctx context.Context, username, tenant string, claims jwt.MapClaims) error
@@ -73,74 +75,136 @@ func (b *GrpcJitProvisioningInterceptorBuilder) Build() (result *GrpcJitProvisio
 	return result, nil
 }
 
-// UnaryInterceptor returns a gRPC unary interceptor that provisions users just-in-time.
-func (i *GrpcJitProvisioningInterceptor) UnaryInterceptor() grpc.UnaryServerInterceptor {
-	return func(
-		ctx context.Context,
-		req interface{},
-		info *grpc.UnaryServerInfo,
-		handler grpc.UnaryHandler,
-	) (interface{}, error) {
-		// Skip if no provisioner configured
-		if i.provisioner == nil {
-			return handler(ctx, req)
-		}
-
-		// Get subject from context (set by authz interceptor)
-		subject := SubjectFromContext(ctx)
-		if subject == nil {
-			// No subject means anonymous or unauthenticated request - skip provisioning
-			return handler(ctx, req)
-		}
-
-		// Only provision for users with exactly one tenant
-		// Users with zero tenants (unauthenticated), multiple tenants (cloud provider admins),
-		// or special tenants (system/shared) should not have user records
-		if !subject.Tenants.Finite() {
-			return handler(ctx, req)
-		}
-
-		tenants := subject.Tenants.Inclusions()
-		if len(tenants) != 1 {
-			// Zero or multiple tenants - not a regular user
-			return handler(ctx, req)
-		}
-
-		tenant := tenants[0]
-		if tenant == SystemTenant || tenant == SharedTenant {
-			// System and shared tenants don't have user records
-			return handler(ctx, req)
-		}
-
-		// Get username from subject
-		username := subject.User
-
-		// Get JWT token from context for additional claims
-		token := TokenFromContext(ctx)
-		if token == nil {
-			// No token in context - skip provisioning
-			return handler(ctx, req)
-		}
-
-		// Extract JWT claims for email, name, etc.
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			i.logger.ErrorContext(ctx, "Failed to extract claims from JWT token for user provisioning")
-			return handler(ctx, req)
-		}
-
-		// Provision the user
-		err := i.provisioner.Provision(ctx, username, tenant, claims)
-		if err != nil {
-			i.logger.ErrorContext(ctx, "Failed to provision user",
-				slog.String("username", username),
-				slog.String("tenant", tenant),
-				slog.Any("error", err),
-			)
-			return nil, grpcstatus.Error(grpccodes.Internal, "failed to provision user")
-		}
-
-		// Continue to handler
+// UnaryServer is the unary server interceptor function.
+func (i *GrpcJitProvisioningInterceptor) UnaryServer(ctx context.Context, req any,
+	info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	// Skip if no provisioner configured
+	if i.provisioner == nil {
 		return handler(ctx, req)
 	}
+
+	// Get subject from context (set by authz interceptor)
+	subject := SubjectFromContext(ctx)
+	if subject == nil {
+		// No subject means anonymous or unauthenticated request - skip provisioning
+		return handler(ctx, req)
+	}
+
+	// Only provision for users with exactly one tenant
+	// Users with zero tenants (unauthenticated), multiple tenants (cloud provider admins),
+	// or special tenants (system/shared) should not have user records
+	if !subject.Tenants.Finite() {
+		return handler(ctx, req)
+	}
+
+	tenants := subject.Tenants.Inclusions()
+	if len(tenants) != 1 {
+		// Zero or multiple tenants - not a regular user
+		return handler(ctx, req)
+	}
+
+	tenant := tenants[0]
+	if tenant == SystemTenant || tenant == SharedTenant {
+		// System and shared tenants don't have user records
+		return handler(ctx, req)
+	}
+
+	// Get username from subject
+	username := subject.User
+
+	// Get JWT token from context for additional claims
+	token := TokenFromContext(ctx)
+	if token == nil {
+		// No token in context - skip provisioning
+		return handler(ctx, req)
+	}
+
+	// Extract JWT claims for email, name, etc.
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		i.logger.ErrorContext(ctx, "Failed to extract claims from JWT token for user provisioning")
+		return handler(ctx, req)
+	}
+
+	// Provision the user
+	err := i.provisioner.Provision(ctx, username, tenant, claims)
+	if err != nil {
+		i.logger.ErrorContext(ctx, "Failed to provision user",
+			slog.String("username", username),
+			slog.String("tenant", tenant),
+			slog.Any("error", err),
+		)
+		return nil, grpcstatus.Error(grpccodes.Internal, "failed to provision user")
+	}
+
+	// Continue to handler
+	return handler(ctx, req)
+}
+
+// StreamServer is the stream server interceptor function.
+func (i *GrpcJitProvisioningInterceptor) StreamServer(srv any, stream grpc.ServerStream,
+	info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	// Skip if no provisioner configured
+	if i.provisioner == nil {
+		return handler(srv, stream)
+	}
+
+	ctx := stream.Context()
+
+	// Get subject from context (set by authz interceptor)
+	subject := SubjectFromContext(ctx)
+	if subject == nil {
+		// No subject means anonymous or unauthenticated request - skip provisioning
+		return handler(srv, stream)
+	}
+
+	// Only provision for users with exactly one tenant
+	// Users with zero tenants (unauthenticated), multiple tenants (cloud provider admins),
+	// or special tenants (system/shared) should not have user records
+	if !subject.Tenants.Finite() {
+		return handler(srv, stream)
+	}
+
+	tenants := subject.Tenants.Inclusions()
+	if len(tenants) != 1 {
+		// Zero or multiple tenants - not a regular user
+		return handler(srv, stream)
+	}
+
+	tenant := tenants[0]
+	if tenant == SystemTenant || tenant == SharedTenant {
+		// System and shared tenants don't have user records
+		return handler(srv, stream)
+	}
+
+	// Get username from subject
+	username := subject.User
+
+	// Get JWT token from context for additional claims
+	token := TokenFromContext(ctx)
+	if token == nil {
+		// No token in context - skip provisioning
+		return handler(srv, stream)
+	}
+
+	// Extract JWT claims for email, name, etc.
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		i.logger.ErrorContext(ctx, "Failed to extract claims from JWT token for user provisioning")
+		return handler(srv, stream)
+	}
+
+	// Provision the user
+	err := i.provisioner.Provision(ctx, username, tenant, claims)
+	if err != nil {
+		i.logger.ErrorContext(ctx, "Failed to provision user",
+			slog.String("username", username),
+			slog.String("tenant", tenant),
+			slog.Any("error", err),
+		)
+		return grpcstatus.Error(grpccodes.Internal, "failed to provision user")
+	}
+
+	// Continue to handler
+	return handler(srv, stream)
 }
