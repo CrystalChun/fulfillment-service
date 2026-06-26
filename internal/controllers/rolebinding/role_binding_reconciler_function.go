@@ -156,6 +156,41 @@ func (t *task) update(ctx context.Context) error {
 	return t.syncRoleAssignments(ctx)
 }
 
+// getRoleByNameOrID fetches a role by ID or name. If the provided value is not found as an ID,
+// it attempts to find the role by name.
+func (t *task) getRoleByNameOrID(ctx context.Context, nameOrID string) (*privatev1.Role, error) {
+	// Try fetching by ID first
+	roleResponse, err := t.r.rolesClient.Get(ctx, privatev1.RolesGetRequest_builder{
+		Id: nameOrID,
+	}.Build())
+	if err == nil {
+		return roleResponse.GetObject(), nil
+	}
+
+	// If not found by ID, try listing by name
+	t.r.logger.DebugContext(ctx, "Role not found by ID, trying by name",
+		slog.String("name_or_id", nameOrID),
+	)
+
+	filter := fmt.Sprintf("this.metadata.name == '%s'", nameOrID)
+	listResponse, err := t.r.rolesClient.List(ctx, privatev1.RolesListRequest_builder{
+		Filter: &filter,
+	}.Build())
+	if err != nil {
+		return nil, fmt.Errorf("failed to list roles by name: %w", err)
+	}
+
+	roles := listResponse.GetItems()
+	if len(roles) == 0 {
+		return nil, fmt.Errorf("role with name or ID '%s' not found", nameOrID)
+	}
+	if len(roles) > 1 {
+		return nil, fmt.Errorf("multiple roles found with name '%s'", nameOrID)
+	}
+
+	return roles[0], nil
+}
+
 // handleUserListChange reconciles a READY binding when the user list changes.
 // It computes the difference between desired users (spec.users) and synced users (status.synced_users),
 // then adds roles to new users and removes roles from removed users.
@@ -194,17 +229,15 @@ func (t *task) handleUserListChange(ctx context.Context) error {
 		return nil
 	}
 
-	// Fetch the Role to get its name and mapping
-	roleResponse, err := t.r.rolesClient.Get(ctx, privatev1.RolesGetRequest_builder{
-		Id: t.binding.GetSpec().GetRole(),
-	}.Build())
+	// Fetch the Role by name or ID
+	role, err := t.getRoleByNameOrID(ctx, t.binding.GetSpec().GetRole())
 	if err != nil {
 		t.binding.GetStatus().SetState(privatev1.RoleBindingState_ROLE_BINDING_STATE_FAILED)
 		t.binding.GetStatus().SetMessage(fmt.Sprintf("Failed to fetch role: %v", err))
 		return nil
 	}
 
-	roleName := roleResponse.GetObject().GetMetadata().GetName()
+	roleName := role.GetMetadata().GetName()
 	organizationName := t.binding.GetMetadata().GetTenant()
 
 	// Map OSAC role to Keycloak roles
@@ -294,17 +327,15 @@ func (t *task) handleUserListChange(ctx context.Context) error {
 
 // syncRoleAssignments assigns the role to all users in the binding.
 func (t *task) syncRoleAssignments(ctx context.Context) error {
-	// Fetch the Role to get its name
-	roleResponse, err := t.r.rolesClient.Get(ctx, privatev1.RolesGetRequest_builder{
-		Id: t.binding.GetSpec().GetRole(),
-	}.Build())
+	// Fetch the Role by name or ID
+	role, err := t.getRoleByNameOrID(ctx, t.binding.GetSpec().GetRole())
 	if err != nil {
 		t.binding.GetStatus().SetState(privatev1.RoleBindingState_ROLE_BINDING_STATE_FAILED)
 		t.binding.GetStatus().SetMessage(fmt.Sprintf("Failed to fetch role: %v", err))
 		return nil
 	}
 
-	roleName := roleResponse.GetObject().GetMetadata().GetName()
+	roleName := role.GetMetadata().GetName()
 	organizationName := t.binding.GetMetadata().GetTenant()
 
 	// Map OSAC role to Keycloak roles
@@ -359,53 +390,13 @@ func (t *task) syncRoleAssignments(ctx context.Context) error {
 	return nil
 }
 
-// mapRoleToKeycloak maps OSAC role names to Keycloak roles.
-// Returns the list of Keycloak roles and the client ID (empty string for organization-level roles).
+// mapRoleToKeycloak maps OSAC role names to Keycloak realm-level roles.
+// All OSAC roles map 1:1 to Keycloak realm roles with the same name.
+// Returns the list of Keycloak roles and an empty client ID (realm-level roles are not client-scoped).
 func (t *task) mapRoleToKeycloak(roleName string) ([]*idp.Role, string) {
-	switch roleName {
-	case "tenant-admin":
-		// tenant-admin gets full realm-management permissions
-		return []*idp.Role{
-			{Name: "manage-realm", ClientRole: true},
-			{Name: "manage-users", ClientRole: true},
-			{Name: "manage-clients", ClientRole: true},
-			{Name: "manage-identity-providers", ClientRole: true},
-			{Name: "manage-authorization", ClientRole: true},
-			{Name: "manage-events", ClientRole: true},
-			{Name: "view-realm", ClientRole: true},
-			{Name: "view-users", ClientRole: true},
-			{Name: "view-clients", ClientRole: true},
-			{Name: "view-identity-providers", ClientRole: true},
-			{Name: "view-authorization", ClientRole: true},
-			{Name: "view-events", ClientRole: true},
-		}, "realm-management"
-
-	case "tenant-reader":
-		// tenant-reader gets view-only realm-management permissions
-		return []*idp.Role{
-			{Name: "view-realm", ClientRole: true},
-			{Name: "view-users", ClientRole: true},
-			{Name: "view-clients", ClientRole: true},
-			{Name: "view-identity-providers", ClientRole: true},
-			{Name: "view-authorization", ClientRole: true},
-			{Name: "view-events", ClientRole: true},
-		}, "realm-management"
-
-	case "tenant-user":
-		// tenant-user gets minimal permissions
-		return []*idp.Role{
-			{Name: "view-realm", ClientRole: true},
-		}, "realm-management"
-
-	default:
-		// Unknown role - try to map directly to an organization-level role
-		t.r.logger.WarnContext(context.Background(), "Unknown role, attempting direct mapping",
-			slog.String("role", roleName),
-		)
-		return []*idp.Role{
-			{Name: roleName, ClientRole: false},
-		}, ""
-	}
+	return []*idp.Role{
+		{Name: roleName, ClientRole: false},
+	}, ""
 }
 
 func (t *task) delete(ctx context.Context) error {
@@ -415,10 +406,8 @@ func (t *task) delete(ctx context.Context) error {
 		return nil
 	}
 
-	// Fetch the Role to get its name
-	roleResponse, err := t.r.rolesClient.Get(ctx, privatev1.RolesGetRequest_builder{
-		Id: t.binding.GetSpec().GetRole(),
-	}.Build())
+	// Fetch the Role by name or ID
+	role, err := t.getRoleByNameOrID(ctx, t.binding.GetSpec().GetRole())
 	if err != nil {
 		t.r.logger.ErrorContext(ctx, "Failed to fetch role for deletion",
 			slog.String("role_binding_id", t.binding.GetId()),
@@ -429,7 +418,7 @@ func (t *task) delete(ctx context.Context) error {
 		return nil
 	}
 
-	roleName := roleResponse.GetObject().GetMetadata().GetName()
+	roleName := role.GetMetadata().GetName()
 	organizationName := t.binding.GetMetadata().GetTenant()
 
 	// Map OSAC role to Keycloak roles
