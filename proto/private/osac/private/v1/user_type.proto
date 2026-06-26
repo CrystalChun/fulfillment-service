@@ -76,6 +76,10 @@ message UserStatus {
 
   // Additional conditions.
   repeated UserCondition conditions = 2;
+
+  // The Keycloak user ID for this user in the identity provider.
+  // This is set when the user is created or imported and is used for role assignments.
+  string keycloak_user_id = 3;
 }
 
 // UserCondition represents a condition of a user.
