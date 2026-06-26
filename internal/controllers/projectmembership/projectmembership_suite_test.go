@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2025 Red Hat Inc.
+Copyright (c) 2026 Red Hat Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
 License. You may obtain a copy of the License at
@@ -11,10 +11,23 @@ Unless required by applicable law or agreed to in writing, software distributed 
 language governing permissions and limitations under the License.
 */
 
-package finalizers
+package projectmembership
 
-// Names of well known finalizers.
-const (
-	Controller                 = "fulfillment-controller"
-	ProjectMembershipFinalizer = "project-membership-controller"
+import (
+	"log/slog"
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
+
+var logger *slog.Logger
+
+func TestProjectMembership(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "ProjectMembership Suite")
+}
+
+var _ = BeforeSuite(func() {
+	logger = slog.Default()
+})
