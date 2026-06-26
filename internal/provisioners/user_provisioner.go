@@ -16,22 +16,28 @@ package provisioners
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/golang-jwt/jwt/v5"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
 	"github.com/osac-project/fulfillment-service/internal/auth"
-	"github.com/osac-project/fulfillment-service/internal/database/dao"
 )
 
 // UserProvisionerBuilder builds a UserProvisioner.
 type UserProvisionerBuilder struct {
-	usersDAO *dao.GenericDAO[*privatev1.User]
+	logger      *slog.Logger
+	usersServer privatev1.UsersServer
 }
 
-// UserProvisioner implements auth.UserProvisioner using a GenericDAO.
+// UserProvisioner implements auth.UserProvisioner using the PrivateUsersServer.
+// The server handles event generation, so user creation automatically triggers events
+// for the user controller to reconcile and populate keycloak_user_id in status.
 type UserProvisioner struct {
-	usersDAO *dao.GenericDAO[*privatev1.User]
+	logger      *slog.Logger
+	usersServer privatev1.UsersServer
 }
 
 // NewUserProvisioner creates a new builder.
@@ -39,31 +45,45 @@ func NewUserProvisioner() *UserProvisionerBuilder {
 	return &UserProvisionerBuilder{}
 }
 
-// SetUsersDAO sets the users DAO.
-func (b *UserProvisionerBuilder) SetUsersDAO(value *dao.GenericDAO[*privatev1.User]) *UserProvisionerBuilder {
-	b.usersDAO = value
+// SetLogger sets the logger.
+func (b *UserProvisionerBuilder) SetLogger(value *slog.Logger) *UserProvisionerBuilder {
+	b.logger = value
+	return b
+}
+
+// SetUsersServer sets the users server (which handles event generation).
+func (b *UserProvisionerBuilder) SetUsersServer(value privatev1.UsersServer) *UserProvisionerBuilder {
+	b.usersServer = value
 	return b
 }
 
 // Build creates the provisioner.
 func (b *UserProvisionerBuilder) Build() (result *UserProvisioner, err error) {
-	if b.usersDAO == nil {
-		return nil, fmt.Errorf("users DAO is mandatory")
+	if b.logger == nil {
+		return nil, fmt.Errorf("logger is mandatory")
+	}
+	if b.usersServer == nil {
+		return nil, fmt.Errorf("users server is mandatory")
 	}
 	result = &UserProvisioner{
-		usersDAO: b.usersDAO,
+		logger:      b.logger,
+		usersServer: b.usersServer,
 	}
 	return result, nil
 }
 
 // Provision creates a user record if it doesn't exist.
+// The server handles event generation, so creating a user will trigger an event
+// that the user controller watches. The controller will reconcile the user and
+// populate the keycloak_user_id in the status.
 func (p *UserProvisioner) Provision(ctx context.Context, username, tenant string, claims jwt.MapClaims) error {
 	// Check if user exists
 	filter := fmt.Sprintf("this.spec.username==%q", username)
-	listResponse, err := p.usersDAO.List().
-		SetFilter(filter).
-		SetLimit(1).
-		Do(ctx)
+	limit := int32(1)
+	listResponse, err := p.usersServer.List(ctx, &privatev1.UsersListRequest{
+		Filter: &filter,
+		Limit:  &limit,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to check if user exists: %w", err)
 	}
@@ -76,7 +96,12 @@ func (p *UserProvisioner) Provision(ctx context.Context, username, tenant string
 	// Extract claims
 	email, _ := claims["email"].(string)
 
-	// Create user
+	p.logger.InfoContext(ctx, "Provisioning user",
+		slog.String("username", username),
+		slog.String("tenant", tenant),
+	)
+
+	// Create user via server (this will trigger events for the controller)
 	user := privatev1.User_builder{
 		Metadata: privatev1.Metadata_builder{
 			Name:   username,
@@ -89,10 +114,14 @@ func (p *UserProvisioner) Provision(ctx context.Context, username, tenant string
 		}.Build(),
 	}.Build()
 
-	_, err = p.usersDAO.Create().
-		SetObject(user).
-		Do(ctx)
+	_, err = p.usersServer.Create(ctx, &privatev1.UsersCreateRequest{
+		Object: user,
+	})
 	if err != nil {
+		// If the user was created concurrently (race condition), treat as success
+		if status.Code(err) == codes.AlreadyExists {
+			return nil
+		}
 		return fmt.Errorf("failed to create user: %w", err)
 	}
 
