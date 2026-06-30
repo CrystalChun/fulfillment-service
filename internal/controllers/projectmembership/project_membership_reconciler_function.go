@@ -329,12 +329,12 @@ func (t *task) buildProjectGroupPath(ctx context.Context, project *privatev1.Pro
 		pathParts = append([]string{projectName}, pathParts...)
 
 		// Check if there's a parent
-		if !currentProject.GetSpec().HasParent() {
+		parentNameOrID := currentProject.GetSpec().GetParent()
+		if parentNameOrID == "" {
 			break
 		}
 
 		// Fetch the parent project
-		parentNameOrID := currentProject.GetSpec().GetParent()
 		var err error
 		currentProject, err = t.getProjectByNameOrID(ctx, parentNameOrID)
 		if err != nil {
