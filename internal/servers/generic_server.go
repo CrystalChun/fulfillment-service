@@ -433,28 +433,50 @@ func (s *GenericServer[O]) Get(ctx context.Context, request any, response any) e
 		return grpcstatus.Errorf(grpccodes.InvalidArgument, "identifier is mandatory")
 	}
 
-	// Fetch the object:
+	// Fetch the object by ID:
+	var object O
 	daoResponse, err := s.dao.Get().
 		SetId(requestId).
 		Do(ctx)
 	if err != nil {
 		var notFoundErr *dao.ErrNotFound
 		if errors.As(err, &notFoundErr) {
-			return grpcstatus.Errorf(grpccodes.NotFound, "object with identifier '%s' not found", requestId)
+			// If not found by ID, try to find by name
+			listResponse, listErr := s.dao.List().
+				SetFilter(fmt.Sprintf("this.metadata.name==%q", requestId)).
+				SetLimit(1).
+				Do(ctx)
+			if listErr != nil {
+				s.logger.ErrorContext(
+					ctx,
+					"Failed to get by name",
+					slog.String("name", requestId),
+					slog.Any("error", listErr),
+				)
+				// Return the original not found error
+				return grpcstatus.Errorf(grpccodes.NotFound, "object with identifier '%s' not found", requestId)
+			}
+			if listResponse.GetSize() == 0 {
+				return grpcstatus.Errorf(grpccodes.NotFound, "object with identifier '%s' not found", requestId)
+			}
+			// Found by name
+			object = listResponse.GetItems()[0]
+		} else {
+			var deniedErr *dao.ErrDenied
+			if errors.As(err, &deniedErr) {
+				return grpcstatus.Errorf(grpccodes.PermissionDenied, "%s", deniedErr.Reason)
+			}
+			s.logger.ErrorContext(
+				ctx,
+				"Failed to get",
+				slog.String("id", requestId),
+				slog.Any("error", err),
+			)
+			return grpcstatus.Errorf(grpccodes.Internal, "failed to get object with identifier '%s'", requestId)
 		}
-		var deniedErr *dao.ErrDenied
-		if errors.As(err, &deniedErr) {
-			return grpcstatus.Errorf(grpccodes.PermissionDenied, "%s", deniedErr.Reason)
-		}
-		s.logger.ErrorContext(
-			ctx,
-			"Failed to get",
-			slog.String("id", requestId),
-			slog.Any("error", err),
-		)
-		return grpcstatus.Errorf(grpccodes.Internal, "failed to get object with identifier '%s'", requestId)
+	} else {
+		object = daoResponse.GetObject()
 	}
-	object := daoResponse.GetObject()
 
 	// Create the response message:
 	type responseIface interface {
