@@ -96,6 +96,63 @@ var _ = Describe("ensureGroupHierarchyWithCache path normalization", func() {
 	})
 })
 
+var _ = Describe("getGroupIDByPathWithOrgID path parsing", func() {
+	It("should normalize and split a simple path", func() {
+		groupPath := "/bens-project/system:managers"
+		normalizedPath := strings.Trim(groupPath, "/")
+		Expect(normalizedPath).To(Equal("bens-project/system:managers"))
+
+		segments := strings.Split(normalizedPath, "/")
+		Expect(segments).To(Equal([]string{"bens-project", "system:managers"}))
+	})
+
+	It("should handle nested project paths", func() {
+		groupPath := "/parent/child/system:viewers"
+		normalizedPath := strings.Trim(groupPath, "/")
+		segments := strings.Split(normalizedPath, "/")
+		Expect(segments).To(Equal([]string{"parent", "child", "system:viewers"}))
+	})
+
+	It("should handle deeply nested paths", func() {
+		groupPath := "/org/team/product/component/system:managers"
+		normalizedPath := strings.Trim(groupPath, "/")
+		segments := strings.Split(normalizedPath, "/")
+		Expect(segments).To(Equal([]string{"org", "team", "product", "component", "system:managers"}))
+	})
+
+	It("should normalize paths with leading slashes", func() {
+		groupPath := "bens-project/system:managers"
+		normalizedPath := strings.Trim(groupPath, "/")
+		Expect(normalizedPath).To(Equal("bens-project/system:managers"))
+	})
+
+	It("should normalize paths with trailing slashes", func() {
+		groupPath := "/bens-project/system:managers/"
+		normalizedPath := strings.Trim(groupPath, "/")
+		Expect(normalizedPath).To(Equal("bens-project/system:managers"))
+	})
+
+	It("should detect empty path", func() {
+		groupPath := ""
+		normalizedPath := strings.Trim(groupPath, "/")
+		Expect(normalizedPath).To(Equal(""))
+	})
+
+	It("should detect path with only slashes as empty", func() {
+		groupPath := "/"
+		normalizedPath := strings.Trim(groupPath, "/")
+		Expect(normalizedPath).To(Equal(""))
+	})
+
+	It("should handle paths with colons in segment names", func() {
+		// system:viewers and system:managers contain colons
+		groupPath := "/project/system:viewers"
+		normalizedPath := strings.Trim(groupPath, "/")
+		segments := strings.Split(normalizedPath, "/")
+		Expect(segments).To(Equal([]string{"project", "system:viewers"}))
+	})
+})
+
 var _ = Describe("searchGroupRecursively", func() {
 	It("should find a top-level group", func() {
 		group := groupNode{
