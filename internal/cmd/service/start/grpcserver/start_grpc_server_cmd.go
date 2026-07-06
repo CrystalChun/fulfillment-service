@@ -54,6 +54,31 @@ import (
 	shtdwn "github.com/osac-project/fulfillment-service/internal/shutdown"
 )
 
+// userLookupImpl implements auth.UserLookup using a GenericDAO.
+type userLookupImpl struct {
+	usersDAO *dao.GenericDAO[*privatev1.User]
+}
+
+// LookupUserID looks up a user by username and returns their ID.
+func (l *userLookupImpl) LookupUserID(ctx context.Context, username string) (string, error) {
+	filter := fmt.Sprintf("this.spec.username==%q", username)
+	listResponse, err := l.usersDAO.List().
+		SetFilter(filter).
+		SetLimit(1).
+		Do(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to look up user: %w", err)
+	}
+
+	if listResponse.GetSize() == 0 {
+		// User not found - return empty string
+		return "", nil
+	}
+
+	user := listResponse.GetItems()[0]
+	return user.GetId(), nil
+}
+
 // Cmd creates and returns the `start grpc-server` command.
 func Cmd() *cobra.Command {
 	var err error
@@ -462,10 +487,25 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 		return fmt.Errorf("failed to start notifier: %w", err)
 	}
 
+	// Create the users DAO for user lookup:
+	c.logger.InfoContext(ctx, "Creating users DAO for attribution")
+	usersDAOForAttribution, err := dao.NewGenericDAO[*privatev1.User]().
+		SetLogger(c.logger).
+		SetTableName("users").
+		SetTenancyLogic(tenancyLogic).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create users DAO: %w", err)
+	}
+
+	// Create the user lookup for attribution (inline implementation):
+	userLookup := &userLookupImpl{usersDAO: usersDAOForAttribution}
+
 	// Create the public attribution logic:
 	c.logger.InfoContext(ctx, "Creating public attribution logic")
 	publicAttributionLogic, err := auth.NewDefaultAttributionLogic().
 		SetLogger(c.logger).
+		SetUserLookup(userLookup).
 		Build()
 	if err != nil {
 		return fmt.Errorf("failed to create public attribution logic: %w", err)
