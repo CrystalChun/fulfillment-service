@@ -146,23 +146,13 @@ func (t *task) reconcile(ctx context.Context) error {
 		return nil
 	}
 
-	tenant := t.user.GetMetadata().GetTenant()
-	if tenant == "" {
-		t.r.logger.WarnContext(ctx, "User has no tenant, cannot look up keycloak_user_id",
-			slog.String("user_id", t.user.GetId()),
-			slog.String("username", username),
-		)
-		return nil
-	}
-
 	// Look up the user in the IDP
-	keycloakUser, err := t.r.idpClient.GetUserByUsername(ctx, tenant, username)
+	keycloakUser, err := t.r.idpClient.GetUserByUsername(ctx, username)
 	if err != nil {
 		// Return error to trigger retry on transient failures (network errors, etc.)
 		t.r.logger.ErrorContext(ctx, "Failed to look up user in IDP",
 			slog.String("user_id", t.user.GetId()),
 			slog.String("username", username),
-			slog.String("tenant", tenant),
 			slog.Any("error", err),
 		)
 		return err
@@ -174,7 +164,6 @@ func (t *task) reconcile(ctx context.Context) error {
 		t.r.logger.DebugContext(ctx, "User not found in IDP",
 			slog.String("user_id", t.user.GetId()),
 			slog.String("username", username),
-			slog.String("tenant", tenant),
 		)
 		return nil
 	}
