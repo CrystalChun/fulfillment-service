@@ -27,6 +27,7 @@ import (
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
 	"github.com/osac-project/fulfillment-service/internal/controllers/finalizers"
 	"github.com/osac-project/fulfillment-service/internal/idp"
+	"github.com/osac-project/fulfillment-service/internal/idp/client"
 )
 
 var _ = Describe("Finalizer Management", func() {
@@ -161,7 +162,7 @@ var _ = Describe("Validation and Activation", func() {
 		ctrl                *gomock.Controller
 		mockClient          *MockProjectsClient
 		mockUsersClient     *MockUsersClient
-		mockIdpClient       *idp.MockClientInterface
+		mockIdpClient       *client.MockClientInterface
 		projectGroupManager *idp.ProjectGroupManager
 		ctx                 context.Context
 		functionObj         *function
@@ -171,7 +172,7 @@ var _ = Describe("Validation and Activation", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockClient = NewMockProjectsClient(ctrl)
 		mockUsersClient = NewMockUsersClient(ctrl)
-		mockIdpClient = idp.NewMockClientInterface(ctrl)
+		mockIdpClient = client.NewMockClientInterface(ctrl)
 		ctx = context.Background()
 
 		var err error
@@ -878,7 +879,7 @@ var _ = Describe("Deletion Cleanup", func() {
 		ctrl              *gomock.Controller
 		mockClient        *MockProjectsClient
 		mockTenantsClient *MockTenantsClient
-		mockIdpClient     *idp.MockClientInterface
+		mockIdpClient     *client.MockClientInterface
 		resourceManager   *idp.ProjectGroupManager
 		ctx               context.Context
 		functionObj       *function
@@ -888,7 +889,7 @@ var _ = Describe("Deletion Cleanup", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockClient = NewMockProjectsClient(ctrl)
 		mockTenantsClient = NewMockTenantsClient(ctrl)
-		mockIdpClient = idp.NewMockClientInterface(ctrl)
+		mockIdpClient = client.NewMockClientInterface(ctrl)
 		ctx = context.Background()
 
 		var err error

@@ -19,6 +19,7 @@ import (
 
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
 	"github.com/osac-project/fulfillment-service/internal/idp"
+	"github.com/osac-project/fulfillment-service/internal/idp/client"
 )
 
 var _ = Describe("User Reconciler Integration", func() {
@@ -88,7 +89,7 @@ var _ = Describe("User Reconciler Integration", func() {
 	Describe("IDP lookup scenarios", func() {
 		It("should handle different Keycloak user ID formats", func() {
 			// Test with UUID format (common Keycloak format)
-			idpUser := &idp.User{
+			idpUser := &client.User{
 				ID:       "f47ac10b-58cc-4372-a567-0e02b2c3d479",
 				Username: "testuser",
 				Email:    "test@example.com",

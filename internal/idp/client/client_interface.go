@@ -11,9 +11,9 @@ Unless required by applicable law or agreed to in writing, software distributed 
 language governing permissions and limitations under the License.
 */
 
-package idp
+package client
 
-//go:generate go run go.uber.org/mock/mockgen -destination=client_mock.go -package=idp . ClientInterface
+//go:generate go run go.uber.org/mock/mockgen -destination=client_mock.go -package=client . ClientInterface
 
 import "context"
 
@@ -28,7 +28,7 @@ type ClientInterface interface {
 	AddUserToOrganization(ctx context.Context, tenantName string, userID string) error
 	CreateUserInRealm(ctx context.Context, user *User) (*User, error)
 	CreateUser(ctx context.Context, tenantName string, user *User) (*User, error)
-	GetUser(ctx context.Context, tenantName, userID string) (*User, error)
+	GetUser(ctx context.Context, userID string) (*User, error)
 	ListUsers(ctx context.Context, tenantName string) ([]*User, error)
 	RemoveUserFromOrganization(ctx context.Context, tenantName, userID string) error
 	DeleteUser(ctx context.Context, userID string) error
@@ -45,7 +45,7 @@ type ClientInterface interface {
 	AssignTenantAdminPermissions(ctx context.Context, tenantName, userID string) error
 	GetRealmRole(ctx context.Context, roleName string) (*Role, error)
 	AssignIdpManagerPermissions(ctx context.Context, userID string) error
-	GetUserByUsername(ctx context.Context, tenantName, username string) (*User, error)
+	GetUserByUsername(ctx context.Context, username string) (*User, error)
 	CreateIdentityProvider(ctx context.Context, tenantName string, idpProvider *IdentityProvider) (*IdentityProvider, error)
 	GetIdentityProvider(ctx context.Context, tenantName, alias string) (*IdentityProvider, error)
 	DeleteIdentityProvider(ctx context.Context, tenantName, alias string) error

@@ -27,6 +27,7 @@ import (
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
 	"github.com/osac-project/fulfillment-service/internal/controllers/finalizers"
 	"github.com/osac-project/fulfillment-service/internal/idp"
+	"github.com/osac-project/fulfillment-service/internal/idp/client"
 	"github.com/osac-project/fulfillment-service/internal/masks"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -141,7 +142,7 @@ var _ = Describe("RoleBinding Reconciler", func() {
 
 	Describe("FunctionBuilder", func() {
 		It("should build function successfully with all dependencies", func() {
-			idpClient := idp.NewMockClientInterface(ctrl)
+			idpClient := client.NewMockClientInterface(ctrl)
 
 			builder := NewFunction().
 				SetLogger(logger).
@@ -200,7 +201,7 @@ var _ = Describe("RoleBinding Reconciler", func() {
 			usersClient := newMockUsersClient("user-1")
 
 			bindingsClient := &mockRoleBindingsClient{}
-			idpClient := idp.NewMockClientInterface(ctrl)
+			idpClient := client.NewMockClientInterface(ctrl)
 			// When binding already has finalizer, update will call syncRoleAssignments
 			idpClient.EXPECT().
 				AssignTenantRolesToUser(ctx, "test-org", "keycloak-user-1", gomock.Any()).
@@ -250,7 +251,7 @@ var _ = Describe("RoleBinding Reconciler", func() {
 			usersClient := newMockUsersClient("user-1")
 
 			bindingsClient := &mockRoleBindingsClient{}
-			idpClient := idp.NewMockClientInterface(ctrl)
+			idpClient := client.NewMockClientInterface(ctrl)
 			idpClient.EXPECT().
 				RemoveTenantRolesFromUser(ctx, "test-org", "keycloak-user-1", gomock.Any()).
 				Return(nil)
@@ -535,7 +536,7 @@ var _ = Describe("RoleBinding Reconciler", func() {
 
 			usersClient := newMockUsersClient("user-1", "user-2")
 
-			idpClient := idp.NewMockClientInterface(ctrl)
+			idpClient := client.NewMockClientInterface(ctrl)
 			idpClient.EXPECT().
 				AssignTenantRolesToUser(ctx, "test-org", "keycloak-user-1", gomock.Any()).
 				Return(nil)
@@ -585,7 +586,7 @@ var _ = Describe("RoleBinding Reconciler", func() {
 
 			usersClient := newMockUsersClient("user-1")
 
-			idpClient := idp.NewMockClientInterface(ctrl)
+			idpClient := client.NewMockClientInterface(ctrl)
 			idpClient.EXPECT().
 				AssignTenantRolesToUser(ctx, "test-org", "keycloak-user-1", gomock.Any()).
 				Return(nil)
@@ -631,7 +632,7 @@ var _ = Describe("RoleBinding Reconciler", func() {
 
 			usersClient := newMockUsersClient("user-1")
 
-			idpClient := idp.NewMockClientInterface(ctrl)
+			idpClient := client.NewMockClientInterface(ctrl)
 			idpClient.EXPECT().
 				AssignTenantRolesToUser(ctx, "test-org", "keycloak-user-1", gomock.Any()).
 				Return(fmt.Errorf("IDP error"))
@@ -710,7 +711,7 @@ var _ = Describe("RoleBinding Reconciler", func() {
 
 			usersClient := newMockUsersClient("user-1", "user-2", "user-3")
 
-			idpClient := idp.NewMockClientInterface(ctrl)
+			idpClient := client.NewMockClientInterface(ctrl)
 			idpClient.EXPECT().
 				AssignTenantRolesToUser(ctx, "test-org", "keycloak-user-3", gomock.Any()).
 				Return(nil)
@@ -758,7 +759,7 @@ var _ = Describe("RoleBinding Reconciler", func() {
 
 			usersClient := newMockUsersClient("user-1", "user-2", "user-3")
 
-			idpClient := idp.NewMockClientInterface(ctrl)
+			idpClient := client.NewMockClientInterface(ctrl)
 			idpClient.EXPECT().
 				RemoveTenantRolesFromUser(ctx, "test-org", "keycloak-user-3", gomock.Any()).
 				Return(nil)
@@ -806,7 +807,7 @@ var _ = Describe("RoleBinding Reconciler", func() {
 
 			usersClient := newMockUsersClient("user-1", "user-2", "user-3")
 
-			idpClient := idp.NewMockClientInterface(ctrl)
+			idpClient := client.NewMockClientInterface(ctrl)
 			idpClient.EXPECT().
 				RemoveTenantRolesFromUser(ctx, "test-org", "keycloak-user-2", gomock.Any()).
 				Return(nil)
@@ -909,7 +910,7 @@ var _ = Describe("RoleBinding Reconciler", func() {
 
 			usersClient := newMockUsersClient("user-1", "user-2")
 
-			idpClient := idp.NewMockClientInterface(ctrl)
+			idpClient := client.NewMockClientInterface(ctrl)
 			idpClient.EXPECT().
 				AssignTenantRolesToUser(ctx, "test-org", "keycloak-user-2", gomock.Any()).
 				Return(fmt.Errorf("IDP error"))
@@ -956,7 +957,7 @@ var _ = Describe("RoleBinding Reconciler", func() {
 
 			usersClient := newMockUsersClient("user-1", "user-2")
 
-			idpClient := idp.NewMockClientInterface(ctrl)
+			idpClient := client.NewMockClientInterface(ctrl)
 			idpClient.EXPECT().
 				RemoveTenantRolesFromUser(ctx, "test-org", "keycloak-user-2", gomock.Any()).
 				Return(fmt.Errorf("IDP error"))
@@ -1005,7 +1006,7 @@ var _ = Describe("RoleBinding Reconciler", func() {
 
 			usersClient := newMockUsersClient("user-1", "user-2")
 
-			idpClient := idp.NewMockClientInterface(ctrl)
+			idpClient := client.NewMockClientInterface(ctrl)
 			idpClient.EXPECT().
 				RemoveTenantRolesFromUser(ctx, "test-org", "keycloak-user-1", gomock.Any()).
 				Return(nil)
@@ -1107,7 +1108,7 @@ var _ = Describe("RoleBinding Reconciler", func() {
 
 			usersClient := newMockUsersClient("user-1", "user-2")
 
-			idpClient := idp.NewMockClientInterface(ctrl)
+			idpClient := client.NewMockClientInterface(ctrl)
 			idpClient.EXPECT().
 				RemoveTenantRolesFromUser(ctx, "test-org", "keycloak-user-1", gomock.Any()).
 				Return(fmt.Errorf("IDP error"))

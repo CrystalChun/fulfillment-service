@@ -22,18 +22,20 @@ import (
 	"math/big"
 	"slices"
 	"time"
+
+	"github.com/osac-project/fulfillment-service/internal/idp/client"
 )
 
 // TenantManager handles the lifecycle of tenants in Keycloak.
 type TenantManager struct {
 	logger *slog.Logger
-	client ClientInterface
+	client client.ClientInterface
 }
 
 // TenantManagerBuilder builds the manager.
 type TenantManagerBuilder struct {
 	logger *slog.Logger
-	client ClientInterface
+	client client.ClientInterface
 }
 
 // NewTenantManager creates a builder for the tenant manager.
@@ -48,7 +50,7 @@ func (b *TenantManagerBuilder) SetLogger(value *slog.Logger) *TenantManagerBuild
 }
 
 // SetClient sets the Keycloak client.
-func (b *TenantManagerBuilder) SetClient(value ClientInterface) *TenantManagerBuilder {
+func (b *TenantManagerBuilder) SetClient(value client.ClientInterface) *TenantManagerBuilder {
 	b.client = value
 	return b
 }
@@ -157,7 +159,7 @@ func (m *TenantManager) CreateTenant(ctx context.Context, config *TenantConfig) 
 	if config.Enabled != nil {
 		enabled = *config.Enabled
 	}
-	tenant := &Tenant{
+	tenant := &client.Tenant{
 		Name:        config.Name,
 		DisplayName: config.DisplayName,
 		Enabled:     enabled,
@@ -296,14 +298,14 @@ func (m *TenantManager) createBreakGlassAccount(ctx context.Context, config *Ten
 		)
 	}
 
-	user := &User{
+	user := &client.User{
 		Username:      username,
 		Email:         email,
 		EmailVerified: true,
 		Enabled:       true,
 		FirstName:     "OSAC",
 		LastName:      "Break-Glass",
-		Credentials: []*Credential{
+		Credentials: []*client.Credential{
 			{
 				Type:      "password",
 				Value:     password,

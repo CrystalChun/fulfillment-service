@@ -63,6 +63,7 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/controllers/virtualnetwork"
 	internalhealth "github.com/osac-project/fulfillment-service/internal/health"
 	"github.com/osac-project/fulfillment-service/internal/idp"
+	idpclient "github.com/osac-project/fulfillment-service/internal/idp/client"
 	hubscheme "github.com/osac-project/fulfillment-service/internal/kubernetes/scheme"
 	"github.com/osac-project/fulfillment-service/internal/logging"
 	"github.com/osac-project/fulfillment-service/internal/network"
@@ -1264,7 +1265,7 @@ func (r *runnerContext) createTokenSource(ctx context.Context, caPool *x509.Cert
 }
 
 // createIDPClient creates the IDP client. The IDP URL and credentials are mandatory.
-func (r *runnerContext) createIDPClient(ctx context.Context, caPool *x509.CertPool) (*idp.Client, error) {
+func (r *runnerContext) createIDPClient(ctx context.Context, caPool *x509.CertPool) (*idpclient.Client, error) {
 	if r.args.idpURL == "" {
 		return nil, fmt.Errorf("flag '--idp-url' is required")
 	}
@@ -1348,7 +1349,7 @@ func (r *runnerContext) createIDPClient(ctx context.Context, caPool *x509.CertPo
 	// Create Keycloak IDP client:
 	r.logger.InfoContext(ctx, "Creating Keycloak IDP client")
 
-	idpClient, err := idp.NewClient().
+	idpClient, err := idpclient.NewClient().
 		SetLogger(r.logger).
 		SetBaseURL(r.args.idpURL).
 		SetTokenSource(idpTokenSource).

@@ -16,13 +16,13 @@ package user
 import (
 	"context"
 	"errors"
+	"github.com/osac-project/fulfillment-service/internal/idp/client"
 	"log/slog"
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
-	"github.com/osac-project/fulfillment-service/internal/idp"
 	"github.com/osac-project/fulfillment-service/internal/masks"
 )
 
@@ -30,7 +30,7 @@ import (
 type FunctionBuilder struct {
 	logger     *slog.Logger
 	connection *grpc.ClientConn
-	idpClient  idp.ClientInterface
+	idpClient  client.ClientInterface
 }
 
 // NewFunction creates a builder that can be used to configure and create reconciler functions.
@@ -51,7 +51,7 @@ func (b *FunctionBuilder) SetConnection(value *grpc.ClientConn) *FunctionBuilder
 }
 
 // SetIdpClient sets the IDP client that the reconciler will use to look up users in the identity provider.
-func (b *FunctionBuilder) SetIdpClient(value idp.ClientInterface) *FunctionBuilder {
+func (b *FunctionBuilder) SetIdpClient(value client.ClientInterface) *FunctionBuilder {
 	b.idpClient = value
 	return b
 }
@@ -84,7 +84,7 @@ func (b *FunctionBuilder) Build() (result *function, err error) {
 type function struct {
 	logger         *slog.Logger
 	usersClient    privatev1.UsersClient
-	idpClient      idp.ClientInterface
+	idpClient      client.ClientInterface
 	maskCalculator *masks.Calculator
 }
 

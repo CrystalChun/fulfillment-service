@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/osac-project/fulfillment-service/internal/idp/client"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -28,7 +29,6 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/apiclient"
 	"github.com/osac-project/fulfillment-service/internal/auth"
 	"github.com/osac-project/fulfillment-service/internal/controllers/finalizers"
-	"github.com/osac-project/fulfillment-service/internal/idp"
 	"github.com/osac-project/fulfillment-service/internal/masks"
 )
 
@@ -36,7 +36,7 @@ import (
 type FunctionBuilder struct {
 	logger     *slog.Logger
 	connection *grpc.ClientConn
-	idpClient  idp.ClientInterface
+	idpClient  client.ClientInterface
 }
 
 // NewFunction creates a builder that can be used to configure and create reconciler functions.
@@ -57,7 +57,7 @@ func (b *FunctionBuilder) SetConnection(value *grpc.ClientConn) *FunctionBuilder
 }
 
 // SetIdpClient sets the IDP client that the reconciler will use to manage identity providers.
-func (b *FunctionBuilder) SetIdpClient(value idp.ClientInterface) *FunctionBuilder {
+func (b *FunctionBuilder) SetIdpClient(value client.ClientInterface) *FunctionBuilder {
 	b.idpClient = value
 	return b
 }
@@ -90,7 +90,7 @@ func (b *FunctionBuilder) Build() (result *function, err error) {
 type function struct {
 	logger                  *slog.Logger
 	identityProvidersClient privatev1.IdentityProvidersClient
-	idpClient               idp.ClientInterface
+	idpClient               client.ClientInterface
 	maskCalculator          *masks.Calculator
 }
 
@@ -177,7 +177,7 @@ func (t *task) syncToIDP(ctx context.Context) error {
 	// Build the IDP provider object from the spec
 	// Use tenant-prefixed alias to ensure uniqueness across tenants in Keycloak
 	alias := fmt.Sprintf("%s-%s", fullIdp.GetMetadata().GetTenant(), fullIdp.GetMetadata().GetName())
-	idpProvider := &idp.IdentityProvider{
+	idpProvider := &client.IdentityProvider{
 		Alias:       alias,
 		DisplayName: fullIdp.GetSpec().GetTitle(),
 		Type:        t.determineProviderTypeFromIdp(fullIdp),

@@ -27,6 +27,7 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/apiclient"
 	"github.com/osac-project/fulfillment-service/internal/controllers/finalizers"
 	"github.com/osac-project/fulfillment-service/internal/idp"
+	"github.com/osac-project/fulfillment-service/internal/idp/client"
 	"google.golang.org/grpc"
 )
 
@@ -317,13 +318,13 @@ var _ = Describe("Config Building", func() {
 var _ = Describe("IDP Sync", func() {
 	var (
 		ctrl       *gomock.Controller
-		mockClient *idp.MockClientInterface
+		mockClient *client.MockClientInterface
 		reconciler *function
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
-		mockClient = idp.NewMockClientInterface(ctrl)
+		mockClient = client.NewMockClientInterface(ctrl)
 
 		reconciler = &function{
 			logger:    logger,
@@ -640,13 +641,13 @@ var _ = Describe("Skip Reconciliation", func() {
 var _ = Describe("Deletion", func() {
 	var (
 		ctrl       *gomock.Controller
-		mockClient *idp.MockClientInterface
+		mockClient *client.MockClientInterface
 		reconciler *function
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
-		mockClient = idp.NewMockClientInterface(ctrl)
+		mockClient = client.NewMockClientInterface(ctrl)
 
 		reconciler = &function{
 			logger:    logger,

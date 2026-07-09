@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/osac-project/fulfillment-service/internal/idp/client"
 	"log/slog"
 	"slices"
 
@@ -25,7 +26,6 @@ import (
 
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
 	"github.com/osac-project/fulfillment-service/internal/controllers/finalizers"
-	"github.com/osac-project/fulfillment-service/internal/idp"
 	"github.com/osac-project/fulfillment-service/internal/masks"
 )
 
@@ -33,7 +33,7 @@ import (
 type FunctionBuilder struct {
 	logger     *slog.Logger
 	connection *grpc.ClientConn
-	idpClient  idp.ClientInterface
+	idpClient  client.ClientInterface
 }
 
 // NewFunction creates a builder that can be used to configure and create reconciler functions.
@@ -54,7 +54,7 @@ func (b *FunctionBuilder) SetConnection(value *grpc.ClientConn) *FunctionBuilder
 }
 
 // SetIdpClient sets the IDP client that the reconciler will use to assign roles to users.
-func (b *FunctionBuilder) SetIdpClient(value idp.ClientInterface) *FunctionBuilder {
+func (b *FunctionBuilder) SetIdpClient(value client.ClientInterface) *FunctionBuilder {
 	b.idpClient = value
 	return b
 }
@@ -92,7 +92,7 @@ type function struct {
 	roleBindingsClient privatev1.RoleBindingsClient
 	rolesClient        privatev1.RolesClient
 	usersClient        privatev1.UsersClient
-	idpClient          idp.ClientInterface
+	idpClient          client.ClientInterface
 	maskCalculator     *masks.Calculator
 }
 
@@ -466,8 +466,8 @@ func (t *task) syncRoleAssignments(ctx context.Context) error {
 // mapRoleToKeycloak maps OSAC role names to Keycloak realm-level roles.
 // All OSAC roles map 1:1 to Keycloak realm roles with the same name.
 // Returns the list of Keycloak roles and an empty client ID (realm-level roles are not client-scoped).
-func (t *task) mapRoleToKeycloak(roleName string) ([]*idp.Role, string) {
-	return []*idp.Role{
+func (t *task) mapRoleToKeycloak(roleName string) ([]*client.Role, string) {
+	return []*client.Role{
 		{Name: roleName, ClientRole: false},
 	}, ""
 }

@@ -20,18 +20,20 @@ import (
 	"log/slog"
 	"path"
 	"strings"
+
+	"github.com/osac-project/fulfillment-service/internal/idp/client"
 )
 
 // ProjectGroupManager handles Keycloak group operations for project authorization.
 type ProjectGroupManager struct {
 	logger *slog.Logger
-	client ClientInterface
+	client client.ClientInterface
 }
 
 // ProjectGroupManagerBuilder builds the project group manager.
 type ProjectGroupManagerBuilder struct {
 	logger *slog.Logger
-	client ClientInterface
+	client client.ClientInterface
 }
 
 // NewProjectGroupManager creates a builder for the project group manager.
@@ -46,7 +48,7 @@ func (b *ProjectGroupManagerBuilder) SetLogger(value *slog.Logger) *ProjectGroup
 }
 
 // SetClient sets the Keycloak client.
-func (b *ProjectGroupManagerBuilder) SetClient(value ClientInterface) *ProjectGroupManagerBuilder {
+func (b *ProjectGroupManagerBuilder) SetClient(value client.ClientInterface) *ProjectGroupManagerBuilder {
 	b.client = value
 	return b
 }
@@ -150,7 +152,7 @@ func (m *ProjectGroupManager) CreateProjectGroups(ctx context.Context, tenant, p
 	}
 
 	// Create the viewers group:
-	viewersGroupPath := path.Join(projectPath, GroupNameViewers)
+	viewersGroupPath := path.Join(projectPath, client.GroupNameViewers)
 	viewersGroupID, err := m.client.CreateGroup(ctx, tenant, viewersGroupPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create viewers group: %w", err)
@@ -165,7 +167,7 @@ func (m *ProjectGroupManager) CreateProjectGroups(ctx context.Context, tenant, p
 	)
 
 	// Create the managers group:
-	managersGroupPath := path.Join(projectPath, GroupNameManagers)
+	managersGroupPath := path.Join(projectPath, client.GroupNameManagers)
 	managersGroupID, err := m.client.CreateGroup(ctx, tenant, managersGroupPath)
 	if err != nil {
 		// Clean up viewers group on failure
@@ -203,8 +205,8 @@ func (m *ProjectGroupManager) AddUserToProjectGroup(ctx context.Context, tenant,
 	if username == "" {
 		return fmt.Errorf("username is required")
 	}
-	if groupType != GroupNameViewers && groupType != GroupNameManagers {
-		return fmt.Errorf("invalid group type %q, must be %q or %q", groupType, GroupNameViewers, GroupNameManagers)
+	if groupType != client.GroupNameViewers && groupType != client.GroupNameManagers {
+		return fmt.Errorf("invalid group type %q, must be %q or %q", groupType, client.GroupNameViewers, client.GroupNameManagers)
 	}
 	// Validate inputs to prevent path traversal attacks
 	if strings.Contains(projectPath, "..") {
@@ -269,8 +271,8 @@ func (m *ProjectGroupManager) RemoveUserFromProjectGroup(ctx context.Context, te
 	if username == "" {
 		return fmt.Errorf("username is required")
 	}
-	if groupType != GroupNameViewers && groupType != GroupNameManagers {
-		return fmt.Errorf("invalid group type %q, must be %q or %q", groupType, GroupNameViewers, GroupNameManagers)
+	if groupType != client.GroupNameViewers && groupType != client.GroupNameManagers {
+		return fmt.Errorf("invalid group type %q, must be %q or %q", groupType, client.GroupNameViewers, client.GroupNameManagers)
 	}
 	// Validate inputs to prevent path traversal attacks
 	if strings.Contains(projectPath, "..") {

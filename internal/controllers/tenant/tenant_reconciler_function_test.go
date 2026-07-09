@@ -27,6 +27,7 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/auth"
 	"github.com/osac-project/fulfillment-service/internal/controllers/finalizers"
 	"github.com/osac-project/fulfillment-service/internal/idp"
+	"github.com/osac-project/fulfillment-service/internal/idp/client"
 )
 
 var _ = Describe("Tenant Validation", func() {
@@ -172,8 +173,8 @@ var _ = Describe("IDP Sync", func() {
 	var (
 		ctx        context.Context
 		ctrl       *gomock.Controller
-		mockClient *idp.MockClientInterface
-		idpManager *idp.TenantManager
+		mockClient *client.MockClientInterface
+		idpManager *client.TenantManager
 		reconciler *function
 	)
 
@@ -181,7 +182,7 @@ var _ = Describe("IDP Sync", func() {
 		var err error
 		ctx = context.Background()
 		ctrl = gomock.NewController(GinkgoT())
-		mockClient = idp.NewMockClientInterface(ctrl)
+		mockClient = client.NewMockClientInterface(ctrl)
 
 		idpManager, err = idp.NewTenantManager().
 			SetLogger(logger).
@@ -207,10 +208,10 @@ var _ = Describe("IDP Sync", func() {
 
 		mockClient.EXPECT().
 			CreateTenant(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(ctx context.Context, org *idp.Tenant) (*idp.Tenant, error) {
+			DoAndReturn(func(ctx context.Context, org *client.Tenant) (*client.Tenant, error) {
 				Expect(org.Name).To(Equal("test-org"))
 				Expect(org.Enabled).To(BeTrue())
-				return &idp.Tenant{
+				return &client.Tenant{
 					Name:    "test-org",
 					Enabled: true,
 				}, nil
@@ -219,7 +220,7 @@ var _ = Describe("IDP Sync", func() {
 
 		mockClient.EXPECT().
 			CreateUser(gomock.Any(), "test-org", gomock.Any()).
-			DoAndReturn(func(ctx context.Context, orgName string, user *idp.User) (*idp.User, error) {
+			DoAndReturn(func(ctx context.Context, orgName string, user *client.User) (*client.User, error) {
 				Expect(user.Username).To(Equal("test-org-osac-break-glass"))
 				Expect(user.Email).To(Equal("break-glass@test-org.osac.local"))
 				user.ID = "user-123"
@@ -258,7 +259,7 @@ var _ = Describe("IDP Sync", func() {
 
 		mockClient.EXPECT().
 			CreateTenant(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(ctx context.Context, org *idp.Tenant) (*idp.Tenant, error) {
+			DoAndReturn(func(ctx context.Context, org *client.Tenant) (*client.Tenant, error) {
 				Expect(tenant.GetStatus().GetState()).To(Equal(privatev1.TenantState_TENANT_STATE_PENDING))
 				return org, nil
 			}).
@@ -266,7 +267,7 @@ var _ = Describe("IDP Sync", func() {
 
 		mockClient.EXPECT().
 			CreateUser(gomock.Any(), "test-org", gomock.Any()).
-			Return(&idp.User{ID: "user-123"}, nil).
+			Return(&client.User{ID: "user-123"}, nil).
 			Times(1)
 
 		mockClient.EXPECT().
@@ -347,10 +348,10 @@ var _ = Describe("IDP Sync", func() {
 
 		mockClient.EXPECT().
 			CreateTenant(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(ctx context.Context, org *idp.Tenant) (*idp.Tenant, error) {
+			DoAndReturn(func(ctx context.Context, org *client.Tenant) (*client.Tenant, error) {
 				Expect(org.Name).To(Equal(auth.SharedTenant))
 				Expect(org.Enabled).To(BeFalse())
-				return &idp.Tenant{
+				return &client.Tenant{
 					Name:    auth.SharedTenant,
 					Enabled: false,
 				}, nil
@@ -359,7 +360,7 @@ var _ = Describe("IDP Sync", func() {
 
 		mockClient.EXPECT().
 			CreateUser(gomock.Any(), auth.SharedTenant, gomock.Any()).
-			Return(&idp.User{ID: "user-shared"}, nil).
+			Return(&client.User{ID: "user-shared"}, nil).
 			Times(1)
 
 		mockClient.EXPECT().
@@ -389,10 +390,10 @@ var _ = Describe("IDP Sync", func() {
 
 		mockClient.EXPECT().
 			CreateTenant(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(ctx context.Context, org *idp.Tenant) (*idp.Tenant, error) {
+			DoAndReturn(func(ctx context.Context, org *client.Tenant) (*client.Tenant, error) {
 				Expect(org.Name).To(Equal(auth.SystemTenant))
 				Expect(org.Enabled).To(BeFalse())
-				return &idp.Tenant{
+				return &client.Tenant{
 					Name:    auth.SystemTenant,
 					Enabled: false,
 				}, nil
@@ -401,7 +402,7 @@ var _ = Describe("IDP Sync", func() {
 
 		mockClient.EXPECT().
 			CreateUser(gomock.Any(), auth.SystemTenant, gomock.Any()).
-			Return(&idp.User{ID: "user-system"}, nil).
+			Return(&client.User{ID: "user-system"}, nil).
 			Times(1)
 
 		mockClient.EXPECT().
@@ -469,12 +470,12 @@ var _ = Describe("IDP Sync", func() {
 
 		mockClient.EXPECT().
 			CreateTenant(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(ctx context.Context, org *idp.Tenant) (*idp.Tenant, error) {
+			DoAndReturn(func(ctx context.Context, org *client.Tenant) (*client.Tenant, error) {
 				Expect(org.Domains).To(ConsistOf(
 					"example.com",
 					"corp.example.org",
 				))
-				return &idp.Tenant{
+				return &client.Tenant{
 					Name:    "domain-org",
 					Enabled: true,
 					Domains: org.Domains,
@@ -484,7 +485,7 @@ var _ = Describe("IDP Sync", func() {
 
 		mockClient.EXPECT().
 			CreateUser(gomock.Any(), "domain-org", gomock.Any()).
-			Return(&idp.User{ID: "user-domains"}, nil).
+			Return(&client.User{ID: "user-domains"}, nil).
 			Times(1)
 
 		mockClient.EXPECT().
@@ -529,7 +530,7 @@ var _ = Describe("IDP Sync", func() {
 
 		mockClient.EXPECT().
 			GetTenant(gomock.Any(), "update-org").
-			Return(&idp.Tenant{
+			Return(&client.Tenant{
 				Name:    "update-org",
 				Enabled: true,
 				Domains: []string{
@@ -540,7 +541,7 @@ var _ = Describe("IDP Sync", func() {
 
 		mockClient.EXPECT().
 			UpdateTenant(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(ctx context.Context, org *idp.Tenant) (*idp.Tenant, error) {
+			DoAndReturn(func(ctx context.Context, org *client.Tenant) (*client.Tenant, error) {
 				Expect(org.Domains).To(ConsistOf(
 					"new.example.com",
 					"new.corp.example.org",
@@ -601,9 +602,9 @@ var _ = Describe("Deletion", func() {
 	var (
 		ctx                context.Context
 		ctrl               *gomock.Controller
-		mockClient         *idp.MockClientInterface
+		mockClient         *client.MockClientInterface
 		mockProjectsClient *MockProjectsClient
-		idpManager         *idp.TenantManager
+		idpManager         *client.TenantManager
 		reconciler         *function
 	)
 
@@ -611,7 +612,7 @@ var _ = Describe("Deletion", func() {
 		var err error
 		ctx = context.Background()
 		ctrl = gomock.NewController(GinkgoT())
-		mockClient = idp.NewMockClientInterface(ctrl)
+		mockClient = client.NewMockClientInterface(ctrl)
 		mockProjectsClient = NewMockProjectsClient(ctrl)
 
 		idpManager, err = idp.NewTenantManager().
@@ -862,7 +863,7 @@ var _ = Describe("Deletion", func() {
 var _ = Describe("Skip Reconciliation", func() {
 	It("should call updateIDP for synced tenants", func() {
 		ctrl := gomock.NewController(GinkgoT())
-		mockClient := idp.NewMockClientInterface(ctrl)
+		mockClient := client.NewMockClientInterface(ctrl)
 
 		idpManager, err := idp.NewTenantManager().
 			SetLogger(logger).
@@ -892,12 +893,12 @@ var _ = Describe("Skip Reconciliation", func() {
 
 		mockClient.EXPECT().
 			GetTenant(gomock.Any(), "test-org").
-			Return(&idp.Tenant{Name: "test-org", Enabled: true}, nil).
+			Return(&client.Tenant{Name: "test-org", Enabled: true}, nil).
 			Times(1)
 
 		mockClient.EXPECT().
 			UpdateTenant(gomock.Any(), gomock.Any()).
-			Return(&idp.Tenant{Name: "test-org", Enabled: true}, nil).
+			Return(&client.Tenant{Name: "test-org", Enabled: true}, nil).
 			Times(1)
 
 		task := &task{

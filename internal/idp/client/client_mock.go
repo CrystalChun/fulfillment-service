@@ -7,7 +7,7 @@
 //
 
 // Package idp is a generated GoMock package.
-package idp
+package client
 
 import (
 	context "context"

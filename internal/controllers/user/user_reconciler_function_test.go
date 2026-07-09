@@ -27,20 +27,21 @@ import (
 
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
 	"github.com/osac-project/fulfillment-service/internal/idp"
+	"github.com/osac-project/fulfillment-service/internal/idp/client"
 )
 
 var _ = Describe("User Reconciler", func() {
 	var (
 		ctx        context.Context
 		ctrl       *gomock.Controller
-		mockClient *idp.MockClientInterface
+		mockClient *client.MockClientInterface
 		function   *function
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		ctrl = gomock.NewController(GinkgoT())
-		mockClient = idp.NewMockClientInterface(ctrl)
+		mockClient = client.NewMockClientInterface(ctrl)
 
 		// Create a minimal gRPC connection (won't be used in these tests)
 		conn := &grpc.ClientConn{}
@@ -108,7 +109,7 @@ var _ = Describe("User Reconciler", func() {
 				// Mock the IDP client to return a user with ID
 				mockClient.EXPECT().
 					GetUserByUsername(ctx, "test-tenant", "testuser").
-					Return(&idp.User{
+					Return(&client.User{
 						ID:       "keycloak-user-id-456",
 						Username: "testuser",
 						Email:    "test@example.com",
@@ -140,7 +141,7 @@ var _ = Describe("User Reconciler", func() {
 
 				mockClient.EXPECT().
 					GetUserByUsername(ctx, "test-tenant", "testuser").
-					Return(&idp.User{
+					Return(&client.User{
 						ID:       "keycloak-user-id-789",
 						Username: "testuser",
 						Email:    "test@example.com",
