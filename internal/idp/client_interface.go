@@ -30,9 +30,8 @@ type ClientInterface interface {
 	CreateUser(ctx context.Context, tenantName string, user *User) (*User, error)
 	GetUser(ctx context.Context, tenantName, userID string) (*User, error)
 	ListUsers(ctx context.Context, tenantName string) ([]*User, error)
-	DeleteUserFromOrganization(ctx context.Context, tenantName, userID string) error
-	DeleteUserFromRealm(ctx context.Context, userID string) error
-	DeleteUser(ctx context.Context, tenantName, userID string) error
+	RemoveUserFromOrganization(ctx context.Context, tenantName, userID string) error
+	DeleteUser(ctx context.Context, userID string) error
 	ListTenantRoles(ctx context.Context, tenantName string) ([]*Role, error)
 	ListClientRoles(ctx context.Context, tenantName, clientID string) ([]*Role, error)
 	AssignTenantRolesToUser(ctx context.Context, tenantName, userID string, roles []*Role) error

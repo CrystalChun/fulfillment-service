@@ -114,7 +114,7 @@ func (m *mockClient) CreateUser(ctx context.Context, tenantName string, user *Us
 	return createdUser, nil
 }
 
-func (m *mockClient) GetUser(ctx context.Context, tenantName, userID string) (*User, error) {
+func (m *mockClient) GetUser(ctx context.Context, userID string) (*User, error) {
 	for _, user := range m.createdUsers {
 		if user.ID == userID {
 			return user, nil
@@ -123,7 +123,7 @@ func (m *mockClient) GetUser(ctx context.Context, tenantName, userID string) (*U
 	return nil, nil
 }
 
-func (m *mockClient) GetUserByUsername(ctx context.Context, tenantName, username string) (*User, error) {
+func (m *mockClient) GetUserByUsername(ctx context.Context, username string) (*User, error) {
 	for _, user := range m.createdUsers {
 		if user.Username == username {
 			return user, nil
@@ -136,7 +136,7 @@ func (m *mockClient) ListUsers(ctx context.Context, tenantName string) ([]*User,
 	return m.createdUsers, nil
 }
 
-func (m *mockClient) DeleteUser(ctx context.Context, tenantName, userID string) error {
+func (m *mockClient) DeleteUser(ctx context.Context, userID string) error {
 	m.deletedUsers = append(m.deletedUsers, userID)
 	return nil
 }
@@ -701,11 +701,7 @@ func (m *mockClient) CreateUserInRealm(ctx context.Context, user *User) (*User, 
 	return nil, fmt.Errorf("not implemented in test mock")
 }
 
-func (m *mockClient) DeleteUserFromOrganization(ctx context.Context, tenantName, userID string) error {
-	return fmt.Errorf("not implemented in test mock")
-}
-
-func (m *mockClient) DeleteUserFromRealm(ctx context.Context, userID string) error {
+func (m *mockClient) RemoveUserFromOrganization(ctx context.Context, tenantName, userID string) error {
 	return fmt.Errorf("not implemented in test mock")
 }
 

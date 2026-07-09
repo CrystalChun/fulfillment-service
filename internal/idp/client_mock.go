@@ -242,45 +242,17 @@ func (mr *MockClientInterfaceMockRecorder) DeleteTenant(ctx, tenantName any) *go
 }
 
 // DeleteUser mocks base method.
-func (m *MockClientInterface) DeleteUser(ctx context.Context, tenantName, userID string) error {
+func (m *MockClientInterface) DeleteUser(ctx context.Context, userID string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteUser", ctx, tenantName, userID)
+	ret := m.ctrl.Call(m, "DeleteUser", ctx, userID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteUser indicates an expected call of DeleteUser.
-func (mr *MockClientInterfaceMockRecorder) DeleteUser(ctx, tenantName, userID any) *gomock.Call {
+func (mr *MockClientInterfaceMockRecorder) DeleteUser(ctx, userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUser", reflect.TypeOf((*MockClientInterface)(nil).DeleteUser), ctx, tenantName, userID)
-}
-
-// DeleteUserFromOrganization mocks base method.
-func (m *MockClientInterface) DeleteUserFromOrganization(ctx context.Context, tenantName, userID string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteUserFromOrganization", ctx, tenantName, userID)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteUserFromOrganization indicates an expected call of DeleteUserFromOrganization.
-func (mr *MockClientInterfaceMockRecorder) DeleteUserFromOrganization(ctx, tenantName, userID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUserFromOrganization", reflect.TypeOf((*MockClientInterface)(nil).DeleteUserFromOrganization), ctx, tenantName, userID)
-}
-
-// DeleteUserFromRealm mocks base method.
-func (m *MockClientInterface) DeleteUserFromRealm(ctx context.Context, userID string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteUserFromRealm", ctx, userID)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteUserFromRealm indicates an expected call of DeleteUserFromRealm.
-func (mr *MockClientInterfaceMockRecorder) DeleteUserFromRealm(ctx, userID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUserFromRealm", reflect.TypeOf((*MockClientInterface)(nil).DeleteUserFromRealm), ctx, userID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUser", reflect.TypeOf((*MockClientInterface)(nil).DeleteUser), ctx, userID)
 }
 
 // GetGroupIDByPath mocks base method.
@@ -359,33 +331,33 @@ func (mr *MockClientInterfaceMockRecorder) GetTenant(ctx, name any) *gomock.Call
 }
 
 // GetUser mocks base method.
-func (m *MockClientInterface) GetUser(ctx context.Context, tenantName, userID string) (*User, error) {
+func (m *MockClientInterface) GetUser(ctx context.Context, userID string) (*User, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetUser", ctx, tenantName, userID)
+	ret := m.ctrl.Call(m, "GetUser", ctx, userID)
 	ret0, _ := ret[0].(*User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetUser indicates an expected call of GetUser.
-func (mr *MockClientInterfaceMockRecorder) GetUser(ctx, tenantName, userID any) *gomock.Call {
+func (mr *MockClientInterfaceMockRecorder) GetUser(ctx, userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUser", reflect.TypeOf((*MockClientInterface)(nil).GetUser), ctx, tenantName, userID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUser", reflect.TypeOf((*MockClientInterface)(nil).GetUser), ctx, userID)
 }
 
 // GetUserByUsername mocks base method.
-func (m *MockClientInterface) GetUserByUsername(ctx context.Context, tenantName, username string) (*User, error) {
+func (m *MockClientInterface) GetUserByUsername(ctx context.Context, username string) (*User, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetUserByUsername", ctx, tenantName, username)
+	ret := m.ctrl.Call(m, "GetUserByUsername", ctx, username)
 	ret0, _ := ret[0].(*User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetUserByUsername indicates an expected call of GetUserByUsername.
-func (mr *MockClientInterfaceMockRecorder) GetUserByUsername(ctx, tenantName, username any) *gomock.Call {
+func (mr *MockClientInterfaceMockRecorder) GetUserByUsername(ctx, username any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserByUsername", reflect.TypeOf((*MockClientInterface)(nil).GetUserByUsername), ctx, tenantName, username)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserByUsername", reflect.TypeOf((*MockClientInterface)(nil).GetUserByUsername), ctx, username)
 }
 
 // GetUserClientRoles mocks base method.
@@ -532,6 +504,20 @@ func (m *MockClientInterface) RemoveUserFromGroup(ctx context.Context, tenantNam
 func (mr *MockClientInterfaceMockRecorder) RemoveUserFromGroup(ctx, tenantName, idpUserID, groupID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveUserFromGroup", reflect.TypeOf((*MockClientInterface)(nil).RemoveUserFromGroup), ctx, tenantName, idpUserID, groupID)
+}
+
+// RemoveUserFromOrganization mocks base method.
+func (m *MockClientInterface) RemoveUserFromOrganization(ctx context.Context, tenantName, userID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveUserFromOrganization", ctx, tenantName, userID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveUserFromOrganization indicates an expected call of RemoveUserFromOrganization.
+func (mr *MockClientInterfaceMockRecorder) RemoveUserFromOrganization(ctx, tenantName, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveUserFromOrganization", reflect.TypeOf((*MockClientInterface)(nil).RemoveUserFromOrganization), ctx, tenantName, userID)
 }
 
 // UpdateTenant mocks base method.
