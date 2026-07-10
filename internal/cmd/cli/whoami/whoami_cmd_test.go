@@ -82,6 +82,12 @@ var _ = Describe("Whoami command execution", func() {
 		stderr *bytes.Buffer
 	)
 
+	const (
+		// Test fixture constants to avoid hardcoded secret literals
+		testSigningKey  = "test-signing-key"
+		testRefreshToken = "test-refresh-token-fixture"
+	)
+
 	BeforeEach(func() {
 		ctx = context.Background()
 		ctx = logging.LoggerIntoContext(ctx, slog.Default())
@@ -106,7 +112,7 @@ var _ = Describe("Whoami command execution", func() {
 			}
 		}
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-		tokenString, _ := token.SignedString([]byte("test-secret"))
+		tokenString, _ := token.SignedString([]byte(testSigningKey))
 		return tokenString
 	}
 
@@ -135,7 +141,7 @@ var _ = Describe("Whoami command execution", func() {
 
 		settings.SetAddress("localhost:8000")
 		settings.SetAccessToken(tokenString)
-		settings.SetRefreshToken("refresh-token")
+		settings.SetRefreshToken(testRefreshToken)
 		settings.SetTokenExpiry(time.Now().Add(1 * time.Hour))
 
 		ctx = config.SettingsIntoContext(ctx, settings)

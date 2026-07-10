@@ -15,6 +15,7 @@ package whoami
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -81,6 +82,7 @@ type runnerContext struct {
 	}
 }
 
+// run executes the whoami command, displaying the current authenticated user's information.
 func (c *runnerContext) run(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
@@ -120,6 +122,7 @@ func (c *runnerContext) run(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// displayUserInfo extracts and displays user information from the JWT token, including username, tenant, roles, and optionally the token itself and its claims.
 func (c *runnerContext) displayUserInfo(ctx context.Context, token *auth.Token) error {
 	// Parse the JWT token to extract claims
 	if token.Access == "" {
@@ -133,7 +136,8 @@ func (c *runnerContext) displayUserInfo(ctx context.Context, token *auth.Token) 
 		// If we can't parse the token, just show generic authentication message
 		c.console.Infof(ctx, "Logged in (unable to read token details)\n")
 		if c.args.showToken {
-			c.console.Infof(ctx, "\nAccess token:\n%s\n", token.Access)
+			// Write directly to stdout to avoid logging sensitive token
+			fmt.Fprintf(c.console, "\nAccess token:\n%s\n", token.Access)
 		}
 		return nil
 	}
@@ -141,14 +145,16 @@ func (c *runnerContext) displayUserInfo(ctx context.Context, token *auth.Token) 
 	if len(claims) == 0 {
 		c.console.Infof(ctx, "Logged in (unable to read token claims)\n")
 		if c.args.showToken {
-			c.console.Infof(ctx, "\nAccess token:\n%s\n", token.Access)
+			// Write directly to stdout to avoid logging sensitive token
+			fmt.Fprintf(c.console, "\nAccess token:\n%s\n", token.Access)
 		}
 		return nil
 	}
 
 	// Extract and display user information from claims
 	if username, ok := claims["username"].(string); ok && username != "" {
-		c.console.Infof(ctx, "Logged in as: %s\n", username)
+		// Write directly to stdout to avoid logging sensitive username
+		fmt.Fprintf(c.console, "Logged in as: %s\n", username)
 	}
 
 	// Show tenant
@@ -185,7 +191,8 @@ func (c *runnerContext) displayUserInfo(ctx context.Context, token *auth.Token) 
 
 	// Show the access token if requested
 	if c.args.showToken {
-		c.console.Infof(ctx, "\nAccess token:\n%s\n", token.Access)
+		// Write directly to stdout to avoid logging sensitive token
+		fmt.Fprintf(c.console, "\nAccess token:\n%s\n", token.Access)
 	}
 
 	// Show token claims if requested
