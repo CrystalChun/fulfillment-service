@@ -82,12 +82,10 @@ func (m *ProjectGroupManager) DeleteProjectGroups(ctx context.Context, tenant, p
 		return fmt.Errorf("project name cannot contain '/' character")
 	}
 
-	// Delete the parent project group, which will cascade delete the system:viewers and system:managers subgroups
 	projectGroupPath := fmt.Sprintf("/%s", projectName)
 
 	projectGroupID, err := m.getGroupIDByPath(ctx, tenant, projectGroupPath)
 	if err != nil {
-		// Only swallow "not found" errors - propagate other errors (network, auth, etc.) for retry
 		if strings.Contains(err.Error(), "organization group not found") {
 			m.logger.WarnContext(ctx, "Project group not found, skipping deletion",
 				slog.String("group_path", projectGroupPath),
@@ -121,20 +119,16 @@ func (m *ProjectGroupManager) DeleteProjectGroups(ctx context.Context, tenant, p
 	return nil
 }
 
-// getGroupIDByPath is a helper to get the group ID from a group path.
 func (m *ProjectGroupManager) getGroupIDByPath(ctx context.Context, tenantName, groupPath string) (string, error) {
 	return m.client.GetGroupIDByPath(ctx, tenantName, groupPath)
 }
 
 // CreateProjectGroups creates Keycloak tenant groups for a project.
-// Creates hierarchical groups: /{project-name}/system:viewers and /{project-name}/system:managers
-// These groups are used by Authorino OPA policies for authorization.
-// Returns the managers group ID for immediate use (avoids timing issues with group lookup).
+// Returns the managers group ID.
 func (m *ProjectGroupManager) CreateProjectGroups(ctx context.Context, tenant, projectPath string) (string, error) {
 	if tenant == "" {
 		return "", fmt.Errorf("tenant is required")
 	}
-	// Validate inputs to prevent path traversal attacks
 	if strings.Contains(projectPath, "..") {
 		return "", fmt.Errorf("project path cannot contain '..' sequence")
 	}
@@ -144,12 +138,10 @@ func (m *ProjectGroupManager) CreateProjectGroups(ctx context.Context, tenant, p
 		slog.String("project_path", projectPath),
 	)
 
-	// Make sure the project path starts with a slash:
 	if !strings.HasPrefix(projectPath, "/") {
 		projectPath = fmt.Sprintf("/%s", projectPath)
 	}
 
-	// Create the viewers group:
 	viewersGroupPath := path.Join(projectPath, GroupNameViewers)
 	viewersGroupID, err := m.client.CreateGroup(ctx, tenant, viewersGroupPath)
 	if err != nil {
@@ -164,11 +156,9 @@ func (m *ProjectGroupManager) CreateProjectGroups(ctx context.Context, tenant, p
 		slog.String("tenant", tenant),
 	)
 
-	// Create the managers group:
 	managersGroupPath := path.Join(projectPath, GroupNameManagers)
 	managersGroupID, err := m.client.CreateGroup(ctx, tenant, managersGroupPath)
 	if err != nil {
-		// Clean up viewers group on failure
 		if cleanupErr := m.client.DeleteGroup(ctx, tenant, viewersGroupID); cleanupErr != nil {
 			m.logger.ErrorContext(
 				ctx,
@@ -206,7 +196,6 @@ func (m *ProjectGroupManager) AddUserToProjectGroup(ctx context.Context, tenant,
 	if groupType != GroupNameViewers && groupType != GroupNameManagers {
 		return fmt.Errorf("invalid group type %q, must be %q or %q", groupType, GroupNameViewers, GroupNameManagers)
 	}
-	// Validate inputs to prevent path traversal attacks
 	if strings.Contains(projectPath, "..") {
 		return fmt.Errorf("project name cannot contain '..' sequence")
 	}
@@ -233,7 +222,6 @@ func (m *ProjectGroupManager) AddUserToProjectGroup(ctx context.Context, tenant,
 }
 
 // AddUserToGroupByID adds a user to a group using the group ID directly.
-// This avoids timing issues with group lookup for recently created groups.
 func (m *ProjectGroupManager) AddUserToGroupByID(ctx context.Context, tenant, username, groupID string) error {
 	if tenant == "" {
 		return fmt.Errorf("tenant is required")
@@ -272,7 +260,6 @@ func (m *ProjectGroupManager) RemoveUserFromProjectGroup(ctx context.Context, te
 	if groupType != GroupNameViewers && groupType != GroupNameManagers {
 		return fmt.Errorf("invalid group type %q, must be %q or %q", groupType, GroupNameViewers, GroupNameManagers)
 	}
-	// Validate inputs to prevent path traversal attacks
 	if strings.Contains(projectPath, "..") {
 		return fmt.Errorf("project name cannot contain '..' sequence")
 	}

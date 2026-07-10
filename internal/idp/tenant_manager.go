@@ -73,58 +73,25 @@ func (b *TenantManagerBuilder) Build() (result *TenantManager, err error) {
 
 // TenantConfig contains configuration for creating a tenant in the identity provider.
 type TenantConfig struct {
-	// Name is the unique identifier for the tenant
-	Name string
-
-	// DisplayName is the human-readable name
+	Name        string
 	DisplayName string
+	Enabled     *bool
+	Domains     []string
 
-	// Enabled indicates whether the tenant should be enabled in the identity provider. Nil defaults to true.
-	Enabled *bool
-
-	// Domains is the list of e-mail domains associated with the tenant.
-	Domains []string
-
-	// BreakGlassUsername is the username for the break-glass account
-	// If empty, defaults to "osac-break-glass"
 	BreakGlassUsername string
-
-	// BreakGlassEmail is the email for the break-glass account
-	// If empty, defaults to "break-glass@{tenant-name}.osac.local"
-	BreakGlassEmail string
-
-	// BreakGlassPassword is the temporary password for the break-glass account
-	// This is mandatory and must be changed on first login
+	BreakGlassEmail    string
 	BreakGlassPassword string
 }
 
 // BreakGlassCredentials contains the credentials for the break-glass account.
-//
-// SECURITY NOTES:
-//   - Password is plaintext and MUST be handled securely
-//   - DO NOT log the password
-//   - Store in a secrets manager (Vault, Kubernetes Secrets, AWS Secrets Manager)
-//   - Transmit only over TLS
-//   - Clear from memory immediately after use
-//   - Password is temporary and must be changed on first login
 type BreakGlassCredentials struct {
-	// UserID is the unique identifier for the break-glass user in the IdP
-	UserID string
-
-	// Username is the username for the break-glass account
+	UserID   string
 	Username string
-
-	// Email is the email address for the break-glass account
-	Email string
-
-	// Password is the temporary password that must be changed on first login.
-	// This field is intentionally excluded from JSON marshaling to prevent
-	// accidental logging or exposure.
+	Email    string
 	Password string `json:"-"`
 }
 
 // CreateTenant creates a complete IdP tenant setup with a break-glass account.
-// Returns the break-glass account credentials and error.
 func (m *TenantManager) CreateTenant(ctx context.Context, config *TenantConfig) (*BreakGlassCredentials, error) {
 	if config == nil {
 		return nil, errors.New("TenantConfig is mandatory")
@@ -135,13 +102,11 @@ func (m *TenantManager) CreateTenant(ctx context.Context, config *TenantConfig) 
 	)
 
 	var (
-		// Track if the tenant was created in case of error and rollback is needed
 		tenantCreated bool
 		credentials   *BreakGlassCredentials
 		err           error
 	)
 
-	// Defer cleanup on error
 	defer func() {
 		if err != nil {
 			m.logger.ErrorContext(ctx, "Error creating tenant in IdP",
@@ -152,7 +117,6 @@ func (m *TenantManager) CreateTenant(ctx context.Context, config *TenantConfig) 
 		}
 	}()
 
-	// Step 1: Create the tenant in the IdP
 	enabled := true
 	if config.Enabled != nil {
 		enabled = *config.Enabled
@@ -172,13 +136,11 @@ func (m *TenantManager) CreateTenant(ctx context.Context, config *TenantConfig) 
 		slog.String("tenant", createdTenant.Name),
 	)
 
-	// Step 2: Create break-glass account
 	credentials, err = m.createBreakGlassAccount(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create break-glass account: %w", err)
 	}
 
-	// Step 3: Assign IdP manager permissions to break-glass account
 	err = m.assignIdpManagerPermissions(ctx, credentials.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to assign IdP manager permissions: %w", err)
@@ -190,8 +152,7 @@ func (m *TenantManager) CreateTenant(ctx context.Context, config *TenantConfig) 
 	return credentials, nil
 }
 
-// UpdateTenant updates an existing tenant in the identity provider. It fetches the current
-// tenant by name, applies the updated domains, and sends the update to the IdP.
+// UpdateTenant updates an existing tenant in the identity provider.
 func (m *TenantManager) UpdateTenant(ctx context.Context, name string, domains []string) error {
 	if name == "" {
 		return errors.New("tenant name is mandatory")
@@ -232,15 +193,11 @@ func (m *TenantManager) UpdateTenant(ctx context.Context, name string, domains [
 	return nil
 }
 
-// rollback performs cleanup by deleting the tenant from the IdP.
-// Deleting the IdP tenant will cascade-delete all resources within it (users, roles, etc.).
 func (m *TenantManager) rollback(ctx context.Context, tenantName string, deleteTenant bool) {
 	if !deleteTenant {
 		return
 	}
 
-	// Use a fresh context for cleanup so rollback succeeds even if
-	// the original context was cancelled or timed out.
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -248,7 +205,6 @@ func (m *TenantManager) rollback(ctx context.Context, tenantName string, deleteT
 		slog.String("tenant", tenantName),
 	)
 
-	// Delete tenant from IdP (cascade-deletes all users and resources within it)
 	if err := m.client.DeleteTenant(cleanupCtx, tenantName); err != nil {
 		m.logger.ErrorContext(ctx, "Failed to rollback tenant creation in IdP",
 			slog.String("tenant", tenantName),
@@ -261,12 +217,7 @@ func (m *TenantManager) rollback(ctx context.Context, tenantName string, deleteT
 	}
 }
 
-// createBreakGlassAccount creates the break-glass account for a tenant.
-// Returns the break-glass credentials and error.
-// The break-glass account is a built-in OSAC user with limited privileges (idp-manager role)
-// that can manage IdP configuration and roles.
 func (m *TenantManager) createBreakGlassAccount(ctx context.Context, config *TenantConfig) (*BreakGlassCredentials, error) {
-	// Set defaults if not provided
 	username := config.BreakGlassUsername
 	if username == "" {
 		username = fmt.Sprintf("%s-osac-break-glass", config.Name)
@@ -278,7 +229,6 @@ func (m *TenantManager) createBreakGlassAccount(ctx context.Context, config *Ten
 	}
 	password := config.BreakGlassPassword
 	if password == "" {
-		// Generate a secure random password using crypto/rand
 		const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%"
 		const passwordLength = 24
 		b := make([]byte, passwordLength)
@@ -307,7 +257,7 @@ func (m *TenantManager) createBreakGlassAccount(ctx context.Context, config *Ten
 			{
 				Type:      "password",
 				Value:     password,
-				Temporary: true, // User must change password on first login
+				Temporary: true,
 			},
 		},
 	}
@@ -333,9 +283,6 @@ func (m *TenantManager) createBreakGlassAccount(ctx context.Context, config *Ten
 	return credentials, nil
 }
 
-// assignIdpManagerPermissions assigns limited IdP manager permissions to a user.
-// This grants the user permissions to manage user roles and identity providers but not
-// critical realm settings.
 func (m *TenantManager) assignIdpManagerPermissions(ctx context.Context, userID string) error {
 	m.logger.InfoContext(ctx, "Assigning IdP manager permissions to user",
 		slog.String("user_id", userID),
