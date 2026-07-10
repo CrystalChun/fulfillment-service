@@ -12,6 +12,55 @@ and configure the necessary mappings and authorization rules.
 > - The ability to validate tokens using the issuer's public keys
 >
 
+## Identity Provider Architecture
+
+The fulfillment service's authentication architecture has two distinct layers:
+
+### 1. Keycloak as the Identity Provider Broker
+
+Keycloak serves as the **built-in identity provider broker** for the fulfillment service. This is the
+primary authentication layer that:
+
+- Issues JWT tokens for users and service accounts
+- Manages the OSAC realm and its users
+- Provides OAuth 2.0 / OpenID Connect endpoints for authentication
+- Acts as the trusted token issuer for the fulfillment service API
+
+This broker layer is **required** for the fulfillment service to function. The service validates all
+incoming JWT tokens against Keycloak's public keys and expects tokens to contain the necessary claims
+(username, organization, roles).
+
+### 2. External Identity Providers (Federation)
+
+Through Keycloak's identity brokering capabilities, users can configure **external identity providers**
+(such as GitHub, Google, LDAP, SAML, or other OIDC providers) to federate authentication. When external
+providers are configured:
+
+- Users can log in using credentials from external systems (e.g., GitHub OAuth, corporate LDAP)
+- Keycloak acts as a broker, translating external authentication into OSAC-compatible JWT tokens
+- The external provider handles the actual credential verification
+- Keycloak maps external user attributes into the required claims (username, organization, roles)
+
+This federation layer is **optional**. Organizations can choose to use Keycloak's built-in user
+database or integrate with existing identity systems. The fulfillment service itself only interacts
+with Keycloak (the broker) and remains unaware of external providers.
+
+**Key distinction**: The fulfillment service always trusts Keycloak as the token issuer, regardless of
+where the user's credentials are verified. External identity providers are a Keycloak configuration
+detail, not a fulfillment service API concern.
+
+## Terminology Mapping
+
+The fulfillment service uses OSAC domain terminology that maps to Keycloak concepts as follows:
+
+- **OSAC "tenant"** → Keycloak "Organization"
+- **OSAC "user"** → Keycloak "user" (realm-scoped)
+- **OSAC "group"** → Keycloak "organization group"
+
+All fulfillment service APIs use OSAC terminology (tenant, user, group). When working with Keycloak
+directly (through the Admin Console or REST API), you will encounter Keycloak terminology.
+Understanding this mapping is essential for configuration and troubleshooting.
+
 
 ## Table of Contents
 
@@ -410,6 +459,41 @@ To configure organization membership:
 
 The `organization` claim will be automatically included in JWT tokens for users who are members of
 organizations.
+
+### Configuring External Identity Providers (Optional)
+
+Keycloak supports identity federation, allowing users to authenticate using external identity
+providers (GitHub, Google, LDAP, SAML providers, other OIDC providers, etc.). When configured,
+external providers handle credential verification while Keycloak issues the JWT tokens that the
+fulfillment service trusts.
+
+To configure an external identity provider:
+
+1. **Access the Keycloak Admin Console** and select the `osac` realm
+
+2. **Add an Identity Provider**:
+   - Go to **Identity providers** (in the left menu)
+   - Click **Add provider** and select the provider type (e.g., GitHub, Google, SAML, OIDC)
+   - Configure the provider-specific settings (client ID, client secret, endpoints, etc.)
+   - Save the configuration
+
+3. **Configure Attribute Mapping**:
+   - For each provider, configure mappers to ensure external user attributes are mapped to the
+     required Keycloak claims:
+     - **Username mapping**: Map the external username to `preferred_username`
+     - **Organization mapping**: Map external groups or attributes to Keycloak Organizations (if
+       applicable)
+     - **Role mapping**: Map external roles to Keycloak realm roles (for tenant-admin, etc.)
+
+4. **Test the Federation**:
+   - Users should now see the external provider as a login option when authenticating
+   - After successful external authentication, Keycloak issues a JWT token with the mapped claims
+   - The fulfillment service treats federated users identically to native Keycloak users
+
+**Important**: The fulfillment service only trusts Keycloak as the token issuer. External identity
+providers are transparent to the API — the service doesn't validate tokens from external providers
+directly. All authentication flows (whether using Keycloak's native users or federated external
+identities) result in Keycloak-issued JWT tokens.
 
 ## Tenancy Logic
 

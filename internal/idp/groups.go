@@ -26,44 +26,27 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/apiclient"
 )
 
-// CreateGroup creates a Keycloak organization group.
-// Organization groups are scoped to the organization and support hierarchical paths.
+// CreateGroup creates an organization group with hierarchical path support.
+// Creates the full hierarchy if parent groups don't exist.
 //
-// Group path format examples:
-//   - Top-level project: "/{project-name}/{system:viewers|system:managers}"
-//     Example: "/web-app/system:viewers"
-//   - Nested project: "/{parent-project}/{sub-project}/{system:viewers|system:managers}"
-//     Example: "/web-app/api/system:viewers"
-//   - Deeper nesting: "/{project}/{sub-project}/{component}/{system:viewers|system:managers}"
-//     Example: "/platform/web-app/api/system:viewers"
-//
-// Organization groups are scoped per organization, so paths can be simple and readable.
-// This method creates the full hierarchy if parent groups don't exist.
-// See https://www.keycloak.org/2026/04/org-groups for details.
+// Path examples: "/web-app/system:viewers", "/web-app/api/system:managers"
 func (c *Client) CreateGroup(ctx context.Context, tenantName, groupPath string) (string, error) {
 	c.logger.DebugContext(ctx, "Creating tenant group",
 		slog.String("tenantName", tenantName),
 		slog.String("groupPath", groupPath),
 	)
 
-	// Get the organization ID first
 	org, err := c.GetTenant(ctx, tenantName)
 	if err != nil {
 		return "", fmt.Errorf("failed to get organization: %w", err)
 	}
 
-	// Parse the path to create parent groups if needed
-	// Path format: /web-app/system:viewers
-	// We need to ensure /web-app exists, then create system:viewers under it
-	// Use a cache to avoid redundant API calls within the same operation
-	cache := make(map[string]string) // path -> groupID
+	cache := make(map[string]string)
 	err = c.ensureGroupHierarchyWithCache(ctx, org.ID, groupPath, cache)
 	if err != nil {
 		return "", fmt.Errorf("failed to ensure group hierarchy: %w", err)
 	}
 
-	// Get the created group ID from the cache using the normalized path
-	// Normalize the path the same way ensureGroupHierarchyWithCache does
 	normalizedPath := "/" + strings.Trim(groupPath, "/")
 	normalizedPath = strings.ReplaceAll(normalizedPath, "//", "/")
 	groupID, ok := cache[normalizedPath]
@@ -80,20 +63,18 @@ func (c *Client) CreateGroup(ctx context.Context, tenantName, groupPath string) 
 	return groupID, nil
 }
 
-// DeleteGroup deletes a Keycloak organization group by ID.
+// DeleteGroup deletes an organization group by ID.
 func (c *Client) DeleteGroup(ctx context.Context, tenantName, groupID string) error {
 	c.logger.DebugContext(ctx, "Deleting organization group",
 		slog.String("tenantName", tenantName),
 		slog.String("groupID", groupID),
 	)
 
-	// Get the organization ID first
 	org, err := c.GetTenant(ctx, tenantName)
 	if err != nil {
 		return fmt.Errorf("failed to get organization: %w", err)
 	}
 
-	// Use organization groups API instead of realm groups
 	path := fmt.Sprintf("/admin/realms/%s/organizations/%s/groups/%s",
 		url.PathEscape(c.realmName),
 		url.PathEscape(org.ID),
@@ -114,17 +95,10 @@ func (c *Client) DeleteGroup(ctx context.Context, tenantName, groupID string) er
 	return nil
 }
 
-// Helper methods
-
 func (c *Client) ensureGroupHierarchyWithCache(ctx context.Context, orgID, groupPath string, cache map[string]string) error {
-	// Normalize the path: remove leading/trailing slashes and collapse multiple slashes
-	// "//system:viewers" -> "system:viewers"
-	// "/web-app/system:viewers" -> "web-app/system:viewers"
 	normalizedPath := strings.Trim(groupPath, "/")
 	normalizedPath = strings.ReplaceAll(normalizedPath, "//", "/")
 
-	// Split path into segments
-	// "web-app/system:viewers" -> ["web-app", "system:viewers"]
 	segments := strings.Split(normalizedPath, "/")
 	if len(segments) == 0 || (len(segments) == 1 && segments[0] == "") {
 		return fmt.Errorf("invalid group path: %s", groupPath)
@@ -134,24 +108,17 @@ func (c *Client) ensureGroupHierarchyWithCache(ctx context.Context, orgID, group
 	var parentID string
 
 	for _, segment := range segments {
-		// Build the current path
 		currentPath = currentPath + "/" + segment
 
-		// Check cache first
 		if cachedID, exists := cache[currentPath]; exists {
 			parentID = cachedID
 			continue
 		}
 
-		// Try to create the group - if it already exists (409), just look it up
 		groupID, err := c.createOrganizationGroupWithParent(ctx, orgID, segment, parentID)
 		if err != nil {
-			// Check if it's a "already exists" error (409 conflict)
 			var apiErr *apiclient.APIError
 			if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusConflict {
-				// Group already exists, look up its ID by listing its siblings and matching by name. We
-				// list the children of the parent group (or the top-level organization groups when
-				// there is no parent) because the top-level list endpoint does not populate subGroups.
 				groupID, lookupErr := c.getGroupIDByName(ctx, orgID, parentID, segment)
 				if lookupErr != nil {
 					return fmt.Errorf(
@@ -166,9 +133,7 @@ func (c *Client) ensureGroupHierarchyWithCache(ctx context.Context, orgID, group
 			return fmt.Errorf("failed to create group %s: %w", currentPath, err)
 		}
 
-		// Cache the created group
 		cache[currentPath] = groupID
-		// Use this group as parent for next iteration
 		parentID = groupID
 	}
 
@@ -204,13 +169,11 @@ func (c *Client) createOrganizationGroupWithParent(ctx context.Context, orgID, n
 	}
 	defer response.Body.Close()
 
-	// Extract the created group ID from the Location header
 	location := response.Header.Get("Location")
 	if location == "" {
 		return "", fmt.Errorf("no Location header in create group response")
 	}
 
-	// Location format: .../groups/{group-id}
 	parts := strings.Split(location, "/")
 	if len(parts) == 0 {
 		return "", fmt.Errorf("invalid Location header: %s", location)
@@ -220,8 +183,7 @@ func (c *Client) createOrganizationGroupWithParent(ctx context.Context, orgID, n
 	return groupID, nil
 }
 
-// getGroupIDByName finds a group by name among the children of a parent group. If parentID is empty it searches the
-// top-level organization groups instead.
+// getGroupIDByName finds a group by name among a parent's children, or top-level groups if parentID is empty.
 func (c *Client) getGroupIDByName(ctx context.Context, orgID, parentID, name string) (string, error) {
 	var reqPath string
 	if parentID == "" {
@@ -257,7 +219,6 @@ func (c *Client) getGroupIDByName(ctx context.Context, orgID, parentID, name str
 	return "", fmt.Errorf("group %q not found among children of parent %q", name, parentID)
 }
 
-// groupNode represents a group in the hierarchy for recursive traversal
 type groupNode struct {
 	ID        string      `json:"id"`
 	Name      string      `json:"name"`
@@ -265,12 +226,9 @@ type groupNode struct {
 	SubGroups []groupNode `json:"subGroups"`
 }
 
-// getGroupIDByPathWithOrgID returns the group ID for a path using orgID directly (not organization name).
-// This is used internally when we already have the orgID to avoid an extra lookup.
+// getGroupIDByPathWithOrgID returns the group ID for a path using orgID directly.
+// Avoids an extra GetTenant lookup when we already have the orgID.
 func (c *Client) getGroupIDByPathWithOrgID(ctx context.Context, orgID, groupPath string) (result string, err error) {
-	// The Keycloak organization groups list API does not populate subgroups, so we manually traverse the hierarchy by splitting the path and fetching each level.
-
-	// Normalize and split the path: "/bens-project/system:managers" -> ["bens-project", "system:managers"]
 	normalizedPath := strings.Trim(groupPath, "/")
 	if normalizedPath == "" {
 		err = fmt.Errorf("empty group path")
@@ -278,45 +236,38 @@ func (c *Client) getGroupIDByPathWithOrgID(ctx context.Context, orgID, groupPath
 	}
 	segments := strings.Split(normalizedPath, "/")
 
-	// Start at the top level and traverse down
-	var currentParentID string // empty for top level
+	var currentParentID string
 	for i, segment := range segments {
-		// Get the group ID for this segment
 		groupID, lookupErr := c.getGroupIDByName(ctx, orgID, currentParentID, segment)
 		if lookupErr != nil {
 			err = fmt.Errorf("failed to find group segment %d '%s' (parent: %s): %w", i, segment, currentParentID, lookupErr)
 			return
 		}
-
-		// This segment becomes the parent for the next iteration
 		currentParentID = groupID
 	}
 
-	// The last segment's ID is the final group ID
 	result = currentParentID
 	return
 }
 
-// GetGroupIDByPath gets a Keycloak organization group ID by its path.
-// This is exposed for use by the ProjectGroupManager.
+// GetGroupIDByPath gets an organization group ID by its path.
+// Exposed for use by ProjectGroupManager.
 func (c *Client) GetGroupIDByPath(ctx context.Context, tenantName, groupPath string) (string, error) {
 	return c.getGroupIDByPath(ctx, tenantName, groupPath)
 }
 
 func (c *Client) getGroupIDByPath(ctx context.Context, tenantName, groupPath string) (string, error) {
-	// Get the organization ID first
 	org, err := c.GetTenant(ctx, tenantName)
 	if err != nil {
 		return "", fmt.Errorf("failed to get organization: %w", err)
 	}
 
-	// Use getGroupIDByPathWithOrgID which lists all groups instead of using the search parameter.
-	// The search parameter is unreliable for recently-created groups.
+	// List groups instead of using search parameter (search is unreliable for recently-created groups)
 	return c.getGroupIDByPathWithOrgID(ctx, org.ID, groupPath)
 }
 
 // AddUserToGroup adds a user to an organization group by group ID.
-// Accepts idpUserID (the identity provider's user UUID from User.status.keycloak_user_id).
+// The idpUserID is the identity provider's user UUID (User.status.keycloak_user_id).
 func (c *Client) AddUserToGroup(ctx context.Context, tenantName, idpUserID, groupID string) error {
 	c.logger.DebugContext(ctx, "Adding user to organization group",
 		slog.String("tenantName", tenantName),
@@ -324,22 +275,17 @@ func (c *Client) AddUserToGroup(ctx context.Context, tenantName, idpUserID, grou
 		slog.String("groupID", groupID),
 	)
 
-	// Get the organization ID
 	org, err := c.GetTenant(ctx, tenantName)
 	if err != nil {
 		return fmt.Errorf("failed to get organization: %w", err)
 	}
 
-	// First, ensure the user is a member of the organization
-	// This is required before we can add them to organization groups
+	// Users must be organization members before they can join organization groups
 	err = c.ensureOrganizationMember(ctx, org.ID, idpUserID)
 	if err != nil {
 		return fmt.Errorf("failed to ensure user is organization member: %w", err)
 	}
 
-	// Add the user to the organization group via the group's members endpoint
-	// PUT /admin/realms/{realm}/organizations/{orgId}/groups/{groupId}/members/{userId}
-	// The userId is in the path, not the body
 	path := fmt.Sprintf("/admin/realms/%s/organizations/%s/groups/%s/members/%s",
 		url.PathEscape(c.realmName),
 		url.PathEscape(org.ID),
@@ -362,12 +308,8 @@ func (c *Client) AddUserToGroup(ctx context.Context, tenantName, idpUserID, grou
 	return nil
 }
 
-// ensureOrganizationMember ensures a user is a member of an organization.
-// If they're already a member, this is a no-op. If not, adds them.
+// ensureOrganizationMember adds a user to an organization if they're not already a member.
 func (c *Client) ensureOrganizationMember(ctx context.Context, orgID, userUUID string) error {
-	// Try to add the user as an organization member
-	// POST /admin/realms/{realm}/organizations/{org-id}/members
-	// Body is just the user UUID as a plain string
 	path := fmt.Sprintf("/admin/realms/%s/organizations/%s/members",
 		url.PathEscape(c.realmName),
 		url.PathEscape(orgID),
@@ -375,7 +317,6 @@ func (c *Client) ensureOrganizationMember(ctx context.Context, orgID, userUUID s
 
 	response, err := c.httpClient.DoRequest(ctx, http.MethodPost, path, userUUID)
 	if err != nil {
-		// Check if they're already a member (409 conflict)
 		var apiErr *apiclient.APIError
 		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusConflict {
 			c.logger.DebugContext(ctx, "User already member of organization",
@@ -404,14 +345,11 @@ func (c *Client) RemoveUserFromGroup(ctx context.Context, tenantName, idpUserID,
 		slog.String("groupID", groupID),
 	)
 
-	// Get the organization ID
 	org, err := c.GetTenant(ctx, tenantName)
 	if err != nil {
 		return fmt.Errorf("failed to get organization: %w", err)
 	}
 
-	// Remove the user from the organization group via DELETE
-	// DELETE /admin/realms/{realm}/organizations/{orgId}/groups/{groupId}/members/{userId}
 	path := fmt.Sprintf("/admin/realms/%s/organizations/%s/groups/%s/members/%s",
 		url.PathEscape(c.realmName),
 		url.PathEscape(org.ID),
