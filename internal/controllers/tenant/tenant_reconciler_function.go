@@ -115,11 +115,10 @@ func (r *function) Run(ctx context.Context, tenant *privatev1.Tenant) error {
 		return err
 	}
 
-	// Never persist break-glass credentials to the database — the password is
-	// only meant to be returned once during IDP account creation.
-	var savedCredentials *privatev1.BreakGlassCredentials
+	// Defense in depth: ensure break-glass credentials are never persisted.
+	// syncToIDP clears them after creating the Keycloak account, but guard
+	// against any code path that might leave them on the tenant.
 	if tenant.HasStatus() && tenant.GetStatus().HasBreakGlassCredentials() {
-		savedCredentials = tenant.GetStatus().GetBreakGlassCredentials()
 		tenant.GetStatus().ClearBreakGlassCredentials()
 	}
 
@@ -130,10 +129,6 @@ func (r *function) Run(ctx context.Context, tenant *privatev1.Tenant) error {
 			Object:     tenant,
 			UpdateMask: updateMask,
 		}.Build())
-	}
-
-	if savedCredentials != nil {
-		tenant.GetStatus().SetBreakGlassCredentials(savedCredentials)
 	}
 
 	return err
@@ -186,9 +181,10 @@ func (t *task) syncToIDP(ctx context.Context) error {
 
 	tenantName := t.tenant.GetMetadata().GetName()
 	config := &idp.TenantConfig{
-		Name:    tenantName,
-		Enabled: new(!t.isBuiltin()),
-		Domains: t.tenant.GetSpec().GetDomains(),
+		Name:               tenantName,
+		Enabled:            new(!t.isBuiltin()),
+		Domains:            t.tenant.GetSpec().GetDomains(),
+		BreakGlassPassword: t.tenant.GetStatus().GetBreakGlassCredentials().GetPassword(),
 	}
 
 	credentials, err := t.r.idpManager.CreateTenant(ctx, config)
@@ -201,12 +197,7 @@ func (t *task) syncToIDP(ctx context.Context) error {
 	t.tenant.GetStatus().SetState(privatev1.TenantState_TENANT_STATE_SYNCED)
 	t.tenant.GetStatus().SetIdpTenantName(config.Name)
 	t.tenant.GetStatus().SetBreakGlassUserId(credentials.UserID)
-
-	breakGlassCredentials := privatev1.BreakGlassCredentials_builder{
-		Username: credentials.Username,
-		Password: credentials.Password,
-	}.Build()
-	t.tenant.GetStatus().SetBreakGlassCredentials(breakGlassCredentials)
+	t.tenant.GetStatus().ClearBreakGlassCredentials()
 
 	t.r.logger.DebugContext(ctx, "Tenant synced to IDP",
 		slog.String("tenant_id", t.tenant.GetId()),
