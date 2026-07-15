@@ -115,6 +115,14 @@ func (r *function) Run(ctx context.Context, tenant *privatev1.Tenant) error {
 		return err
 	}
 
+	// Never persist break-glass credentials to the database — the password is
+	// only meant to be returned once during IDP account creation.
+	var savedCredentials *privatev1.BreakGlassCredentials
+	if tenant.HasStatus() && tenant.GetStatus().HasBreakGlassCredentials() {
+		savedCredentials = tenant.GetStatus().GetBreakGlassCredentials()
+		tenant.GetStatus().ClearBreakGlassCredentials()
+	}
+
 	updateMask := r.maskCalculator.Calculate(oldTenant, tenant)
 
 	if len(updateMask.GetPaths()) > 0 {
@@ -122,6 +130,10 @@ func (r *function) Run(ctx context.Context, tenant *privatev1.Tenant) error {
 			Object:     tenant,
 			UpdateMask: updateMask,
 		}.Build())
+	}
+
+	if savedCredentials != nil {
+		tenant.GetStatus().SetBreakGlassCredentials(savedCredentials)
 	}
 
 	return err
