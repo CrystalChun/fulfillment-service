@@ -27,7 +27,7 @@ import (
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
 	"github.com/osac-project/fulfillment-service/internal/controllers/finalizers"
 	"github.com/osac-project/fulfillment-service/internal/idp"
-	"github.com/osac-project/fulfillment-service/internal/idp/client"
+	"github.com/osac-project/fulfillment-service/internal/idp/keycloak"
 )
 
 var _ = Describe("Finalizer Management", func() {
@@ -172,7 +172,7 @@ var _ = Describe("Validation and Activation", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockClient = NewMockProjectsClient(ctrl)
 		mockUsersClient = NewMockUsersClient(ctrl)
-		mockIdpClient = client.NewMockClientInterface(ctrl)
+		mockIdpClient = keycloak.NewMockClientInterface(ctrl)
 		ctx = context.Background()
 
 		var err error
@@ -889,7 +889,7 @@ var _ = Describe("Deletion Cleanup", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockClient = NewMockProjectsClient(ctrl)
 		mockTenantsClient = NewMockTenantsClient(ctrl)
-		mockIdpClient = client.NewMockClientInterface(ctrl)
+		mockIdpClient = keycloak.NewMockClientInterface(ctrl)
 		ctx = context.Background()
 
 		var err error

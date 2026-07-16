@@ -11,9 +11,9 @@ Unless required by applicable law or agreed to in writing, software distributed 
 language governing permissions and limitations under the License.
 */
 
-package client
+package keycloak
 
-//go:generate go run go.uber.org/mock/mockgen -destination=client_mock.go -package=client . ClientInterface
+//go:generate go run go.uber.org/mock/mockgen -destination=client_mock.go -package=keycloak . ClientInterface
 
 import "context"
 

@@ -27,7 +27,7 @@ import (
 
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
 	"github.com/osac-project/fulfillment-service/internal/idp"
-	"github.com/osac-project/fulfillment-service/internal/idp/client"
+	"github.com/osac-project/fulfillment-service/internal/idp/keycloak"
 )
 
 var _ = Describe("User Reconciler", func() {
@@ -41,7 +41,7 @@ var _ = Describe("User Reconciler", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		ctrl = gomock.NewController(GinkgoT())
-		mockClient = client.NewMockClientInterface(ctrl)
+		mockClient = keycloak.NewMockClientInterface(ctrl)
 
 		// Create a minimal gRPC connection (won't be used in these tests)
 		conn := &grpc.ClientConn{}

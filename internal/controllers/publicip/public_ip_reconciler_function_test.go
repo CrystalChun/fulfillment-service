@@ -87,7 +87,7 @@ var _ = Describe("buildSpec", func() {
 	})
 })
 
-// newPublicIPCR creates a typed PublicIP CR for use with the fake client.
+// newPublicIPCR creates a typed PublicIP CR for use with the fake keycloak.
 func newPublicIPCR(id, namespace, name string, deletionTimestamp *metav1.Time) *osacv1alpha1.PublicIP {
 	obj := &osacv1alpha1.PublicIP{
 		ObjectMeta: metav1.ObjectMeta{

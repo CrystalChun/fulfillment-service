@@ -19,7 +19,7 @@ import (
 
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
 	"github.com/osac-project/fulfillment-service/internal/idp"
-	"github.com/osac-project/fulfillment-service/internal/idp/client"
+	"github.com/osac-project/fulfillment-service/internal/idp/keycloak"
 )
 
 var _ = Describe("User Reconciler Integration", func() {

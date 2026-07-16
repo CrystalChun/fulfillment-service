@@ -148,7 +148,7 @@ var _ = Describe("validateIPFamily", func() {
 	})
 })
 
-// newExternalIPPoolCR creates a typed ExternalIPPool CR for use with the fake client.
+// newExternalIPPoolCR creates a typed ExternalIPPool CR for use with the fake keycloak.
 func newExternalIPPoolCR(id, namespace, name string, deletionTimestamp *metav1.Time) *osacv1alpha1.ExternalIPPool {
 	obj := &osacv1alpha1.ExternalIPPool{
 		ObjectMeta: metav1.ObjectMeta{

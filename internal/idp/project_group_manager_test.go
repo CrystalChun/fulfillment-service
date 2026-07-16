@@ -21,19 +21,19 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 
-	"github.com/osac-project/fulfillment-service/internal/idp/client"
+	"github.com/osac-project/fulfillment-service/internal/idp/keycloak"
 )
 
 var _ = Describe("ProjectGroupManager", func() {
 	var (
 		ctrl       *gomock.Controller
-		mockClient *client.MockClientInterface
+		mockClient *keycloak.MockClientInterface
 		ctx        = context.Background()
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
-		mockClient = client.NewMockClientInterface(ctrl)
+		mockClient = keycloak.NewMockClientInterface(ctrl)
 	})
 
 	AfterEach(func() {
@@ -252,7 +252,7 @@ var _ = Describe("ProjectGroupManager", func() {
 				AddUserToGroup(gomock.Any(), "test-org", "user-123", "managers-group-id").
 				Return(nil)
 
-			err := manager.AddUserToProjectGroup(ctx, "test-org", "test-project", "user-123", client.GroupNameManagers)
+			err := manager.AddUserToProjectGroup(ctx, "test-org", "test-project", "user-123", keycloak.GroupNameManagers)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -265,24 +265,24 @@ var _ = Describe("ProjectGroupManager", func() {
 				AddUserToGroup(gomock.Any(), "test-org", "user-456", "viewers-group-id").
 				Return(nil)
 
-			err := manager.AddUserToProjectGroup(ctx, "test-org", "test-project", "user-456", client.GroupNameViewers)
+			err := manager.AddUserToProjectGroup(ctx, "test-org", "test-project", "user-456", keycloak.GroupNameViewers)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return error when tenant is empty", func() {
-			err := manager.AddUserToProjectGroup(ctx, "", "test-project", "user-123", client.GroupNameManagers)
+			err := manager.AddUserToProjectGroup(ctx, "", "test-project", "user-123", keycloak.GroupNameManagers)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("tenant is required"))
 		})
 
 		It("should return error when project name is empty", func() {
-			err := manager.AddUserToProjectGroup(ctx, "test-org", "", "user-123", client.GroupNameManagers)
+			err := manager.AddUserToProjectGroup(ctx, "test-org", "", "user-123", keycloak.GroupNameManagers)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("project name is required"))
 		})
 
 		It("should return error when username is empty", func() {
-			err := manager.AddUserToProjectGroup(ctx, "test-org", "test-project", "", client.GroupNameManagers)
+			err := manager.AddUserToProjectGroup(ctx, "test-org", "test-project", "", keycloak.GroupNameManagers)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("username is required"))
 		})
@@ -298,7 +298,7 @@ var _ = Describe("ProjectGroupManager", func() {
 				GetGroupIDByPath(gomock.Any(), "test-org", "/test-project/system:managers").
 				Return("", errors.New("group not found"))
 
-			err := manager.AddUserToProjectGroup(ctx, "test-org", "test-project", "user-123", client.GroupNameManagers)
+			err := manager.AddUserToProjectGroup(ctx, "test-org", "test-project", "user-123", keycloak.GroupNameManagers)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to get group ID"))
 		})
@@ -312,13 +312,13 @@ var _ = Describe("ProjectGroupManager", func() {
 				AddUserToGroup(gomock.Any(), "test-org", "user-123", "managers-group-id").
 				Return(errors.New("keycloak error"))
 
-			err := manager.AddUserToProjectGroup(ctx, "test-org", "test-project", "user-123", client.GroupNameManagers)
+			err := manager.AddUserToProjectGroup(ctx, "test-org", "test-project", "user-123", keycloak.GroupNameManagers)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to add user to group"))
 		})
 
 		It("should reject project name with dot-dot sequence", func() {
-			err := manager.AddUserToProjectGroup(ctx, "test-org", "../malicious", "user-123", client.GroupNameManagers)
+			err := manager.AddUserToProjectGroup(ctx, "test-org", "../malicious", "user-123", keycloak.GroupNameManagers)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("project name cannot contain '..' sequence"))
 		})
@@ -345,7 +345,7 @@ var _ = Describe("ProjectGroupManager", func() {
 				RemoveUserFromGroup(gomock.Any(), "test-org", "user-123", "managers-group-id").
 				Return(nil)
 
-			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "user-123", client.GroupNameManagers)
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "user-123", keycloak.GroupNameManagers)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -358,24 +358,24 @@ var _ = Describe("ProjectGroupManager", func() {
 				RemoveUserFromGroup(gomock.Any(), "test-org", "user-456", "viewers-group-id").
 				Return(nil)
 
-			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "user-456", client.GroupNameViewers)
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "user-456", keycloak.GroupNameViewers)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return error when tenant is empty", func() {
-			err := manager.RemoveUserFromProjectGroup(ctx, "", "test-project", "user-123", client.GroupNameManagers)
+			err := manager.RemoveUserFromProjectGroup(ctx, "", "test-project", "user-123", keycloak.GroupNameManagers)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("tenant is required"))
 		})
 
 		It("should return error when project name is empty", func() {
-			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "", "user-123", client.GroupNameManagers)
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "", "user-123", keycloak.GroupNameManagers)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("project name is required"))
 		})
 
 		It("should return error when username is empty", func() {
-			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "", client.GroupNameManagers)
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "", keycloak.GroupNameManagers)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("username is required"))
 		})
@@ -391,7 +391,7 @@ var _ = Describe("ProjectGroupManager", func() {
 				GetGroupIDByPath(gomock.Any(), "test-org", "/test-project/system:managers").
 				Return("", errors.New("group not found"))
 
-			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "user-123", client.GroupNameManagers)
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "user-123", keycloak.GroupNameManagers)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to get group ID"))
 		})
@@ -405,13 +405,13 @@ var _ = Describe("ProjectGroupManager", func() {
 				RemoveUserFromGroup(gomock.Any(), "test-org", "user-123", "managers-group-id").
 				Return(errors.New("keycloak error"))
 
-			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "user-123", client.GroupNameManagers)
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "test-project", "user-123", keycloak.GroupNameManagers)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to remove user from group"))
 		})
 
 		It("should reject project name with dot-dot sequence", func() {
-			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "../malicious", "user-123", client.GroupNameManagers)
+			err := manager.RemoveUserFromProjectGroup(ctx, "test-org", "../malicious", "user-123", keycloak.GroupNameManagers)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("project name cannot contain '..' sequence"))
 		})

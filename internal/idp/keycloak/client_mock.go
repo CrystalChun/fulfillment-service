@@ -7,7 +7,7 @@
 //
 
 // Package idp is a generated GoMock package.
-package client
+package keycloak
 
 import (
 	context "context"

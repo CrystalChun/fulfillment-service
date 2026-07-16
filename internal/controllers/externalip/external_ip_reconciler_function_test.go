@@ -87,7 +87,7 @@ var _ = Describe("buildSpec", func() {
 	})
 })
 
-// newExternalIPCR creates a typed ExternalIP CR for use with the fake client.
+// newExternalIPCR creates a typed ExternalIP CR for use with the fake keycloak.
 func newExternalIPCR(id, namespace, name string, deletionTimestamp *metav1.Time) *osacv1alpha1.ExternalIP {
 	obj := &osacv1alpha1.ExternalIP{
 		ObjectMeta: metav1.ObjectMeta{

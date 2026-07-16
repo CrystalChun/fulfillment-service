@@ -42,7 +42,7 @@ type HubCache interface {
 	Get(ctx context.Context, id string) (*HubEntry, error)
 }
 
-// HubCacheBuilder contains the data and logic needed to build a cache of hub client.
+// HubCacheBuilder contains the data and logic needed to build a cache of hub keycloak.
 type HubCacheBuilder struct {
 	logger     *slog.Logger
 	connection *grpc.ClientConn

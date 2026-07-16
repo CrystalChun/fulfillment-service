@@ -63,7 +63,7 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/controllers/virtualnetwork"
 	internalhealth "github.com/osac-project/fulfillment-service/internal/health"
 	"github.com/osac-project/fulfillment-service/internal/idp"
-	idpclient "github.com/osac-project/fulfillment-service/internal/idp/client"
+	idpclient "github.com/osac-project/fulfillment-service/internal/idp/keycloak"
 	hubscheme "github.com/osac-project/fulfillment-service/internal/kubernetes/scheme"
 	"github.com/osac-project/fulfillment-service/internal/logging"
 	"github.com/osac-project/fulfillment-service/internal/network"

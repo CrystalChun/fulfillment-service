@@ -429,7 +429,7 @@ var _ = Describe("buildSpec", func() {
 	})
 })
 
-// newComputeInstanceCR creates a typed ComputeInstance CR for use with the fake client.
+// newComputeInstanceCR creates a typed ComputeInstance CR for use with the fake keycloak.
 func newComputeInstanceCR(id, namespace, name string, deletionTimestamp *metav1.Time) *osacv1alpha1.ComputeInstance {
 	obj := &osacv1alpha1.ComputeInstance{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1015,7 +1015,7 @@ var _ = Describe("buildSpec with subnetRef", func() {
 					if _, ok := list.(*osacv1alpha1.SecurityGroupList); ok {
 						return fmt.Errorf("simulated List error")
 					}
-					return client.List(ctx, list, opts...)
+					return keycloak.List(ctx, list, opts...)
 				},
 			}).
 			Build()

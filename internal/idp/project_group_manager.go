@@ -21,19 +21,19 @@ import (
 	"path"
 	"strings"
 
-	"github.com/osac-project/fulfillment-service/internal/idp/client"
+	"github.com/osac-project/fulfillment-service/internal/idp/keycloak"
 )
 
 // ProjectGroupManager handles Keycloak group operations for project authorization.
 type ProjectGroupManager struct {
 	logger *slog.Logger
-	client client.ClientInterface
+	client keycloak.ClientInterface
 }
 
 // ProjectGroupManagerBuilder builds the project group manager.
 type ProjectGroupManagerBuilder struct {
 	logger *slog.Logger
-	client client.ClientInterface
+	client keycloak.ClientInterface
 }
 
 // NewProjectGroupManager creates a builder for the project group manager.
@@ -47,8 +47,8 @@ func (b *ProjectGroupManagerBuilder) SetLogger(value *slog.Logger) *ProjectGroup
 	return b
 }
 
-// SetClient sets the Keycloak client.
-func (b *ProjectGroupManagerBuilder) SetClient(value client.ClientInterface) *ProjectGroupManagerBuilder {
+// SetClient sets the Keycloak keycloak.
+func (b *ProjectGroupManagerBuilder) SetClient(value keycloak.ClientInterface) *ProjectGroupManagerBuilder {
 	b.client = value
 	return b
 }
@@ -105,7 +105,7 @@ func (m *ProjectGroupManager) DeleteProjectGroups(ctx context.Context, tenant, p
 		return fmt.Errorf("failed to get project group ID: %w", err)
 	}
 
-	if err = m.client.DeleteGroup(ctx, tenant, projectGroupID); err != nil {
+	if err = m.keycloak.DeleteGroup(ctx, tenant, projectGroupID); err != nil {
 		m.logger.ErrorContext(ctx, "Failed to delete project group",
 			slog.String("group_id", projectGroupID),
 			slog.String("group_path", projectGroupPath),
@@ -125,7 +125,7 @@ func (m *ProjectGroupManager) DeleteProjectGroups(ctx context.Context, tenant, p
 
 // getGroupIDByPath is a helper to get the group ID from a group path.
 func (m *ProjectGroupManager) getGroupIDByPath(ctx context.Context, tenantName, groupPath string) (string, error) {
-	return m.client.GetGroupIDByPath(ctx, tenantName, groupPath)
+	return m.keycloak.GetGroupIDByPath(ctx, tenantName, groupPath)
 }
 
 // CreateProjectGroups creates Keycloak tenant groups for a project.
@@ -152,8 +152,8 @@ func (m *ProjectGroupManager) CreateProjectGroups(ctx context.Context, tenant, p
 	}
 
 	// Create the viewers group:
-	viewersGroupPath := path.Join(projectPath, client.GroupNameViewers)
-	viewersGroupID, err := m.client.CreateGroup(ctx, tenant, viewersGroupPath)
+	viewersGroupPath := path.Join(projectPath, keycloak.GroupNameViewers)
+	viewersGroupID, err := m.keycloak.CreateGroup(ctx, tenant, viewersGroupPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create viewers group: %w", err)
 	}
@@ -167,11 +167,11 @@ func (m *ProjectGroupManager) CreateProjectGroups(ctx context.Context, tenant, p
 	)
 
 	// Create the managers group:
-	managersGroupPath := path.Join(projectPath, client.GroupNameManagers)
-	managersGroupID, err := m.client.CreateGroup(ctx, tenant, managersGroupPath)
+	managersGroupPath := path.Join(projectPath, keycloak.GroupNameManagers)
+	managersGroupID, err := m.keycloak.CreateGroup(ctx, tenant, managersGroupPath)
 	if err != nil {
 		// Clean up viewers group on failure
-		if cleanupErr := m.client.DeleteGroup(ctx, tenant, viewersGroupID); cleanupErr != nil {
+		if cleanupErr := m.keycloak.DeleteGroup(ctx, tenant, viewersGroupID); cleanupErr != nil {
 			m.logger.ErrorContext(
 				ctx,
 				"Failed to cleanup viewers group during rollback",
@@ -205,8 +205,8 @@ func (m *ProjectGroupManager) AddUserToProjectGroup(ctx context.Context, tenant,
 	if username == "" {
 		return fmt.Errorf("username is required")
 	}
-	if groupType != client.GroupNameViewers && groupType != client.GroupNameManagers {
-		return fmt.Errorf("invalid group type %q, must be %q or %q", groupType, client.GroupNameViewers, client.GroupNameManagers)
+	if groupType != keycloak.GroupNameViewers && groupType != keycloak.GroupNameManagers {
+		return fmt.Errorf("invalid group type %q, must be %q or %q", groupType, keycloak.GroupNameViewers, keycloak.GroupNameManagers)
 	}
 	// Validate inputs to prevent path traversal attacks
 	if strings.Contains(projectPath, "..") {
@@ -219,7 +219,7 @@ func (m *ProjectGroupManager) AddUserToProjectGroup(ctx context.Context, tenant,
 		return fmt.Errorf("failed to get group ID for %s: %w", groupPath, err)
 	}
 
-	if err = m.client.AddUserToGroup(ctx, tenant, username, groupID); err != nil {
+	if err = m.keycloak.AddUserToGroup(ctx, tenant, username, groupID); err != nil {
 		return fmt.Errorf("failed to add user to group %s: %w", groupPath, err)
 	}
 
@@ -247,7 +247,7 @@ func (m *ProjectGroupManager) AddUserToGroupByID(ctx context.Context, tenant, us
 		return fmt.Errorf("group ID is required")
 	}
 
-	if err := m.client.AddUserToGroup(ctx, tenant, username, groupID); err != nil {
+	if err := m.keycloak.AddUserToGroup(ctx, tenant, username, groupID); err != nil {
 		return fmt.Errorf("failed to add user to group: %w", err)
 	}
 
@@ -271,8 +271,8 @@ func (m *ProjectGroupManager) RemoveUserFromProjectGroup(ctx context.Context, te
 	if username == "" {
 		return fmt.Errorf("username is required")
 	}
-	if groupType != client.GroupNameViewers && groupType != client.GroupNameManagers {
-		return fmt.Errorf("invalid group type %q, must be %q or %q", groupType, client.GroupNameViewers, client.GroupNameManagers)
+	if groupType != keycloak.GroupNameViewers && groupType != keycloak.GroupNameManagers {
+		return fmt.Errorf("invalid group type %q, must be %q or %q", groupType, keycloak.GroupNameViewers, keycloak.GroupNameManagers)
 	}
 	// Validate inputs to prevent path traversal attacks
 	if strings.Contains(projectPath, "..") {
@@ -285,7 +285,7 @@ func (m *ProjectGroupManager) RemoveUserFromProjectGroup(ctx context.Context, te
 		return fmt.Errorf("failed to get group ID for %s: %w", groupPath, err)
 	}
 
-	if err = m.client.RemoveUserFromGroup(ctx, tenant, username, groupID); err != nil {
+	if err = m.keycloak.RemoveUserFromGroup(ctx, tenant, username, groupID); err != nil {
 		return fmt.Errorf("failed to remove user from group %s: %w", groupPath, err)
 	}
 

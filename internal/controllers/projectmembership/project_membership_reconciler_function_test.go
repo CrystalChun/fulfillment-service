@@ -26,7 +26,7 @@ import (
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
 	"github.com/osac-project/fulfillment-service/internal/controllers/finalizers"
 	"github.com/osac-project/fulfillment-service/internal/idp"
-	"github.com/osac-project/fulfillment-service/internal/idp/client"
+	"github.com/osac-project/fulfillment-service/internal/idp/keycloak"
 )
 
 var _ = Describe("Finalizer Management", func() {
@@ -146,7 +146,7 @@ var _ = Describe("Project Group Path Building", func() {
 		mockProjectsClient = NewMockProjectsClient(ctrl)
 		mockProjectMembershipsClient = NewMockProjectMembershipsClient(ctrl)
 		mockUsersClient = NewMockUsersClient(ctrl)
-		mockIdpClient = client.NewMockClientInterface(ctrl)
+		mockIdpClient = keycloak.NewMockClientInterface(ctrl)
 		ctx = context.Background()
 
 		functionObj = &function{
@@ -404,7 +404,7 @@ var _ = Describe("Synchronization", func() {
 		mockProjectsClient = NewMockProjectsClient(ctrl)
 		mockProjectMembershipsClient = NewMockProjectMembershipsClient(ctrl)
 		mockUsersClient = NewMockUsersClient(ctrl)
-		mockIdpClient = client.NewMockClientInterface(ctrl)
+		mockIdpClient = keycloak.NewMockClientInterface(ctrl)
 		ctx = context.Background()
 
 		functionObj = &function{
@@ -691,7 +691,7 @@ var _ = Describe("Deletion Cleanup", func() {
 		mockProjectsClient = NewMockProjectsClient(ctrl)
 		mockProjectMembershipsClient = NewMockProjectMembershipsClient(ctrl)
 		mockUsersClient = NewMockUsersClient(ctrl)
-		mockIdpClient = client.NewMockClientInterface(ctrl)
+		mockIdpClient = keycloak.NewMockClientInterface(ctrl)
 		ctx = context.Background()
 
 		functionObj = &function{

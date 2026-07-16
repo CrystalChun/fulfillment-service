@@ -11,7 +11,7 @@ Unless required by applicable law or agreed to in writing, software distributed 
 language governing permissions and limitations under the License.
 */
 
-package client
+package keycloak
 
 // Tenant represents a Keycloak Organization - a logical grouping of users, groups, and applications.
 // This type provides a Go-idiomatic API over the raw Keycloak JSON representation.

@@ -50,7 +50,7 @@ func (f *fakeExternalIPsClient) Get(
 	return f.getResponse, f.getErr
 }
 
-// newAttachmentCR creates a typed ExternalIPAttachment CR for use with the fake client.
+// newAttachmentCR creates a typed ExternalIPAttachment CR for use with the fake keycloak.
 func newAttachmentCR(id, namespace, name string, deletionTimestamp *metav1.Time) *osacv1alpha1.ExternalIPAttachment {
 	obj := &osacv1alpha1.ExternalIPAttachment{
 		ObjectMeta: metav1.ObjectMeta{

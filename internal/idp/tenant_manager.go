@@ -23,19 +23,19 @@ import (
 	"slices"
 	"time"
 
-	"github.com/osac-project/fulfillment-service/internal/idp/client"
+	"github.com/osac-project/fulfillment-service/internal/idp/keycloak"
 )
 
 // TenantManager handles the lifecycle of tenants in Keycloak.
 type TenantManager struct {
 	logger *slog.Logger
-	client client.ClientInterface
+	client keycloak.ClientInterface
 }
 
 // TenantManagerBuilder builds the manager.
 type TenantManagerBuilder struct {
 	logger *slog.Logger
-	client client.ClientInterface
+	client keycloak.ClientInterface
 }
 
 // NewTenantManager creates a builder for the tenant manager.
@@ -49,8 +49,8 @@ func (b *TenantManagerBuilder) SetLogger(value *slog.Logger) *TenantManagerBuild
 	return b
 }
 
-// SetClient sets the Keycloak client.
-func (b *TenantManagerBuilder) SetClient(value client.ClientInterface) *TenantManagerBuilder {
+// SetClient sets the Keycloak keycloak.
+func (b *TenantManagerBuilder) SetClient(value keycloak.ClientInterface) *TenantManagerBuilder {
 	b.client = value
 	return b
 }
@@ -159,13 +159,13 @@ func (m *TenantManager) CreateTenant(ctx context.Context, config *TenantConfig) 
 	if config.Enabled != nil {
 		enabled = *config.Enabled
 	}
-	tenant := &client.Tenant{
+	tenant := &keycloak.Tenant{
 		Name:        config.Name,
 		DisplayName: config.DisplayName,
 		Enabled:     enabled,
 		Domains:     config.Domains,
 	}
-	createdTenant, err := m.client.CreateTenant(ctx, tenant)
+	createdTenant, err := m.keycloak.CreateTenant(ctx, tenant)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tenant in IdP: %w", err)
 	}
@@ -203,7 +203,7 @@ func (m *TenantManager) UpdateTenant(ctx context.Context, name string, domains [
 		slog.String("tenant", name),
 	)
 
-	tenant, err := m.client.GetTenant(ctx, name)
+	tenant, err := m.keycloak.GetTenant(ctx, name)
 	if err != nil {
 		return fmt.Errorf("failed to get tenant from IdP for update: %w", err)
 	}
@@ -223,7 +223,7 @@ func (m *TenantManager) UpdateTenant(ctx context.Context, name string, domains [
 	}
 
 	tenant.Domains = domains
-	_, err = m.client.UpdateTenant(ctx, tenant)
+	_, err = m.keycloak.UpdateTenant(ctx, tenant)
 	if err != nil {
 		return fmt.Errorf("failed to update tenant in IdP: %w", err)
 	}
@@ -251,7 +251,7 @@ func (m *TenantManager) rollback(ctx context.Context, tenantName string, deleteT
 	)
 
 	// Delete tenant from IdP (cascade-deletes all users and resources within it)
-	if err := m.client.DeleteTenant(cleanupCtx, tenantName); err != nil {
+	if err := m.keycloak.DeleteTenant(cleanupCtx, tenantName); err != nil {
 		m.logger.ErrorContext(ctx, "Failed to rollback tenant creation in IdP",
 			slog.String("tenant", tenantName),
 			slog.Any("error", err),
@@ -298,14 +298,14 @@ func (m *TenantManager) createBreakGlassAccount(ctx context.Context, config *Ten
 		)
 	}
 
-	user := &client.User{
+	user := &keycloak.User{
 		Username:      username,
 		Email:         email,
 		EmailVerified: true,
 		Enabled:       true,
 		FirstName:     "OSAC",
 		LastName:      "Break-Glass",
-		Credentials: []*client.Credential{
+		Credentials: []*keycloak.Credential{
 			{
 				Type:      "password",
 				Value:     password,
@@ -314,7 +314,7 @@ func (m *TenantManager) createBreakGlassAccount(ctx context.Context, config *Ten
 		},
 	}
 
-	createdUser, err := m.client.CreateUser(ctx, config.Name, user)
+	createdUser, err := m.keycloak.CreateUser(ctx, config.Name, user)
 	if err != nil {
 		return nil, err
 	}
@@ -344,7 +344,7 @@ func (m *TenantManager) assignIdpManagerPermissions(ctx context.Context, userID 
 		slog.String("user_id", userID),
 	)
 
-	err := m.client.AssignIdpManagerPermissions(ctx, userID)
+	err := m.keycloak.AssignIdpManagerPermissions(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("failed to assign IdP manager permissions: %w", err)
 	}
@@ -362,7 +362,7 @@ func (m *TenantManager) DeleteTenant(ctx context.Context, tenantName string) err
 		slog.String("tenant", tenantName),
 	)
 
-	err := m.client.DeleteTenant(ctx, tenantName)
+	err := m.keycloak.DeleteTenant(ctx, tenantName)
 	if err != nil {
 		return fmt.Errorf("failed to delete tenant from IdP: %w", err)
 	}

@@ -102,7 +102,7 @@ var _ = Describe("buildSpec", func() {
 	})
 })
 
-// newSubnetCR creates a typed Subnet CR for use with the fake client.
+// newSubnetCR creates a typed Subnet CR for use with the fake keycloak.
 func newSubnetCR(id, namespace, name string, deletionTimestamp *metav1.Time) *osacv1alpha1.Subnet {
 	obj := &osacv1alpha1.Subnet{
 		ObjectMeta: metav1.ObjectMeta{

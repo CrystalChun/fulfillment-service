@@ -158,7 +158,7 @@ var _ = Describe("buildSpec", func() {
 	})
 })
 
-// newVirtualNetworkCR creates a typed VirtualNetwork CR for use with the fake client.
+// newVirtualNetworkCR creates a typed VirtualNetwork CR for use with the fake keycloak.
 func newVirtualNetworkCR(id, namespace, name string, deletionTimestamp *metav1.Time) *osacv1alpha1.VirtualNetwork {
 	obj := &osacv1alpha1.VirtualNetwork{
 		ObjectMeta: metav1.ObjectMeta{

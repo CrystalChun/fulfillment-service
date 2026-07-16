@@ -20,16 +20,16 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/osac-project/fulfillment-service/internal/idp/client"
+	"github.com/osac-project/fulfillment-service/internal/idp/keycloak"
 )
 
 // mockClient is a mock IdP client for testing.
 type mockClient struct {
-	createdTenant       *client.Tenant
-	createdUsers        []*client.User
+	createdTenant       *keycloak.Tenant
+	createdUsers        []*keycloak.User
 	deletedTenant       string
 	deletedUsers        []string                             // Track deleted user IDs
-	userRoleAssignments map[string]map[string][]*client.Role // userID -> clientID -> roles
+	userRoleAssignments map[string]map[string][]*keycloak.Role // userID -> clientID -> roles
 	failUserCreation    bool                                 // Trigger user creation failure
 	failRoleAssignment  bool                                 // Trigger role assignment failure
 	failTenantDeletion  bool                                 // Trigger tenant deletion failure
@@ -39,9 +39,9 @@ type mockClient struct {
 	tenantUpdateCalled  bool                                 // Track whether UpdateTenant was called
 }
 
-func (m *mockClient) CreateTenant(ctx context.Context, tenant *client.Tenant) (*client.Tenant, error) {
+func (m *mockClient) CreateTenant(ctx context.Context, tenant *keycloak.Tenant) (*keycloak.Tenant, error) {
 	// Create a copy to avoid mutation
-	createdTenant := &client.Tenant{
+	createdTenant := &keycloak.Tenant{
 		ID:          tenant.ID,
 		Name:        tenant.Name,
 		DisplayName: tenant.DisplayName,
@@ -53,7 +53,7 @@ func (m *mockClient) CreateTenant(ctx context.Context, tenant *client.Tenant) (*
 	return createdTenant, nil
 }
 
-func (m *mockClient) GetTenant(ctx context.Context, name string) (*client.Tenant, error) {
+func (m *mockClient) GetTenant(ctx context.Context, name string) (*keycloak.Tenant, error) {
 	if m.failTenantGet {
 		return nil, fmt.Errorf("simulated get tenant failure")
 	}
@@ -63,7 +63,7 @@ func (m *mockClient) GetTenant(ctx context.Context, name string) (*client.Tenant
 	return m.createdTenant, nil
 }
 
-func (m *mockClient) UpdateTenant(ctx context.Context, tenant *client.Tenant) (*client.Tenant, error) {
+func (m *mockClient) UpdateTenant(ctx context.Context, tenant *keycloak.Tenant) (*keycloak.Tenant, error) {
 	m.tenantUpdateCalled = true
 	if m.failTenantUpdate {
 		return nil, fmt.Errorf("simulated update tenant failure")
@@ -93,13 +93,13 @@ func (m *mockClient) DeleteTenant(ctx context.Context, name string) error {
 	return nil
 }
 
-func (m *mockClient) CreateUser(ctx context.Context, tenantName string, user *client.User) (*client.User, error) {
+func (m *mockClient) CreateUser(ctx context.Context, tenantName string, user *keycloak.User) (*keycloak.User, error) {
 	if m.failUserCreation {
 		return nil, fmt.Errorf("simulated user creation failure")
 	}
 	// Create a copy with ID populated
 	userID := fmt.Sprintf("user-%d", len(m.createdUsers)+1)
-	createdUser := &client.User{
+	createdUser := &keycloak.User{
 		ID:              userID,
 		Username:        user.Username,
 		Email:           user.Email,
@@ -116,7 +116,7 @@ func (m *mockClient) CreateUser(ctx context.Context, tenantName string, user *cl
 	return createdUser, nil
 }
 
-func (m *mockClient) GetUser(ctx context.Context, userID string) (*client.User, error) {
+func (m *mockClient) GetUser(ctx context.Context, userID string) (*keycloak.User, error) {
 	for _, user := range m.createdUsers {
 		if user.ID == userID {
 			return user, nil
@@ -125,7 +125,7 @@ func (m *mockClient) GetUser(ctx context.Context, userID string) (*client.User, 
 	return nil, nil
 }
 
-func (m *mockClient) GetUserByUsername(ctx context.Context, username string) (*client.User, error) {
+func (m *mockClient) GetUserByUsername(ctx context.Context, username string) (*keycloak.User, error) {
 	for _, user := range m.createdUsers {
 		if user.Username == username {
 			return user, nil
@@ -134,7 +134,7 @@ func (m *mockClient) GetUserByUsername(ctx context.Context, username string) (*c
 	return nil, nil
 }
 
-func (m *mockClient) ListUsers(ctx context.Context, tenantName string) ([]*client.User, error) {
+func (m *mockClient) ListUsers(ctx context.Context, tenantName string) ([]*keycloak.User, error) {
 	return m.createdUsers, nil
 }
 
@@ -143,14 +143,14 @@ func (m *mockClient) DeleteUser(ctx context.Context, userID string) error {
 	return nil
 }
 
-func (m *mockClient) ListTenantRoles(ctx context.Context, tenantName string) ([]*client.Role, error) {
+func (m *mockClient) ListTenantRoles(ctx context.Context, tenantName string) ([]*keycloak.Role, error) {
 	return nil, nil
 }
 
-func (m *mockClient) ListClientRoles(ctx context.Context, tenantName, clientID string) ([]*client.Role, error) {
+func (m *mockClient) ListClientRoles(ctx context.Context, tenantName, clientID string) ([]*keycloak.Role, error) {
 	// Return full set of realm-management roles (matching Keycloak's standard roles)
 	if clientID == "realm-management" {
-		return []*client.Role{
+		return []*keycloak.Role{
 			{ID: "1", Name: "manage-realm", ClientRole: true},
 			{ID: "2", Name: "manage-users", ClientRole: true},
 			{ID: "3", Name: "manage-clients", ClientRole: true},
@@ -168,44 +168,44 @@ func (m *mockClient) ListClientRoles(ctx context.Context, tenantName, clientID s
 	return nil, nil
 }
 
-func (m *mockClient) AssignTenantRolesToUser(ctx context.Context, tenantName, userID string, roles []*client.Role) error {
+func (m *mockClient) AssignTenantRolesToUser(ctx context.Context, tenantName, userID string, roles []*keycloak.Role) error {
 	if m.userRoleAssignments == nil {
-		m.userRoleAssignments = make(map[string]map[string][]*client.Role)
+		m.userRoleAssignments = make(map[string]map[string][]*keycloak.Role)
 	}
 	if m.userRoleAssignments[userID] == nil {
-		m.userRoleAssignments[userID] = make(map[string][]*client.Role)
+		m.userRoleAssignments[userID] = make(map[string][]*keycloak.Role)
 	}
 	m.userRoleAssignments[userID]["realm"] = roles
 	return nil
 }
 
-func (m *mockClient) AssignClientRolesToUser(ctx context.Context, tenantName, userID, clientID string, roles []*client.Role) error {
+func (m *mockClient) AssignClientRolesToUser(ctx context.Context, tenantName, userID, clientID string, roles []*keycloak.Role) error {
 	if m.userRoleAssignments == nil {
-		m.userRoleAssignments = make(map[string]map[string][]*client.Role)
+		m.userRoleAssignments = make(map[string]map[string][]*keycloak.Role)
 	}
 	if m.userRoleAssignments[userID] == nil {
-		m.userRoleAssignments[userID] = make(map[string][]*client.Role)
+		m.userRoleAssignments[userID] = make(map[string][]*keycloak.Role)
 	}
 	m.userRoleAssignments[userID][clientID] = roles
 	return nil
 }
 
-func (m *mockClient) RemoveTenantRolesFromUser(ctx context.Context, tenantName, userID string, roles []*client.Role) error {
+func (m *mockClient) RemoveTenantRolesFromUser(ctx context.Context, tenantName, userID string, roles []*keycloak.Role) error {
 	return nil
 }
 
-func (m *mockClient) RemoveClientRolesFromUser(ctx context.Context, tenantName, userID, clientID string, roles []*client.Role) error {
+func (m *mockClient) RemoveClientRolesFromUser(ctx context.Context, tenantName, userID, clientID string, roles []*keycloak.Role) error {
 	return nil
 }
 
-func (m *mockClient) GetUserTenantRoles(ctx context.Context, tenantName, userID string) ([]*client.Role, error) {
+func (m *mockClient) GetUserTenantRoles(ctx context.Context, tenantName, userID string) ([]*keycloak.Role, error) {
 	if m.userRoleAssignments != nil && m.userRoleAssignments[userID] != nil {
 		return m.userRoleAssignments[userID]["realm"], nil
 	}
 	return nil, nil
 }
 
-func (m *mockClient) GetUserClientRoles(ctx context.Context, tenantName, userID, clientID string) ([]*client.Role, error) {
+func (m *mockClient) GetUserClientRoles(ctx context.Context, tenantName, userID, clientID string) ([]*keycloak.Role, error) {
 	if m.userRoleAssignments != nil && m.userRoleAssignments[userID] != nil {
 		return m.userRoleAssignments[userID][clientID], nil
 	}
@@ -217,7 +217,7 @@ func (m *mockClient) AssignTenantAdminPermissions(ctx context.Context, tenantNam
 		return fmt.Errorf("simulated role assignment failure")
 	}
 	// Simulate assigning full admin roles (matching keycloakRealmManagementRoles)
-	roles := []*client.Role{
+	roles := []*keycloak.Role{
 		{ID: "1", Name: "manage-realm", ClientRole: true},
 		{ID: "2", Name: "manage-users", ClientRole: true},
 		{ID: "3", Name: "manage-clients", ClientRole: true},
@@ -239,7 +239,7 @@ func (m *mockClient) AssignIdpManagerPermissions(ctx context.Context, userID str
 		return fmt.Errorf("simulated role assignment failure")
 	}
 	// Simulate assigning limited IdP manager roles (matching keycloakIdpManagerRoles)
-	roles := []*client.Role{
+	roles := []*keycloak.Role{
 		{ID: "2", Name: "manage-users", ClientRole: true},
 		{ID: "8", Name: "view-users", ClientRole: true},
 		{ID: "4", Name: "manage-identity-providers", ClientRole: true},
@@ -251,15 +251,15 @@ func (m *mockClient) AssignIdpManagerPermissions(ctx context.Context, userID str
 }
 
 // Identity Provider stub methods
-func (m *mockClient) CreateIdentityProvider(ctx context.Context, tenantName string, idp *client.IdentityProvider) (*client.IdentityProvider, error) {
+func (m *mockClient) CreateIdentityProvider(ctx context.Context, tenantName string, idp *keycloak.IdentityProvider) (*keycloak.IdentityProvider, error) {
 	return idp, nil
 }
 
-func (m *mockClient) GetIdentityProvider(ctx context.Context, tenantName, alias string) (*client.IdentityProvider, error) {
+func (m *mockClient) GetIdentityProvider(ctx context.Context, tenantName, alias string) (*keycloak.IdentityProvider, error) {
 	return nil, nil
 }
 
-func (m *mockClient) ListIdentityProviders(ctx context.Context, tenantName string) ([]*client.IdentityProvider, error) {
+func (m *mockClient) ListIdentityProviders(ctx context.Context, tenantName string) ([]*keycloak.IdentityProvider, error) {
 	return nil, nil
 }
 
@@ -653,7 +653,7 @@ var _ = Describe("TenantManager", func() {
 
 		It("returns an error when the client update fails", func() {
 			failingMock := &mockClient{
-				createdTenant:    &client.Tenant{Name: "test-tenant"},
+				createdTenant:    &keycloak.Tenant{Name: "test-tenant"},
 				failTenantUpdate: true,
 			}
 			failingManager, err := NewTenantManager().
@@ -699,7 +699,7 @@ func (m *mockClient) AddUserToOrganization(ctx context.Context, tenantName strin
 	return fmt.Errorf("not implemented in test mock")
 }
 
-func (m *mockClient) CreateUserInRealm(ctx context.Context, user *client.User) (*client.User, error) {
+func (m *mockClient) CreateUserInRealm(ctx context.Context, user *keycloak.User) (*keycloak.User, error) {
 	return nil, fmt.Errorf("not implemented in test mock")
 }
 
@@ -711,10 +711,10 @@ func (m *mockClient) GetRealmClientByClientID(ctx context.Context, clientID, rea
 	return "", fmt.Errorf("not implemented in test mock")
 }
 
-func (m *mockClient) GetRealmRole(ctx context.Context, roleName string) (*client.Role, error) {
+func (m *mockClient) GetRealmRole(ctx context.Context, roleName string) (*keycloak.Role, error) {
 	return nil, fmt.Errorf("not implemented in test mock")
 }
 
-func (m *mockClient) RemoveRealmRolesFromUser(ctx context.Context, userID string, roles []*client.Role) error {
+func (m *mockClient) RemoveRealmRolesFromUser(ctx context.Context, userID string, roles []*keycloak.Role) error {
 	return fmt.Errorf("not implemented in test mock")
 }

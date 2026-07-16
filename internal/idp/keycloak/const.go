@@ -11,7 +11,7 @@ Unless required by applicable law or agreed to in writing, software distributed 
 language governing permissions and limitations under the License.
 */
 
-package client
+package keycloak
 
 // realmManagementClientID is the clientId of the built-in Keycloak client that contains
 // all administrative roles for managing a realm. This client exists by default in every

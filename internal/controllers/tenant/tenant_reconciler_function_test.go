@@ -27,7 +27,7 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/auth"
 	"github.com/osac-project/fulfillment-service/internal/controllers/finalizers"
 	"github.com/osac-project/fulfillment-service/internal/idp"
-	"github.com/osac-project/fulfillment-service/internal/idp/client"
+	"github.com/osac-project/fulfillment-service/internal/idp/keycloak"
 )
 
 var _ = Describe("Tenant Validation", func() {
@@ -182,7 +182,7 @@ var _ = Describe("IDP Sync", func() {
 		var err error
 		ctx = context.Background()
 		ctrl = gomock.NewController(GinkgoT())
-		mockClient = client.NewMockClientInterface(ctrl)
+		mockClient = keycloak.NewMockClientInterface(ctrl)
 
 		idpManager, err = idp.NewTenantManager().
 			SetLogger(logger).
@@ -612,7 +612,7 @@ var _ = Describe("Deletion", func() {
 		var err error
 		ctx = context.Background()
 		ctrl = gomock.NewController(GinkgoT())
-		mockClient = client.NewMockClientInterface(ctrl)
+		mockClient = keycloak.NewMockClientInterface(ctrl)
 		mockProjectsClient = NewMockProjectsClient(ctrl)
 
 		idpManager, err = idp.NewTenantManager().
@@ -863,7 +863,7 @@ var _ = Describe("Deletion", func() {
 var _ = Describe("Skip Reconciliation", func() {
 	It("should call updateIDP for synced tenants", func() {
 		ctrl := gomock.NewController(GinkgoT())
-		mockClient := client.NewMockClientInterface(ctrl)
+		mockClient := keycloak.NewMockClientInterface(ctrl)
 
 		idpManager, err := idp.NewTenantManager().
 			SetLogger(logger).

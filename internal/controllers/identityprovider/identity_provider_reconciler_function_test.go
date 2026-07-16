@@ -27,7 +27,7 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/apiclient"
 	"github.com/osac-project/fulfillment-service/internal/controllers/finalizers"
 	"github.com/osac-project/fulfillment-service/internal/idp"
-	"github.com/osac-project/fulfillment-service/internal/idp/client"
+	"github.com/osac-project/fulfillment-service/internal/idp/keycloak"
 	"google.golang.org/grpc"
 )
 
@@ -324,7 +324,7 @@ var _ = Describe("IDP Sync", func() {
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
-		mockClient = client.NewMockClientInterface(ctrl)
+		mockClient = keycloak.NewMockClientInterface(ctrl)
 
 		reconciler = &function{
 			logger:    logger,
@@ -647,7 +647,7 @@ var _ = Describe("Deletion", func() {
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
-		mockClient = client.NewMockClientInterface(ctrl)
+		mockClient = keycloak.NewMockClientInterface(ctrl)
 
 		reconciler = &function{
 			logger:    logger,
