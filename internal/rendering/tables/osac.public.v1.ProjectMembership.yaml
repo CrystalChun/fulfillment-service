@@ -28,10 +28,8 @@ columns:
   type: osac.public.v1.Project
   lookup: true
 
-- header: USER
-  value: this.spec.user
-  type: osac.public.v1.User
-  lookup: true
+- header: USERS
+  value: "size(this.spec.users) > 0? this.spec.users.join(', '): '-'"
 
 - header: ROLE
   value: this.spec.role
