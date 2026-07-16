@@ -334,7 +334,6 @@ func (t *task) handleUserListChange(ctx context.Context) error {
 func (t *task) resolveProjectGroup(ctx context.Context) (
 	project *privatev1.Project, organizationName string, groupID string, err error,
 ) {
-	projectNameOrID := t.membership.GetSpec().GetProject()
 	// Get the project
 	projectNameOrID := t.membership.GetMetadata().GetProject()
 	if projectNameOrID == "" {

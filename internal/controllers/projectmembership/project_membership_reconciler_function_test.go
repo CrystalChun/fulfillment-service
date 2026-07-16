@@ -453,8 +453,8 @@ var _ = Describe("Synchronization", func() {
 					Project: "project-id",
 				}.Build(),
 				Spec: privatev1.ProjectMembershipSpec_builder{
-					User: new("user-id"),
-					Role: privatev1.ProjectMembershipRole_PROJECT_MEMBERSHIP_ROLE_MANAGER,
+					Users: []string{"alice-id", "bob-id"},
+					Role:  privatev1.ProjectMembershipRole_PROJECT_MEMBERSHIP_ROLE_MANAGER,
 				}.Build(),
 				Status: privatev1.ProjectMembershipStatus_builder{
 					State: privatev1.ProjectMembershipState_PROJECT_MEMBERSHIP_STATE_PENDING,
@@ -548,13 +548,12 @@ var _ = Describe("Synchronization", func() {
 			}.Build()
 
 			membership := privatev1.ProjectMembership_builder{
-				Spec: privatev1.ProjectMembershipSpec_builder{
-					Users:   []string{"user-id"},
-					Project: "child-project-id",
+				Metadata: privatev1.Metadata_builder{
+					Project: "project-id",
 				}.Build(),
 				Spec: privatev1.ProjectMembershipSpec_builder{
-					User: new("user-id"),
-					Role: privatev1.ProjectMembershipRole_PROJECT_MEMBERSHIP_ROLE_VIEWER,
+					Users: []string{"user-id"},
+					Role:  privatev1.ProjectMembershipRole_PROJECT_MEMBERSHIP_ROLE_VIEWER,
 				}.Build(),
 				Status: privatev1.ProjectMembershipStatus_builder{
 					State: privatev1.ProjectMembershipState_PROJECT_MEMBERSHIP_STATE_PENDING,
@@ -601,8 +600,8 @@ var _ = Describe("Synchronization", func() {
 					Users: []string{"nonexistent-user"},
 				}.Build(),
 				Spec: privatev1.ProjectMembershipSpec_builder{
-					User: new("nonexistent-user"),
-					Role: privatev1.ProjectMembershipRole_PROJECT_MEMBERSHIP_ROLE_MANAGER,
+					Users: []string{"nonexistent-user"},
+					Role:  privatev1.ProjectMembershipRole_PROJECT_MEMBERSHIP_ROLE_MANAGER,
 				}.Build(),
 				Status: privatev1.ProjectMembershipStatus_builder{
 					State: privatev1.ProjectMembershipState_PROJECT_MEMBERSHIP_STATE_PENDING,
@@ -688,8 +687,8 @@ var _ = Describe("Synchronization", func() {
 					Users: []string{"user-id"},
 				}.Build(),
 				Spec: privatev1.ProjectMembershipSpec_builder{
-					User: new("user-id"),
-					Role: privatev1.ProjectMembershipRole_PROJECT_MEMBERSHIP_ROLE_MANAGER,
+					Users: []string{"user-id"},
+					Role:  privatev1.ProjectMembershipRole_PROJECT_MEMBERSHIP_ROLE_MANAGER,
 				}.Build(),
 				Status: privatev1.ProjectMembershipStatus_builder{
 					State: privatev1.ProjectMembershipState_PROJECT_MEMBERSHIP_STATE_PENDING,
