@@ -152,7 +152,9 @@ func (t *task) update(ctx context.Context) error {
 		return nil
 	}
 
-	// For READY memberships, detect user list changes and sync accordingly
+	// For READY memberships, spec.role and metadata.project are immutable.
+	// The controller doesn't support changing these fields after initial sync.
+	// User list changes are detected and synced accordingly
 	if state == privatev1.ProjectMembershipState_PROJECT_MEMBERSHIP_STATE_READY {
 		return t.handleUserListChange(ctx)
 	}
@@ -333,6 +335,8 @@ func (t *task) resolveProjectGroup(ctx context.Context) (
 	project *privatev1.Project, organizationName string, groupID string, err error,
 ) {
 	projectNameOrID := t.membership.GetSpec().GetProject()
+	// Get the project
+	projectNameOrID := t.membership.GetMetadata().GetProject()
 	if projectNameOrID == "" {
 		t.membership.GetStatus().SetState(privatev1.ProjectMembershipState_PROJECT_MEMBERSHIP_STATE_FAILED)
 		t.membership.GetStatus().SetMessage("Project is required")
@@ -543,7 +547,7 @@ func (t *task) cleanupProjectMembership(ctx context.Context) error {
 	}
 
 	// Get the project
-	projectNameOrID := t.membership.GetSpec().GetProject()
+	projectNameOrID := t.membership.GetMetadata().GetProject()
 	if projectNameOrID == "" {
 		return nil
 	}
