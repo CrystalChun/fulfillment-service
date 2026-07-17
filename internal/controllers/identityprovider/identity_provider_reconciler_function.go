@@ -80,6 +80,7 @@ func (b *FunctionBuilder) Build() (result *function, err error) {
 	result = &function{
 		logger:                  b.logger,
 		identityProvidersClient: privatev1.NewIdentityProvidersClient(b.connection),
+		usersClient:             privatev1.NewUsersClient(b.connection),
 		idpClient:               b.idpClient,
 		maskCalculator:          masks.NewCalculator().Build(),
 	}
@@ -90,6 +91,7 @@ func (b *FunctionBuilder) Build() (result *function, err error) {
 type function struct {
 	logger                  *slog.Logger
 	identityProvidersClient privatev1.IdentityProvidersClient
+	usersClient             privatev1.UsersClient
 	idpClient               idp.ClientInterface
 	maskCalculator          *masks.Calculator
 }
@@ -283,6 +285,69 @@ func (t *task) removeFinalizer() {
 	}
 }
 
+// deleteFederatedUsers deletes users that are linked through this identity provider.
+// Returns the number of users that were found and deleted (or are still pending deletion).
+func (t *task) deleteFederatedUsers(ctx context.Context) (int, error) {
+	tenantName := t.identityProvider.GetMetadata().GetTenant()
+	alias := fmt.Sprintf("%s-%s", tenantName, t.identityProvider.GetMetadata().GetName())
+
+	keycloakUsers, err := t.r.idpClient.ListUsersByIdpLink(ctx, alias)
+	if err != nil {
+		return 0, fmt.Errorf("failed to list users by IdP link: %w", err)
+	}
+	if len(keycloakUsers) == 0 {
+		return 0, nil
+	}
+
+	federatedIDs := make(map[string]bool, len(keycloakUsers))
+	for _, u := range keycloakUsers {
+		federatedIDs[u.ID] = true
+	}
+
+	// List fulfillment-service users in this tenant
+	listFilter := fmt.Sprintf("this.metadata.tenant == %q", tenantName)
+	listResp, err := t.r.usersClient.List(ctx, privatev1.UsersListRequest_builder{
+		Filter: &listFilter,
+	}.Build())
+	if err != nil {
+		return 0, fmt.Errorf("failed to list users: %w", err)
+	}
+
+	// Build a set of keycloak_user_ids that have fulfillment-service records
+	matchedKeycloakIDs := make(map[string]bool)
+	for _, user := range listResp.GetItems() {
+		keycloakID := user.GetStatus().GetKeycloakUserId()
+		if keycloakID != "" && federatedIDs[keycloakID] {
+			matchedKeycloakIDs[keycloakID] = true
+			_, err := t.r.usersClient.Delete(ctx, privatev1.UsersDeleteRequest_builder{
+				Id: user.GetId(),
+			}.Build())
+			if err != nil {
+				t.r.logger.ErrorContext(ctx, "Failed to delete federated user",
+					slog.String("user_id", user.GetId()),
+					slog.String("keycloak_user_id", keycloakID),
+					slog.Any("error", err),
+				)
+			}
+		}
+	}
+
+	// Delete Keycloak-only users that have no fulfillment-service record
+	for _, kcUser := range keycloakUsers {
+		if !matchedKeycloakIDs[kcUser.ID] {
+			err := t.r.idpClient.DeleteUser(ctx, tenantName, kcUser.ID)
+			if err != nil {
+				t.r.logger.ErrorContext(ctx, "Failed to delete Keycloak-only federated user",
+					slog.String("keycloak_user_id", kcUser.ID),
+					slog.Any("error", err),
+				)
+			}
+		}
+	}
+
+	return len(keycloakUsers), nil
+}
+
 // delete performs the deletion cleanup for an identity provider.
 func (t *task) delete(ctx context.Context) error {
 	// Skip if not in ready state (not synced to IDP yet)
@@ -291,12 +356,25 @@ func (t *task) delete(ctx context.Context) error {
 		return nil
 	}
 
+	// Delete federated users before removing the IdP
+	remaining, err := t.deleteFederatedUsers(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete federated users: %w", err)
+	}
+	if remaining > 0 {
+		t.r.logger.InfoContext(ctx, "Waiting for federated users to be deleted before identity provider can be removed",
+			slog.String("identity_provider_id", t.identityProvider.GetId()),
+			slog.Int("remaining_users", remaining),
+		)
+		return fmt.Errorf("identity provider still has %d federated user(s) pending deletion", remaining)
+	}
+
 	// Delete the identity provider from Keycloak
 	// Use tenant-prefixed alias (same as in syncToIDP)
 	tenantName := t.identityProvider.GetMetadata().GetTenant()
 	alias := fmt.Sprintf("%s-%s", tenantName, t.identityProvider.GetMetadata().GetName())
 
-	err := t.r.idpClient.DeleteIdentityProvider(ctx, tenantName, alias)
+	err = t.r.idpClient.DeleteIdentityProvider(ctx, tenantName, alias)
 	if err != nil {
 		// Check if this is a terminal error (not found / already deleted)
 		var apiErr *apiclient.APIError

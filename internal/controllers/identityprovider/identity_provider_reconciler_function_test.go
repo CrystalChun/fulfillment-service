@@ -59,6 +59,42 @@ func (m *mockIdentityProvidersClient) Signal(ctx context.Context, req *privatev1
 	return nil, nil
 }
 
+// mockUsersClient is a minimal mock for testing user deletion during IdP cleanup
+type mockUsersClient struct {
+	listFunc   func(ctx context.Context, req *privatev1.UsersListRequest) (*privatev1.UsersListResponse, error)
+	deleteFunc func(ctx context.Context, req *privatev1.UsersDeleteRequest) (*privatev1.UsersDeleteResponse, error)
+}
+
+func (m *mockUsersClient) List(ctx context.Context, req *privatev1.UsersListRequest, _ ...grpc.CallOption) (*privatev1.UsersListResponse, error) {
+	if m.listFunc != nil {
+		return m.listFunc(ctx, req)
+	}
+	return privatev1.UsersListResponse_builder{}.Build(), nil
+}
+
+func (m *mockUsersClient) Delete(ctx context.Context, req *privatev1.UsersDeleteRequest, _ ...grpc.CallOption) (*privatev1.UsersDeleteResponse, error) {
+	if m.deleteFunc != nil {
+		return m.deleteFunc(ctx, req)
+	}
+	return &privatev1.UsersDeleteResponse{}, nil
+}
+
+func (m *mockUsersClient) Get(ctx context.Context, req *privatev1.UsersGetRequest, _ ...grpc.CallOption) (*privatev1.UsersGetResponse, error) {
+	return nil, nil
+}
+
+func (m *mockUsersClient) Create(ctx context.Context, req *privatev1.UsersCreateRequest, _ ...grpc.CallOption) (*privatev1.UsersCreateResponse, error) {
+	return nil, nil
+}
+
+func (m *mockUsersClient) Update(ctx context.Context, req *privatev1.UsersUpdateRequest, _ ...grpc.CallOption) (*privatev1.UsersUpdateResponse, error) {
+	return nil, nil
+}
+
+func (m *mockUsersClient) Signal(ctx context.Context, req *privatev1.UsersSignalRequest, _ ...grpc.CallOption) (*privatev1.UsersSignalResponse, error) {
+	return nil, nil
+}
+
 var _ = Describe("Finalizer Management", func() {
 	It("should add finalizer on first call", func() {
 		identityProvider := privatev1.IdentityProvider_builder{
@@ -639,18 +675,21 @@ var _ = Describe("Skip Reconciliation", func() {
 
 var _ = Describe("Deletion", func() {
 	var (
-		ctrl       *gomock.Controller
-		mockClient *idp.MockClientInterface
-		reconciler *function
+		ctrl          *gomock.Controller
+		mockClient    *idp.MockClientInterface
+		mockUsersGrpc *mockUsersClient
+		reconciler    *function
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockClient = idp.NewMockClientInterface(ctrl)
+		mockUsersGrpc = &mockUsersClient{}
 
 		reconciler = &function{
-			logger:    logger,
-			idpClient: mockClient,
+			logger:      logger,
+			idpClient:   mockClient,
+			usersClient: mockUsersGrpc,
 		}
 	})
 
@@ -720,6 +759,11 @@ var _ = Describe("Deletion", func() {
 		}.Build()
 
 		mockClient.EXPECT().
+			ListUsersByIdpLink(gomock.Any(), "tenant-1-test-idp").
+			Return(nil, nil).
+			Times(1)
+
+		mockClient.EXPECT().
 			DeleteIdentityProvider(gomock.Any(), "tenant-1", "tenant-1-test-idp").
 			Return(nil).
 			Times(1)
@@ -748,6 +792,11 @@ var _ = Describe("Deletion", func() {
 				Phase: privatev1.IdentityProviderPhase_IDENTITY_PROVIDER_PHASE_READY,
 			}.Build(),
 		}.Build()
+
+		mockClient.EXPECT().
+			ListUsersByIdpLink(gomock.Any(), "tenant-1-missing-idp").
+			Return(nil, nil).
+			Times(1)
 
 		// Simulate 404 - IdP was already deleted
 		mockClient.EXPECT().
@@ -782,6 +831,11 @@ var _ = Describe("Deletion", func() {
 				Phase: privatev1.IdentityProviderPhase_IDENTITY_PROVIDER_PHASE_READY,
 			}.Build(),
 		}.Build()
+
+		mockClient.EXPECT().
+			ListUsersByIdpLink(gomock.Any(), "tenant-1-failing-idp").
+			Return(nil, nil).
+			Times(1)
 
 		// Simulate transient error (500)
 		mockClient.EXPECT().
@@ -844,5 +898,170 @@ var _ = Describe("Deletion", func() {
 
 		task.removeFinalizer()
 		Expect(identityProvider.HasMetadata()).To(BeFalse())
+	})
+
+	It("should delete fulfillment-service users federated through the IdP", func() {
+		deletionTimestamp := timestamppb.New(time.Now())
+		identityProvider := privatev1.IdentityProvider_builder{
+			Id: "idp-with-users",
+			Metadata: privatev1.Metadata_builder{
+				Name:              "google-sso",
+				Tenant:            "tenant-1",
+				Finalizers:        []string{finalizers.Controller},
+				DeletionTimestamp: deletionTimestamp,
+			}.Build(),
+			Status: privatev1.IdentityProviderStatus_builder{
+				Phase: privatev1.IdentityProviderPhase_IDENTITY_PROVIDER_PHASE_READY,
+			}.Build(),
+		}.Build()
+
+		// Keycloak returns one federated user
+		mockClient.EXPECT().
+			ListUsersByIdpLink(gomock.Any(), "tenant-1-google-sso").
+			Return([]*idp.User{{ID: "kc-user-1", Username: "alice"}}, nil).
+			Times(1)
+
+		// The fulfillment-service has a matching user
+		mockUsersGrpc.listFunc = func(ctx context.Context, req *privatev1.UsersListRequest) (*privatev1.UsersListResponse, error) {
+			return privatev1.UsersListResponse_builder{
+				Items: []*privatev1.User{
+					privatev1.User_builder{
+						Id: "fs-user-1",
+						Metadata: privatev1.Metadata_builder{
+							Tenant: "tenant-1",
+						}.Build(),
+						Status: privatev1.UserStatus_builder{
+							KeycloakUserId: "kc-user-1",
+						}.Build(),
+					}.Build(),
+				},
+			}.Build(), nil
+		}
+
+		var deletedUserID string
+		mockUsersGrpc.deleteFunc = func(ctx context.Context, req *privatev1.UsersDeleteRequest) (*privatev1.UsersDeleteResponse, error) {
+			deletedUserID = req.GetId()
+			return &privatev1.UsersDeleteResponse{}, nil
+		}
+
+		task := &task{
+			r:                reconciler,
+			identityProvider: identityProvider,
+		}
+
+		err := task.delete(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("federated user(s) pending deletion"))
+		Expect(deletedUserID).To(Equal("fs-user-1"))
+		// Finalizer should be kept since we're waiting for users
+		Expect(identityProvider.GetMetadata().GetFinalizers()).To(ContainElement(finalizers.Controller))
+	})
+
+	It("should delete Keycloak-only users directly when no fulfillment-service record exists", func() {
+		deletionTimestamp := timestamppb.New(time.Now())
+		identityProvider := privatev1.IdentityProvider_builder{
+			Id: "idp-kc-only",
+			Metadata: privatev1.Metadata_builder{
+				Name:              "github-sso",
+				Tenant:            "tenant-1",
+				Finalizers:        []string{finalizers.Controller},
+				DeletionTimestamp: deletionTimestamp,
+			}.Build(),
+			Status: privatev1.IdentityProviderStatus_builder{
+				Phase: privatev1.IdentityProviderPhase_IDENTITY_PROVIDER_PHASE_READY,
+			}.Build(),
+		}.Build()
+
+		// Keycloak returns a user that has no fulfillment-service record
+		mockClient.EXPECT().
+			ListUsersByIdpLink(gomock.Any(), "tenant-1-github-sso").
+			Return([]*idp.User{{ID: "kc-orphan-1", Username: "bob"}}, nil).
+			Times(1)
+
+		// No matching fulfillment-service users
+		mockUsersGrpc.listFunc = func(ctx context.Context, req *privatev1.UsersListRequest) (*privatev1.UsersListResponse, error) {
+			return privatev1.UsersListResponse_builder{}.Build(), nil
+		}
+
+		// Should delete directly from Keycloak
+		mockClient.EXPECT().
+			DeleteUser(gomock.Any(), "tenant-1", "kc-orphan-1").
+			Return(nil).
+			Times(1)
+
+		task := &task{
+			r:                reconciler,
+			identityProvider: identityProvider,
+		}
+
+		err := task.delete(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("federated user(s) pending deletion"))
+	})
+
+	It("should proceed with IdP deletion when no federated users remain", func() {
+		deletionTimestamp := timestamppb.New(time.Now())
+		identityProvider := privatev1.IdentityProvider_builder{
+			Id: "idp-no-users",
+			Metadata: privatev1.Metadata_builder{
+				Name:              "clean-idp",
+				Tenant:            "tenant-1",
+				Finalizers:        []string{finalizers.Controller},
+				DeletionTimestamp: deletionTimestamp,
+			}.Build(),
+			Status: privatev1.IdentityProviderStatus_builder{
+				Phase: privatev1.IdentityProviderPhase_IDENTITY_PROVIDER_PHASE_READY,
+			}.Build(),
+		}.Build()
+
+		mockClient.EXPECT().
+			ListUsersByIdpLink(gomock.Any(), "tenant-1-clean-idp").
+			Return(nil, nil).
+			Times(1)
+
+		mockClient.EXPECT().
+			DeleteIdentityProvider(gomock.Any(), "tenant-1", "tenant-1-clean-idp").
+			Return(nil).
+			Times(1)
+
+		task := &task{
+			r:                reconciler,
+			identityProvider: identityProvider,
+		}
+
+		err := task.delete(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(identityProvider.GetMetadata().GetFinalizers()).ToNot(ContainElement(finalizers.Controller))
+	})
+
+	It("should return error when ListUsersByIdpLink fails", func() {
+		deletionTimestamp := timestamppb.New(time.Now())
+		identityProvider := privatev1.IdentityProvider_builder{
+			Id: "idp-list-fail",
+			Metadata: privatev1.Metadata_builder{
+				Name:              "err-idp",
+				Tenant:            "tenant-1",
+				Finalizers:        []string{finalizers.Controller},
+				DeletionTimestamp: deletionTimestamp,
+			}.Build(),
+			Status: privatev1.IdentityProviderStatus_builder{
+				Phase: privatev1.IdentityProviderPhase_IDENTITY_PROVIDER_PHASE_READY,
+			}.Build(),
+		}.Build()
+
+		mockClient.EXPECT().
+			ListUsersByIdpLink(gomock.Any(), "tenant-1-err-idp").
+			Return(nil, fmt.Errorf("keycloak unavailable")).
+			Times(1)
+
+		task := &task{
+			r:                reconciler,
+			identityProvider: identityProvider,
+		}
+
+		err := task.delete(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to delete federated users"))
+		Expect(identityProvider.GetMetadata().GetFinalizers()).To(ContainElement(finalizers.Controller))
 	})
 })

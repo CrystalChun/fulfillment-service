@@ -56,6 +56,7 @@ type ClientInterface interface {
 	GetGroupIDByPath(ctx context.Context, tenantName, groupPath string) (string, error)
 	AddUserToGroup(ctx context.Context, tenantName, idpUserID, groupID string) error
 	RemoveUserFromGroup(ctx context.Context, tenantName, idpUserID, groupID string) error
+	ListUsersByIdpLink(ctx context.Context, idpAlias string) ([]*User, error)
 }
 
 // Ensure Client implements ClientInterface at compile time.

@@ -478,6 +478,21 @@ func (mr *MockClientInterfaceMockRecorder) ListUsers(ctx, tenantName any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUsers", reflect.TypeOf((*MockClientInterface)(nil).ListUsers), ctx, tenantName)
 }
 
+// ListUsersByIdpLink mocks base method.
+func (m *MockClientInterface) ListUsersByIdpLink(ctx context.Context, idpAlias string) ([]*User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListUsersByIdpLink", ctx, idpAlias)
+	ret0, _ := ret[0].([]*User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListUsersByIdpLink indicates an expected call of ListUsersByIdpLink.
+func (mr *MockClientInterfaceMockRecorder) ListUsersByIdpLink(ctx, idpAlias any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUsersByIdpLink", reflect.TypeOf((*MockClientInterface)(nil).ListUsersByIdpLink), ctx, idpAlias)
+}
+
 // RemoveClientRolesFromUser mocks base method.
 func (m *MockClientInterface) RemoveClientRolesFromUser(ctx context.Context, tenantName, userID, clientID string, roles []*Role) error {
 	m.ctrl.T.Helper()

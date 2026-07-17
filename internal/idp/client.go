@@ -900,6 +900,51 @@ func (c *Client) ListIdentityProviders(ctx context.Context, tenantName string) (
 	return idps, nil
 }
 
+// ListUsersByIdpLink lists all users in the realm that have a federated identity link
+// to the specified identity provider alias.
+func (c *Client) ListUsersByIdpLink(ctx context.Context, idpAlias string) ([]*User, error) {
+	var allUsers []*User
+	const maxPerPage = 100
+	first := 0
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
+		query := url.Values{}
+		query.Add("idpAlias", idpAlias)
+		query.Add("first", fmt.Sprintf("%d", first))
+		query.Add("max", fmt.Sprintf("%d", maxPerPage))
+		path := fmt.Sprintf("/admin/realms/%s/users?%s", c.realmName, query.Encode())
+
+		response, err := c.httpClient.DoRequest(ctx, http.MethodGet, path, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list users by IdP link: %w", err)
+		}
+
+		var kcUsers []keycloakUser
+		err = json.NewDecoder(response.Body).Decode(&kcUsers)
+		response.Body.Close()
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode users response: %w", err)
+		}
+
+		for _, kcUser := range kcUsers {
+			allUsers = append(allUsers, fromKeycloakUser(&kcUser))
+		}
+
+		if len(kcUsers) < maxPerPage {
+			break
+		}
+
+		first += maxPerPage
+	}
+
+	return allUsers, nil
+}
+
 // Helper methods for role conversion
 
 // fetchAndConvertRealmRoles fetches full realm role objects from Keycloak by name

@@ -306,6 +306,9 @@ allow if {
     "/osac.public.v1.IdentityProviders/List",
     "/osac.public.v1.IdentityProviders/Update",
     "/osac.public.v1.IdentityProviders/Delete",
+    "/osac.public.v1.RoleBindings/Create",
+    "/osac.public.v1.RoleBindings/Update",
+    "/osac.public.v1.RoleBindings/Delete"
   }
 }
 allow if {
@@ -316,6 +319,9 @@ allow if {
     "/osac.public.v1.IdentityProviders/List",
     "/osac.public.v1.IdentityProviders/Update",
     "/osac.public.v1.IdentityProviders/Delete",
+    "/osac.public.v1.RoleBindings/Create",
+    "/osac.public.v1.RoleBindings/Update",
+    "/osac.public.v1.RoleBindings/Delete"
   }
 }
 
