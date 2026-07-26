@@ -58,10 +58,10 @@ type ReferenceValidatorBuilder struct {
 // types ending with "Reference" or "LocalReference"), validates them against registered lookup
 // functions, and mutates the request to auto-populate missing id or name fields.
 type ReferenceValidator struct {
-	logger           *slog.Logger
-	registry         map[protoreflect.FullName]ReferenceLookupFunc
-	validationTotal  *prometheus.CounterVec
-	validationDurati *prometheus.HistogramVec
+	logger             *slog.Logger
+	registry           map[protoreflect.FullName]ReferenceLookupFunc
+	validationTotal    *prometheus.CounterVec
+	validationDuration *prometheus.HistogramVec
 }
 
 // NewReferenceValidator creates a builder that can then be used to configure and create a new
@@ -106,7 +106,7 @@ func (b *ReferenceValidatorBuilder) Build() (result *ReferenceValidator, err err
 			return
 		}
 
-		result.validationDurati, err = registerOrReuse(b.registerer, prometheus.NewHistogramVec(
+		result.validationDuration, err = registerOrReuse(b.registerer, prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "osac_reference_validation_duration_seconds",
 				Help:    "Duration of individual reference validation lookups in seconds.",
@@ -197,7 +197,11 @@ func (v *ReferenceValidator) walkMessage(ctx context.Context, msg protoreflect.M
 			return true
 		}
 
-		fieldPath := append(path, string(fd.Name()))
+		fieldPath := append(append([]string{}, path...), string(fd.Name()))
+
+		if fd.IsMap() {
+			return true
+		}
 
 		if fd.IsList() {
 			list := val.List()
@@ -270,6 +274,10 @@ func (v *ReferenceValidator) resolveAndMutate(ctx context.Context, refMsg protor
 
 	idField := refMsg.Descriptor().Fields().ByName("id")
 	nameField := refMsg.Descriptor().Fields().ByName("name")
+	if idField == nil || nameField == nil {
+		return grpcstatus.Errorf(grpccodes.Internal,
+			"reference type %q does not have required id/name fields", fullName)
+	}
 	id := refMsg.Get(idField).String()
 	name := refMsg.Get(nameField).String()
 
@@ -352,8 +360,8 @@ func (v *ReferenceValidator) recordResult(resourceType, result string) {
 }
 
 func (v *ReferenceValidator) recordDuration(resourceType string, d time.Duration) {
-	if v.validationDurati != nil {
-		v.validationDurati.With(prometheus.Labels{
+	if v.validationDuration != nil {
+		v.validationDuration.With(prometheus.Labels{
 			"resource_type": resourceType,
 		}).Observe(d.Seconds())
 	}
@@ -454,7 +462,10 @@ func identifier(id, name string) string {
 	if name != "" {
 		return name
 	}
-	return id
+	if id != "" {
+		return id
+	}
+	return "(empty reference)"
 }
 
 // registerOrReuse registers a Prometheus collector and returns it. If the collector is already
