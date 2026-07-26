@@ -984,6 +984,49 @@ var _ = Describe("Reference validator", func() {
 			Expect(status.Message()).To(ContainSubstring("internal error resolving reference"))
 		})
 
+		It("Passes through when id and name both match resolved values", func() {
+			validator.Register("osac.tests.v1.TestTargetLocalReference", func(
+				ctx context.Context, tenant, project, id, name string,
+			) (*ResolvedRef, error) {
+				return &ResolvedRef{
+					ID:   "my-id",
+					Name: "my-name",
+				}, nil
+			})
+
+			request := testsv1.CreateTestResourceWithRefsRequest_builder{
+				Object: testsv1.TestResourceWithRefs_builder{
+					Id: "resource-1",
+					Metadata: testsv1.Metadata_builder{
+						Tenant:  "tenant-a",
+						Project: "default",
+					}.Build(),
+					Spec: testsv1.TestRefSpec_builder{
+						LocalTarget: testsv1.TestTargetLocalReference_builder{
+							Id:   "my-id",
+							Name: "my-name",
+						}.Build(),
+					}.Build(),
+				}.Build(),
+			}.Build()
+
+			handlerCalled := false
+			mockHandler := func(ctx context.Context, req any) (any, error) {
+				handlerCalled = true
+				return nil, nil
+			}
+
+			_, err := validator.UnaryServer(
+				context.Background(),
+				request,
+				&grpc.UnaryServerInfo{FullMethod: "/osac.tests.v1.TestService/Create"},
+				mockHandler,
+			)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(handlerCalled).To(BeTrue())
+		})
+
 		It("Returns InvalidArgument for id/name mismatch", func() {
 			validator.Register("osac.tests.v1.TestTargetLocalReference", func(
 				ctx context.Context, tenant, project, id, name string,
@@ -1137,12 +1180,17 @@ var _ = Describe("Reference validator", func() {
 				return nil, nil
 			}
 
-			_, _ = validator.UnaryServer(
+			_, err := validator.UnaryServer(
 				context.Background(),
 				request,
 				&grpc.UnaryServerInfo{FullMethod: "/osac.tests.v1.TestService/Create"},
 				mockHandler,
 			)
+
+			Expect(err).To(HaveOccurred())
+			status, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
 
 			count := counterValue(registry, "osac_reference_validation_total",
 				"TestTargetReference", "invalid")
@@ -1175,12 +1223,17 @@ var _ = Describe("Reference validator", func() {
 				return nil, nil
 			}
 
-			_, _ = validator.UnaryServer(
+			_, err := validator.UnaryServer(
 				context.Background(),
 				request,
 				&grpc.UnaryServerInfo{FullMethod: "/osac.tests.v1.TestService/Create"},
 				mockHandler,
 			)
+
+			Expect(err).To(HaveOccurred())
+			status, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(status.Code()).To(Equal(grpccodes.Internal))
 
 			count := counterValue(registry, "osac_reference_validation_total",
 				"TestTargetReference", "error")

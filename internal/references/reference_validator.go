@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -170,6 +171,9 @@ func (v *ReferenceValidator) validate(ctx context.Context, request any) error {
 	}
 
 	if len(violations) > 0 {
+		sort.Slice(violations, func(i, j int) bool {
+			return violations[i].GetField() < violations[j].GetField()
+		})
 		descriptions := make([]string, len(violations))
 		for i, fv := range violations {
 			descriptions[i] = fmt.Sprintf("%s: %s", fv.GetField(), fv.GetDescription())
@@ -204,6 +208,11 @@ func (v *ReferenceValidator) walkMessage(ctx context.Context, msg protoreflect.M
 		fieldPath := append(append([]string{}, path...), string(fd.Name()))
 
 		if fd.IsMap() {
+			if fd.MapValue().Kind() == protoreflect.MessageKind {
+				v.logger.WarnContext(ctx, "Skipping map field with message values — map reference validation not yet supported",
+					"field_path", strings.Join(fieldPath, "."),
+				)
+			}
 			return true
 		}
 
@@ -288,6 +297,15 @@ func (v *ReferenceValidator) resolveAndMutate(ctx context.Context, refMsg protor
 	resourceType := string(fullName.Name())
 	fieldPath := strings.Join(path, ".")
 
+	if id == "" && name == "" {
+		*violations = append(*violations, &errdetails.BadRequest_FieldViolation{
+			Field:       fieldPath,
+			Description: fmt.Sprintf("%s reference must specify id or name", shortName(fullName)),
+		})
+		v.recordResult(resourceType, "invalid")
+		return nil
+	}
+
 	start := time.Now()
 	resolved, err := lookupFunc(ctx, refTenant, refProject, id, name)
 	elapsed := time.Since(start)
@@ -304,9 +322,9 @@ func (v *ReferenceValidator) resolveAndMutate(ctx context.Context, refMsg protor
 			v.logger.WarnContext(ctx, "Reference not found",
 				"field_path", fieldPath,
 				"reference_type", resourceType,
-				"identifier", identifier(id, name),
-				"tenant", refTenant,
-				"project", refProject,
+				"!identifier", identifier(id, name),
+				"!tenant", refTenant,
+				"!project", refProject,
 			)
 			v.recordResult(resourceType, "invalid")
 			return nil
@@ -315,6 +333,16 @@ func (v *ReferenceValidator) resolveAndMutate(ctx context.Context, refMsg protor
 			"field_path", fieldPath,
 			"reference_type", resourceType,
 			"error", err,
+		)
+		v.recordResult(resourceType, "error")
+		return grpcstatus.Errorf(grpccodes.Internal,
+			"internal error resolving reference at %s", fieldPath)
+	}
+
+	if resolved == nil {
+		v.logger.ErrorContext(ctx, "Reference lookup returned no result and no error",
+			"field_path", fieldPath,
+			"reference_type", resourceType,
 		)
 		v.recordResult(resourceType, "error")
 		return grpcstatus.Errorf(grpccodes.Internal,
@@ -337,8 +365,8 @@ func (v *ReferenceValidator) resolveAndMutate(ctx context.Context, refMsg protor
 		v.logger.WarnContext(ctx, "Reference id/name mismatch",
 			"field_path", fieldPath,
 			"reference_type", resourceType,
-			"id", id,
-			"name", name,
+			"!id", id,
+			"!name", name,
 		)
 		v.recordResult(resourceType, "invalid")
 		return nil
@@ -479,7 +507,12 @@ func registerOrReuse[C prometheus.Collector](registerer prometheus.Registerer, c
 	if err != nil {
 		var registered prometheus.AlreadyRegisteredError
 		if errors.As(err, &registered) {
-			return registered.ExistingCollector.(C), nil
+			existing, ok := registered.ExistingCollector.(C)
+			if !ok {
+				var zero C
+				return zero, fmt.Errorf("existing collector has unexpected type %T", registered.ExistingCollector)
+			}
+			return existing, nil
 		}
 		var zero C
 		return zero, err
