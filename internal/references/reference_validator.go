@@ -95,44 +95,28 @@ func (b *ReferenceValidatorBuilder) Build() (result *ReferenceValidator, err err
 	}
 
 	if b.registerer != nil {
-		validationTotal := prometheus.NewCounterVec(
+		result.validationTotal, err = registerOrReuse(b.registerer, prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "osac_reference_validation_total",
 				Help: "Total number of reference validations performed.",
 			},
 			[]string{"resource_type", "result"},
-		)
-		err = b.registerer.Register(validationTotal)
+		))
 		if err != nil {
-			var registered prometheus.AlreadyRegisteredError
-			if errors.As(err, &registered) {
-				validationTotal = registered.ExistingCollector.(*prometheus.CounterVec)
-				err = nil
-			} else {
-				return
-			}
+			return
 		}
-		result.validationTotal = validationTotal
 
-		validationDuration := prometheus.NewHistogramVec(
+		result.validationDurati, err = registerOrReuse(b.registerer, prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "osac_reference_validation_duration_seconds",
 				Help:    "Duration of individual reference validation lookups in seconds.",
 				Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0},
 			},
 			[]string{"resource_type"},
-		)
-		err = b.registerer.Register(validationDuration)
+		))
 		if err != nil {
-			var registered prometheus.AlreadyRegisteredError
-			if errors.As(err, &registered) {
-				validationDuration = registered.ExistingCollector.(*prometheus.HistogramVec)
-				err = nil
-			} else {
-				return
-			}
+			return
 		}
-		result.validationDurati = validationDuration
 	}
 
 	return
@@ -471,4 +455,19 @@ func identifier(id, name string) string {
 		return name
 	}
 	return id
+}
+
+// registerOrReuse registers a Prometheus collector and returns it. If the collector is already
+// registered, it returns the existing one.
+func registerOrReuse[C prometheus.Collector](registerer prometheus.Registerer, c C) (C, error) {
+	err := registerer.Register(c)
+	if err != nil {
+		var registered prometheus.AlreadyRegisteredError
+		if errors.As(err, &registered) {
+			return registered.ExistingCollector.(C), nil
+		}
+		var zero C
+		return zero, err
+	}
+	return c, nil
 }
