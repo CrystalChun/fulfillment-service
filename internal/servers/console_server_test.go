@@ -398,30 +398,6 @@ var _ = Describe("Console Server", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		buildServerWithManager := func(mgr *console.Manager) {
-			resolver, err := NewConsoleTargetResolver().
-				SetLogger(logger).
-				SetComputeInstanceLookup(NewPrivateServerCILookup(ciServer)).
-				SetHubLookup(NewPrivateServerHubLookup(hubServer)).
-				SetHubClientFactory(newFakeHubClientFactory(fakeK8s)).
-				Build()
-			Expect(err).NotTo(HaveOccurred())
-
-			sessionService, err := console.NewSessionService().
-				SetLogger(logger).
-				SetResolver(resolver).
-				SetSealer(sealer).
-				SetManager(mgr).
-				Build()
-			Expect(err).NotTo(HaveOccurred())
-
-			server, err = NewConsoleServer().
-				SetLogger(logger).
-				SetSessionService(sessionService).
-				Build()
-			Expect(err).NotTo(HaveOccurred())
-		}
-
 		It("should create a ticket for a running compute instance", func() {
 			ciServer.getResponse = privatev1.ComputeInstancesGetResponse_builder{
 				Object: privatev1.ComputeInstance_builder{
@@ -507,57 +483,6 @@ var _ = Describe("Console Server", func() {
 			}.Build())
 			Expect(err).To(HaveOccurred())
 			Expect(status.Code(err)).To(Equal(codes.Unimplemented))
-		})
-
-		It("should return FailedPrecondition when session already active", func() {
-			instanceID := "ci-123"
-			hubNamespace := "test-ns"
-
-			ciServer.getResponse = privatev1.ComputeInstancesGetResponse_builder{
-				Object: privatev1.ComputeInstance_builder{
-					Id: instanceID,
-					Status: privatev1.ComputeInstanceStatus_builder{
-						State: privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_RUNNING,
-						Hub:   "hub-1",
-					}.Build(),
-				}.Build(),
-			}.Build()
-
-			fakeK8s = setupHubMock(instanceID, hubNamespace, osacv1alpha1.ComputeInstancePhaseRunning)
-
-			backend := &mockBackendForServer{conn: newMockConn("")}
-			mgr, err := console.NewManager().
-				SetLogger(logger).
-				AddBackend("compute_instance", backend).
-				Build()
-			Expect(err).NotTo(HaveOccurred())
-
-			// Pre-occupy the session with the URI that BuildKubeVirtTarget will generate.
-			target := console.Target{
-				ResourceType: console.ResourceTypeComputeInstance,
-				BackendURI:   "wss://test-hub.example.com:6443/apis/console.osac.openshift.io/v1alpha1/namespaces/test-ns/computeinstances/ci-ci-123/vnc",
-			}
-			result, err := mgr.Connect(context.Background(), target, "existing-user", "existing-client")
-			Expect(err).NotTo(HaveOccurred())
-			defer result.Conn.Close()
-
-			buildServerWithManager(mgr)
-
-			ctx := authpkg.ContextWithSubject(context.Background(), &authpkg.Subject{
-				User: "another-user",
-			})
-			ctx = database.TxManagerIntoContext(ctx, &mockTxManager{})
-			_, err = server.Create(ctx, publicv1.ConsoleSessionsCreateRequest_builder{
-				Object: publicv1.ConsoleSession_builder{
-					ResourceType: publicv1.ConsoleResourceType_CONSOLE_RESOURCE_TYPE_COMPUTE_INSTANCE,
-					ResourceId:   instanceID,
-					Type:         publicv1.ConsoleType_CONSOLE_TYPE_VNC,
-					ClientId:     "550e8400-e29b-41d4-a716-446655440000",
-				}.Build(),
-			}.Build())
-			Expect(err).To(HaveOccurred())
-			Expect(status.Code(err)).To(Equal(codes.FailedPrecondition))
-			Expect(err.Error()).To(ContainSubstring("console session already active"))
 		})
 
 		It("should reject unsupported console type", func() {

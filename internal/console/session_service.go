@@ -60,7 +60,6 @@ type SessionServiceBuilder struct {
 	logger   *slog.Logger
 	resolver TargetResolver
 	sealer   *TicketSealer
-	manager  *Manager
 }
 
 // SessionService orchestrates console session creation: resolving the compute
@@ -69,7 +68,6 @@ type SessionService struct {
 	logger   *slog.Logger
 	resolver TargetResolver
 	sealer   *TicketSealer
-	manager  *Manager
 }
 
 // NewSessionService creates a builder that can then be used to configure and create a new session service.
@@ -95,14 +93,6 @@ func (b *SessionServiceBuilder) SetSealer(value *TicketSealer) *SessionServiceBu
 	return b
 }
 
-// SetManager sets the console session manager for pre-flight conflict detection.
-// Optional — when set, CreateSession checks for active session conflicts before
-// issuing a ticket.
-func (b *SessionServiceBuilder) SetManager(value *Manager) *SessionServiceBuilder {
-	b.manager = value
-	return b
-}
-
 // Build uses the data stored in the builder to create and configure a new session service.
 func (b *SessionServiceBuilder) Build() (*SessionService, error) {
 	// Check parameters:
@@ -121,7 +111,6 @@ func (b *SessionServiceBuilder) Build() (*SessionService, error) {
 		logger:   b.logger,
 		resolver: b.resolver,
 		sealer:   b.sealer,
-		manager:  b.manager,
 	}, nil
 }
 
@@ -138,15 +127,6 @@ func (s *SessionService) CreateSession(ctx context.Context, req *CreateSessionRe
 	target, err := BuildKubeVirtTarget(resolved.HubConfig, resolved.Namespace, resolved.CRName, req.ConsoleType)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to build backend target: %v", err)
-	}
-
-	// Pre-flight conflict check: if a Manager is available, reject early when
-	// the target already has an active session rather than issuing a ticket that
-	// will fail at connect time.
-	if s.manager != nil {
-		if conflictErr := s.manager.HasConflict(*target, req.User, req.ClientID); conflictErr != nil {
-			return nil, conflictErr
-		}
 	}
 
 	// Seal the ticket with pre-computed backend URI and token.
