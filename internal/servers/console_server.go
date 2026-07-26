@@ -113,6 +113,10 @@ func (s *consoleSessionsServer) Create(ctx context.Context,
 		ClientID:    clientID,
 	})
 	if err != nil {
+		var sessionErr *console.ErrSessionExists
+		if errors.As(err, &sessionErr) {
+			err = status.Errorf(codes.FailedPrecondition, "console session already active")
+		}
 		return
 	}
 

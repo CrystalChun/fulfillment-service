@@ -16,6 +16,7 @@ package console
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"time"
 
@@ -342,6 +343,84 @@ var _ = Describe("Manager", func() {
 
 			result1.Conn.Close()
 			result2.Conn.Close()
+		})
+	})
+
+	Describe("HasConflict", func() {
+		It("should return nil when no session exists", func() {
+			target := Target{ResourceType: "compute_instance", BackendURI: "wss://hub/ns/vm-1/console"}
+			err := mgr.HasConflict(target, "user1", "client-1")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return nil for empty backend URI", func() {
+			target := Target{ResourceType: "compute_instance"}
+			err := mgr.HasConflict(target, "user1", "client-1")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return ErrSessionExists when another user has the session", func() {
+			ctx := context.Background()
+			target := Target{ResourceType: "compute_instance", BackendURI: "wss://hub/ns/vm-1/console"}
+
+			result, err := mgr.Connect(ctx, target, "user1", "client-1")
+			Expect(err).NotTo(HaveOccurred())
+			defer result.Conn.Close()
+
+			conflictErr := mgr.HasConflict(target, "user2", "client-2")
+			Expect(conflictErr).To(HaveOccurred())
+			var sessionErr *ErrSessionExists
+			Expect(errors.As(conflictErr, &sessionErr)).To(BeTrue())
+			Expect(sessionErr.User).To(Equal("user1"))
+		})
+
+		It("should return nil when same user and client_id would evict", func() {
+			ctx := context.Background()
+			target := Target{ResourceType: "compute_instance", BackendURI: "wss://hub/ns/vm-1/console"}
+
+			result, err := mgr.Connect(ctx, target, "user1", "client-1")
+			Expect(err).NotTo(HaveOccurred())
+			defer result.Conn.Close()
+
+			conflictErr := mgr.HasConflict(target, "user1", "client-1")
+			Expect(conflictErr).NotTo(HaveOccurred())
+		})
+
+		It("should return ErrSessionExists when same user has different client_id", func() {
+			ctx := context.Background()
+			target := Target{ResourceType: "compute_instance", BackendURI: "wss://hub/ns/vm-1/console"}
+
+			result, err := mgr.Connect(ctx, target, "user1", "client-1")
+			Expect(err).NotTo(HaveOccurred())
+			defer result.Conn.Close()
+
+			conflictErr := mgr.HasConflict(target, "user1", "client-2")
+			Expect(conflictErr).To(HaveOccurred())
+		})
+
+		It("should return ErrSessionExists when client_id is empty", func() {
+			ctx := context.Background()
+			target := Target{ResourceType: "compute_instance", BackendURI: "wss://hub/ns/vm-1/console"}
+
+			result, err := mgr.Connect(ctx, target, "user1", "client-1")
+			Expect(err).NotTo(HaveOccurred())
+			defer result.Conn.Close()
+
+			conflictErr := mgr.HasConflict(target, "user1", "")
+			Expect(conflictErr).To(HaveOccurred())
+		})
+
+		It("should not modify session state", func() {
+			ctx := context.Background()
+			target := Target{ResourceType: "compute_instance", BackendURI: "wss://hub/ns/vm-1/console"}
+
+			result, err := mgr.Connect(ctx, target, "user1", "client-1")
+			Expect(err).NotTo(HaveOccurred())
+			defer result.Conn.Close()
+
+			Expect(mgr.ActiveSessions()).To(Equal(1))
+			_ = mgr.HasConflict(target, "user2", "client-2")
+			Expect(mgr.ActiveSessions()).To(Equal(1))
 		})
 	})
 

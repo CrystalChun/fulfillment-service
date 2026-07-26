@@ -181,6 +181,37 @@ func (m *Manager) Connect(ctx context.Context, target Target, user, clientID str
 	}, nil
 }
 
+// HasConflict checks whether connecting with the given target, user, and
+// clientID would hit an existing-session conflict — the same check Connect
+// performs, but without side effects (no eviction, no session registration,
+// no backend dial). Returns *ErrSessionExists if a conflict exists, nil
+// otherwise.
+func (m *Manager) HasConflict(target Target, user, clientID string) error {
+	if target.BackendURI == "" {
+		return nil
+	}
+
+	sessionKey := target.BackendURI
+
+	m.sessionsLock.Lock()
+	defer m.sessionsLock.Unlock()
+
+	existing, ok := m.sessions[sessionKey]
+	if !ok {
+		return nil
+	}
+
+	if clientID != "" && existing.clientID == clientID && existing.user == user {
+		return nil
+	}
+
+	return &ErrSessionExists{
+		Resource: sessionKey,
+		User:     existing.user,
+		Since:    existing.startedAt.Format(time.RFC3339),
+	}
+}
+
 // ActiveSessions returns the number of active console sessions.
 func (m *Manager) ActiveSessions() int {
 	m.sessionsLock.Lock()
