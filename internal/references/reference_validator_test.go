@@ -981,7 +981,7 @@ var _ = Describe("Reference validator", func() {
 			status, ok := grpcstatus.FromError(err)
 			Expect(ok).To(BeTrue())
 			Expect(status.Code()).To(Equal(grpccodes.Internal))
-			Expect(status.Message()).To(ContainSubstring("database connection refused"))
+			Expect(status.Message()).To(ContainSubstring("internal error resolving reference"))
 		})
 
 		It("Returns InvalidArgument for id/name mismatch", func() {

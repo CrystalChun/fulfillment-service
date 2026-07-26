@@ -89,13 +89,11 @@ func (b *ReferenceValidatorBuilder) Build() (result *ReferenceValidator, err err
 		return
 	}
 
-	result = &ReferenceValidator{
-		logger:   b.logger,
-		registry: make(map[protoreflect.FullName]ReferenceLookupFunc),
-	}
+	var validationTotal *prometheus.CounterVec
+	var validationDuration *prometheus.HistogramVec
 
 	if b.registerer != nil {
-		result.validationTotal, err = registerOrReuse(b.registerer, prometheus.NewCounterVec(
+		validationTotal, err = registerOrReuse(b.registerer, prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "osac_reference_validation_total",
 				Help: "Total number of reference validations performed.",
@@ -106,7 +104,7 @@ func (b *ReferenceValidatorBuilder) Build() (result *ReferenceValidator, err err
 			return
 		}
 
-		result.validationDuration, err = registerOrReuse(b.registerer, prometheus.NewHistogramVec(
+		validationDuration, err = registerOrReuse(b.registerer, prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "osac_reference_validation_duration_seconds",
 				Help:    "Duration of individual reference validation lookups in seconds.",
@@ -119,6 +117,12 @@ func (b *ReferenceValidatorBuilder) Build() (result *ReferenceValidator, err err
 		}
 	}
 
+	result = &ReferenceValidator{
+		logger:             b.logger,
+		registry:           make(map[protoreflect.FullName]ReferenceLookupFunc),
+		validationTotal:    validationTotal,
+		validationDuration: validationDuration,
+	}
 	return
 }
 
@@ -262,7 +266,7 @@ func (v *ReferenceValidator) resolveAndMutate(ctx context.Context, refMsg protor
 
 	lookupFunc, ok := v.registry[fullName]
 	if !ok {
-		v.logger.Error("No lookup registered for reference type",
+		v.logger.ErrorContext(ctx, "No lookup registered for reference type",
 			"reference_type", string(fullName),
 			"field_path", strings.Join(path, "."),
 		)
@@ -297,7 +301,7 @@ func (v *ReferenceValidator) resolveAndMutate(ctx context.Context, refMsg protor
 				Field:       fieldPath,
 				Description: desc,
 			})
-			v.logger.Warn("Reference not found",
+			v.logger.WarnContext(ctx, "Reference not found",
 				"field_path", fieldPath,
 				"reference_type", resourceType,
 				"identifier", identifier(id, name),
@@ -307,14 +311,14 @@ func (v *ReferenceValidator) resolveAndMutate(ctx context.Context, refMsg protor
 			v.recordResult(resourceType, "invalid")
 			return nil
 		}
-		v.logger.Error("Reference lookup failed",
+		v.logger.ErrorContext(ctx, "Reference lookup failed",
 			"field_path", fieldPath,
 			"reference_type", resourceType,
 			"error", err,
 		)
 		v.recordResult(resourceType, "error")
 		return grpcstatus.Errorf(grpccodes.Internal,
-			"failed to resolve reference at %s: %v", fieldPath, err)
+			"internal error resolving reference at %s", fieldPath)
 	}
 
 	if id == "" && resolved.ID != "" {
@@ -330,7 +334,7 @@ func (v *ReferenceValidator) resolveAndMutate(ctx context.Context, refMsg protor
 			Field:       fieldPath,
 			Description: desc,
 		})
-		v.logger.Warn("Reference id/name mismatch",
+		v.logger.WarnContext(ctx, "Reference id/name mismatch",
 			"field_path", fieldPath,
 			"reference_type", resourceType,
 			"id", id,
@@ -340,7 +344,7 @@ func (v *ReferenceValidator) resolveAndMutate(ctx context.Context, refMsg protor
 		return nil
 	}
 
-	v.logger.Debug("Reference validated",
+	v.logger.DebugContext(ctx, "Reference validated",
 		"field_path", fieldPath,
 		"reference_type", resourceType,
 		"resolved_id", resolved.ID,
