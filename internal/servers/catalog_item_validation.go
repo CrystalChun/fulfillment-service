@@ -318,7 +318,13 @@ func collectLeafPaths(m map[string]any, prefix string) []string {
 			fullPath = prefix + "." + key
 		}
 		if nested, ok := val.(map[string]any); ok {
-			paths = append(paths, collectLeafPaths(nested, fullPath)...)
+			// Treat template_parameters entries as opaque leaves —
+			// their inner @type/value keys are protobuf Any encoding details.
+			if prefix == "template_parameters" {
+				paths = append(paths, fullPath)
+			} else {
+				paths = append(paths, collectLeafPaths(nested, fullPath)...)
+			}
 		} else {
 			paths = append(paths, fullPath)
 		}
