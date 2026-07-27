@@ -399,33 +399,36 @@ func (s *PrivateBareMetalInstancesServer) validateImmutability(ctx context.Conte
 	}
 
 	if updatingNetworkAttachments {
-		existingAttachments := existingSpec.GetNetworkAttachments()
-		newAttachments := newSpec.GetNetworkAttachments()
-
-		if len(existingAttachments) != len(newAttachments) {
-			return grpcstatus.Errorf(grpccodes.InvalidArgument,
-				"cannot change number of network attachments from %d to %d: network_attachments structure is immutable",
-				len(existingAttachments), len(newAttachments))
-		}
-
-		for i := range existingAttachments {
-			if existingAttachments[i].GetSubnet() != newAttachments[i].GetSubnet() {
-				return grpcstatus.Errorf(grpccodes.InvalidArgument,
-					"cannot change network_attachments[%d].subnet from '%s' to '%s': subnet is immutable",
-					i, existingAttachments[i].GetSubnet(), newAttachments[i].GetSubnet())
-			}
-			if existingAttachments[i].GetInterface() != newAttachments[i].GetInterface() {
-				return grpcstatus.Errorf(grpccodes.InvalidArgument,
-					"cannot change network_attachments[%d].interface from '%s' to '%s': interface is immutable",
-					i, existingAttachments[i].GetInterface(), newAttachments[i].GetInterface())
-			}
-			if existingAttachments[i].GetPrimary() != newAttachments[i].GetPrimary() {
-				return grpcstatus.Errorf(grpccodes.InvalidArgument,
-					"cannot change network_attachments[%d].primary: primary is immutable after creation", i)
-			}
+		if err := compareNetworkAttachmentsImmutability(existingSpec.GetNetworkAttachments(), newSpec.GetNetworkAttachments()); err != nil {
+			return err
 		}
 	}
 
+	return nil
+}
+
+func compareNetworkAttachmentsImmutability(existing, updated []*privatev1.BareMetalNetworkAttachment) error {
+	if len(existing) != len(updated) {
+		return grpcstatus.Errorf(grpccodes.InvalidArgument,
+			"cannot change number of network attachments from %d to %d: network_attachments structure is immutable",
+			len(existing), len(updated))
+	}
+	for i := range existing {
+		if existing[i].GetSubnet() != updated[i].GetSubnet() {
+			return grpcstatus.Errorf(grpccodes.InvalidArgument,
+				"cannot change network_attachments[%d].subnet from '%s' to '%s': subnet is immutable",
+				i, existing[i].GetSubnet(), updated[i].GetSubnet())
+		}
+		if existing[i].GetInterface() != updated[i].GetInterface() {
+			return grpcstatus.Errorf(grpccodes.InvalidArgument,
+				"cannot change network_attachments[%d].interface from '%s' to '%s': interface is immutable",
+				i, existing[i].GetInterface(), updated[i].GetInterface())
+		}
+		if existing[i].GetPrimary() != updated[i].GetPrimary() {
+			return grpcstatus.Errorf(grpccodes.InvalidArgument,
+				"cannot change network_attachments[%d].primary: primary is immutable after creation", i)
+		}
+	}
 	return nil
 }
 
