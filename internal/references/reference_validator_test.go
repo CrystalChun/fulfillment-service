@@ -839,6 +839,54 @@ var _ = Describe("Reference validator", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
+		It("Returns InvalidArgument when reference has neither id nor name", func() {
+			validator.Register("osac.tests.v1.TestTargetReference", func(
+				ctx context.Context, tenant, project, id, name string,
+			) (*ResolvedRef, error) {
+				Fail("Lookup should not be called for empty reference")
+				return nil, nil
+			})
+
+			request := testsv1.CreateTestResourceWithRefsRequest_builder{
+				Object: testsv1.TestResourceWithRefs_builder{
+					Id: "resource-1",
+					Metadata: testsv1.Metadata_builder{
+						Tenant:  "tenant-a",
+						Project: "default",
+					}.Build(),
+					Spec: testsv1.TestRefSpec_builder{
+						Target: testsv1.TestTargetReference_builder{}.Build(),
+					}.Build(),
+				}.Build(),
+			}.Build()
+
+			mockHandler := func(ctx context.Context, req any) (any, error) {
+				Fail("Handler should not be called for invalid reference")
+				return nil, nil
+			}
+
+			_, err := validator.UnaryServer(
+				context.Background(),
+				request,
+				&grpc.UnaryServerInfo{FullMethod: "/osac.tests.v1.TestService/Create"},
+				mockHandler,
+			)
+
+			Expect(err).To(HaveOccurred())
+			status, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+
+			details := status.Details()
+			Expect(details).To(HaveLen(1))
+			badRequest, ok := details[0].(*errdetails.BadRequest)
+			Expect(ok).To(BeTrue())
+			Expect(badRequest.GetFieldViolations()).To(HaveLen(1))
+			fv := badRequest.GetFieldViolations()[0]
+			Expect(fv.GetField()).To(Equal("object.spec.target"))
+			Expect(fv.GetDescription()).To(ContainSubstring("must specify id or name"))
+		})
+
 		It("Returns InvalidArgument with BadRequest FieldViolation for not-found reference", func() {
 			validator.Register("osac.tests.v1.TestTargetReference", func(
 				ctx context.Context, tenant, project, id, name string,
