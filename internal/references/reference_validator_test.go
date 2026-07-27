@@ -51,6 +51,36 @@ var _ = Describe("Reference validator", func() {
 		})
 	})
 
+	Describe("Sealed after serving", func() {
+		It("Panics when Register is called after UnaryServer", func() {
+			validator, err := NewReferenceValidator().
+				SetLogger(logger).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+
+			validator.Register("osac.tests.v1.TestTargetReference", func(
+				ctx context.Context, tenant, project, id, name string,
+			) (*ResolvedRef, error) {
+				return &ResolvedRef{ID: "id-1", Name: name}, nil
+			})
+
+			_, _ = validator.UnaryServer(
+				context.Background(),
+				"not-a-proto",
+				&grpc.UnaryServerInfo{FullMethod: "/osac.tests.v1.TestService/Get"},
+				func(ctx context.Context, req any) (any, error) { return "ok", nil },
+			)
+
+			Expect(func() {
+				validator.Register("osac.tests.v1.TestOtherTargetLocalReference", func(
+					ctx context.Context, tenant, project, id, name string,
+				) (*ResolvedRef, error) {
+					return nil, nil
+				})
+			}).To(PanicWith(ContainSubstring("Register called after interceptor started serving")))
+		})
+	})
+
 	Describe("Method filtering", func() {
 		BeforeEach(func() {
 			var err error
@@ -1118,6 +1148,86 @@ var _ = Describe("Reference validator", func() {
 			Expect(ok).To(BeTrue())
 			Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
 			Expect(status.Message()).To(ContainSubstring("do not refer to the same resource"))
+		})
+	})
+
+	Describe("End-to-end with complex message", func() {
+		BeforeEach(func() {
+			var err error
+			validator, err = NewReferenceValidator().
+				SetLogger(logger).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("Resolves and mutates all reference patterns through UnaryServer", func() {
+			lookupFunc := func(
+				ctx context.Context, tenant, project, id, name string,
+			) (*ResolvedRef, error) {
+				return &ResolvedRef{
+					ID:   "resolved-" + name,
+					Name: name,
+				}, nil
+			}
+			validator.Register("osac.tests.v1.TestTargetReference", lookupFunc)
+			validator.Register("osac.tests.v1.TestTargetLocalReference", lookupFunc)
+			validator.Register("osac.tests.v1.TestOtherTargetLocalReference", lookupFunc)
+
+			request := testsv1.CreateTestResourceWithRefsRequest_builder{
+				Object: testsv1.TestResourceWithRefs_builder{
+					Id: "resource-1",
+					Metadata: testsv1.Metadata_builder{
+						Tenant:  "tenant-a",
+						Project: "default",
+					}.Build(),
+					Spec: testsv1.TestRefSpec_builder{
+						Target: testsv1.TestTargetReference_builder{
+							Name: "full-ref",
+						}.Build(),
+						LocalTarget: testsv1.TestTargetLocalReference_builder{
+							Name: "local-ref",
+						}.Build(),
+						Attachment: testsv1.TestRefAttachment_builder{
+							Subnet: testsv1.TestTargetLocalReference_builder{
+								Name: "nested-subnet",
+							}.Build(),
+							SecurityGroups: []*testsv1.TestOtherTargetLocalReference{
+								testsv1.TestOtherTargetLocalReference_builder{
+									Name: "nested-sg",
+								}.Build(),
+							},
+						}.Build(),
+						OtherTargets: []*testsv1.TestOtherTargetLocalReference{
+							testsv1.TestOtherTargetLocalReference_builder{
+								Name: "repeated-other",
+							}.Build(),
+						},
+					}.Build(),
+				}.Build(),
+			}.Build()
+
+			handlerCalled := false
+			mockHandler := func(ctx context.Context, req any) (any, error) {
+				handlerCalled = true
+				return "response", nil
+			}
+
+			_, err := validator.UnaryServer(
+				context.Background(),
+				request,
+				&grpc.UnaryServerInfo{FullMethod: "/osac.tests.v1.TestService/Create"},
+				mockHandler,
+			)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(handlerCalled).To(BeTrue())
+
+			spec := request.GetObject().GetSpec()
+			Expect(spec.GetTarget().GetId()).To(Equal("resolved-full-ref"))
+			Expect(spec.GetLocalTarget().GetId()).To(Equal("resolved-local-ref"))
+			Expect(spec.GetAttachment().GetSubnet().GetId()).To(Equal("resolved-nested-subnet"))
+			Expect(spec.GetAttachment().GetSecurityGroups()[0].GetId()).To(Equal("resolved-nested-sg"))
+			Expect(spec.GetOtherTargets()[0].GetId()).To(Equal("resolved-repeated-other"))
 		})
 	})
 

@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -61,6 +62,7 @@ type ReferenceValidatorBuilder struct {
 type ReferenceValidator struct {
 	logger             *slog.Logger
 	registry           map[protoreflect.FullName]ReferenceLookupFunc
+	sealed             atomic.Bool
 	validationTotal    *prometheus.CounterVec
 	validationDuration *prometheus.HistogramVec
 }
@@ -130,12 +132,16 @@ func (b *ReferenceValidatorBuilder) Build() (result *ReferenceValidator, err err
 // Register associates a reference message type with a lookup function. Must be called before the
 // gRPC server starts accepting requests.
 func (v *ReferenceValidator) Register(fullName protoreflect.FullName, lookupFunc ReferenceLookupFunc) {
+	if v.sealed.Load() {
+		panic(fmt.Sprintf("Register called after interceptor started serving: %s", fullName))
+	}
 	v.registry[fullName] = lookupFunc
 }
 
 // UnaryServer is the unary server interceptor function.
 func (v *ReferenceValidator) UnaryServer(ctx context.Context, request any, info *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler) (response any, err error) {
+	v.sealed.Store(true)
 	if !isCreateOrUpdate(info.FullMethod) {
 		return handler(ctx, request)
 	}
@@ -375,8 +381,8 @@ func (v *ReferenceValidator) resolveAndMutate(ctx context.Context, refMsg protor
 	v.logger.DebugContext(ctx, "Reference validated",
 		"field_path", fieldPath,
 		"reference_type", resourceType,
-		"resolved_id", resolved.ID,
-		"resolved_name", resolved.Name,
+		"!resolved_id", resolved.ID,
+		"!resolved_name", resolved.Name,
 	)
 	v.recordResult(resourceType, "valid")
 	return nil
