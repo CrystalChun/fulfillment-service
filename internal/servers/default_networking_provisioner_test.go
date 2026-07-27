@@ -32,7 +32,7 @@ var _ = Describe("Default networking provisioner", func() {
 				Name:   "test-network-class",
 				Tenant: "system",
 			}.Build(),
-			IsDefault:              boolPtr(true),
+			IsDefault:              new(true),
 			FabricManager:          "netris",
 			ImplementationStrategy: "netris",
 			Spec: privatev1.NetworkClassSpec_builder{
@@ -58,6 +58,24 @@ var _ = Describe("Default networking provisioner", func() {
 		tenant.SetId(name)
 		_, err := tenantDao.Create().SetObject(tenant).Do(ctx)
 		Expect(err).ToNot(HaveOccurred())
+	}
+
+	createExternalIPPool := func(name, tenant string, available int64) *privatev1.ExternalIPPool {
+		pool := privatev1.ExternalIPPool_builder{
+			Metadata: privatev1.Metadata_builder{
+				Name:   name,
+				Tenant: tenant,
+			}.Build(),
+			Status: privatev1.ExternalIPPoolStatus_builder{
+				State:     privatev1.ExternalIPPoolState_EXTERNAL_IP_POOL_STATE_READY,
+				Total:     available,
+				Available: available,
+				Allocated: 0,
+			}.Build(),
+		}.Build()
+		resp, err := provisioner.externalIPPoolDao.Create().SetObject(pool).Do(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		return resp.GetObject()
 	}
 
 	BeforeEach(func() {
@@ -94,17 +112,17 @@ var _ = Describe("Default networking provisioner", func() {
 				IngressRules: []*privatev1.SecurityRule{
 					privatev1.SecurityRule_builder{
 						Protocol: privatev1.Protocol_PROTOCOL_TCP,
-						PortFrom: int32Ptr(22),
-						PortTo:   int32Ptr(22),
-						Ipv4Cidr: stringPtr("0.0.0.0/0"),
+						PortFrom: new(int32(22)),
+						PortTo:   new(int32(22)),
+						Ipv4Cidr: new("0.0.0.0/0"),
 					}.Build(),
 				},
 				EgressRules: []*privatev1.SecurityRule{
 					privatev1.SecurityRule_builder{
 						Protocol: privatev1.Protocol_PROTOCOL_TCP,
-						PortFrom: int32Ptr(443),
-						PortTo:   int32Ptr(443),
-						Ipv4Cidr: stringPtr("0.0.0.0/0"),
+						PortFrom: new(int32(443)),
+						PortTo:   new(int32(443)),
+						Ipv4Cidr: new("0.0.0.0/0"),
 					}.Build(),
 				},
 			}.Build())
@@ -136,6 +154,12 @@ var _ = Describe("Default networking provisioner", func() {
 			err := provisioner.Provision(ctx, "test-tenant")
 			Expect(err).ToNot(HaveOccurred())
 
+			vnList, err := provisioner.virtualNetworkDao.List().
+				SetFilter("this.metadata.tenant == 'test-tenant'").
+				Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			vnID := vnList.GetItems()[0].GetId()
+
 			subnetList, err := provisioner.subnetDao.List().
 				SetFilter("this.metadata.tenant == 'test-tenant'").
 				Do(ctx)
@@ -151,9 +175,9 @@ var _ = Describe("Default networking provisioner", func() {
 			Expect(ipv4Subnet).ToNot(BeNil())
 			Expect(ipv4Subnet.GetMetadata().GetTenant()).To(Equal("test-tenant"))
 			Expect(ipv4Subnet.GetMetadata().GetLabels()).To(HaveKeyWithValue("osac.openshift.io/default", "true"))
-			Expect(ipv4Subnet.GetMetadata().GetAnnotations()).To(HaveKey("osac.openshift.io/owner-reference"))
+			Expect(ipv4Subnet.GetMetadata().GetAnnotations()).To(HaveKeyWithValue("osac.openshift.io/owner-reference", vnID))
 			Expect(ipv4Subnet.GetSpec().GetIpv4Cidr()).To(Equal("10.0.1.0/24"))
-			Expect(ipv4Subnet.GetSpec().GetVirtualNetwork()).ToNot(BeEmpty())
+			Expect(ipv4Subnet.GetSpec().GetVirtualNetwork()).To(Equal(vnID))
 			Expect(ipv4Subnet.GetStatus().GetState()).To(Equal(
 				privatev1.SubnetState_SUBNET_STATE_PENDING))
 		})
@@ -161,6 +185,12 @@ var _ = Describe("Default networking provisioner", func() {
 		It("creates default IPv6 Subnet with correct CIDR and owner-reference", func() {
 			err := provisioner.Provision(ctx, "test-tenant")
 			Expect(err).ToNot(HaveOccurred())
+
+			vnList, err := provisioner.virtualNetworkDao.List().
+				SetFilter("this.metadata.tenant == 'test-tenant'").
+				Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			vnID := vnList.GetItems()[0].GetId()
 
 			subnetList, err := provisioner.subnetDao.List().
 				SetFilter("this.metadata.tenant == 'test-tenant'").
@@ -177,9 +207,9 @@ var _ = Describe("Default networking provisioner", func() {
 			Expect(ipv6Subnet).ToNot(BeNil())
 			Expect(ipv6Subnet.GetMetadata().GetTenant()).To(Equal("test-tenant"))
 			Expect(ipv6Subnet.GetMetadata().GetLabels()).To(HaveKeyWithValue("osac.openshift.io/default", "true"))
-			Expect(ipv6Subnet.GetMetadata().GetAnnotations()).To(HaveKey("osac.openshift.io/owner-reference"))
+			Expect(ipv6Subnet.GetMetadata().GetAnnotations()).To(HaveKeyWithValue("osac.openshift.io/owner-reference", vnID))
 			Expect(ipv6Subnet.GetSpec().GetIpv6Cidr()).To(Equal("fd00:0:0:1::/64"))
-			Expect(ipv6Subnet.GetSpec().GetVirtualNetwork()).ToNot(BeEmpty())
+			Expect(ipv6Subnet.GetSpec().GetVirtualNetwork()).To(Equal(vnID))
 			Expect(ipv6Subnet.GetStatus().GetState()).To(Equal(
 				privatev1.SubnetState_SUBNET_STATE_PENDING))
 		})
@@ -187,6 +217,12 @@ var _ = Describe("Default networking provisioner", func() {
 		It("creates default SecurityGroup with rules and owner-reference", func() {
 			err := provisioner.Provision(ctx, "test-tenant")
 			Expect(err).ToNot(HaveOccurred())
+
+			vnList, err := provisioner.virtualNetworkDao.List().
+				SetFilter("this.metadata.tenant == 'test-tenant'").
+				Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			vnID := vnList.GetItems()[0].GetId()
 
 			sgList, err := provisioner.securityGroupDao.List().
 				SetFilter("this.metadata.tenant == 'test-tenant'").
@@ -198,8 +234,8 @@ var _ = Describe("Default networking provisioner", func() {
 			Expect(sg.GetMetadata().GetName()).To(Equal("default"))
 			Expect(sg.GetMetadata().GetTenant()).To(Equal("test-tenant"))
 			Expect(sg.GetMetadata().GetLabels()).To(HaveKeyWithValue("osac.openshift.io/default", "true"))
-			Expect(sg.GetMetadata().GetAnnotations()).To(HaveKey("osac.openshift.io/owner-reference"))
-			Expect(sg.GetSpec().GetVirtualNetwork()).ToNot(BeEmpty())
+			Expect(sg.GetMetadata().GetAnnotations()).To(HaveKeyWithValue("osac.openshift.io/owner-reference", vnID))
+			Expect(sg.GetSpec().GetVirtualNetwork()).To(Equal(vnID))
 			Expect(sg.GetSpec().GetIngress()).To(HaveLen(1))
 			Expect(sg.GetSpec().GetIngress()[0].GetProtocol()).To(Equal(privatev1.Protocol_PROTOCOL_TCP))
 			Expect(sg.GetSpec().GetIngress()[0].GetPortFrom()).To(Equal(int32(22)))
@@ -256,6 +292,62 @@ var _ = Describe("Default networking provisioner", func() {
 		})
 	})
 
+	Context("when enable_nat_gateway is true", func() {
+		It("creates ExternalIP and NATGateway when pool has capacity", func() {
+			createTenant("nat-tenant")
+			createNetworkClass(privatev1.NetworkDefaults_builder{
+				VirtualNetworkIpv4Cidr: "10.0.0.0/16",
+				SubnetIpv4Cidr:         "10.0.1.0/24",
+				EnableNatGateway:       true,
+			}.Build())
+			pool := createExternalIPPool("test-pool", "system", 10)
+
+			err := provisioner.Provision(ctx, "nat-tenant")
+			Expect(err).ToNot(HaveOccurred())
+
+			eipList, err := provisioner.externalIPDao.List().
+				SetFilter("this.metadata.tenant == 'nat-tenant'").
+				Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(eipList.GetItems()).To(HaveLen(1))
+			eip := eipList.GetItems()[0]
+			Expect(eip.GetMetadata().GetLabels()).To(HaveKeyWithValue("osac.openshift.io/default", "true"))
+			Expect(eip.GetSpec().GetPool()).To(Equal(pool.GetId()))
+			Expect(eip.GetStatus().GetState()).To(Equal(privatev1.ExternalIPState_EXTERNAL_IP_STATE_PENDING))
+			Expect(eip.GetStatus().GetAttached()).To(BeTrue())
+
+			ngList, err := provisioner.natGatewayDao.List().
+				SetFilter("this.metadata.tenant == 'nat-tenant'").
+				Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ngList.GetItems()).To(HaveLen(1))
+			ng := ngList.GetItems()[0]
+			Expect(ng.GetMetadata().GetLabels()).To(HaveKeyWithValue("osac.openshift.io/default", "true"))
+			Expect(ng.GetSpec().GetExternalIp()).To(Equal(eip.GetId()))
+			Expect(ng.GetStatus().GetState()).To(Equal(privatev1.NATGatewayState_NAT_GATEWAY_STATE_PENDING))
+
+			poolResp, err := provisioner.externalIPPoolDao.Get().
+				SetId(pool.GetId()).
+				Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(poolResp.GetObject().GetStatus().GetAllocated()).To(Equal(int64(1)))
+			Expect(poolResp.GetObject().GetStatus().GetAvailable()).To(Equal(int64(9)))
+		})
+
+		It("returns error when no pool has capacity", func() {
+			createTenant("nat-tenant")
+			createNetworkClass(privatev1.NetworkDefaults_builder{
+				VirtualNetworkIpv4Cidr: "10.0.0.0/16",
+				SubnetIpv4Cidr:         "10.0.1.0/24",
+				EnableNatGateway:       true,
+			}.Build())
+
+			err := provisioner.Provision(ctx, "nat-tenant")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no ExternalIP pool with available capacity"))
+		})
+	})
+
 	Context("when NetworkClass defaults are partially populated", func() {
 		It("creates only IPv4 subnet when IPv6 CIDRs are empty", func() {
 			createTenant("test-tenant")
@@ -299,15 +391,3 @@ var _ = Describe("Default networking provisioner", func() {
 		})
 	})
 })
-
-func boolPtr(b bool) *bool {
-	return &b
-}
-
-func int32Ptr(i int32) *int32 {
-	return &i
-}
-
-func stringPtr(s string) *string {
-	return &s
-}

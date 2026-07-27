@@ -511,7 +511,7 @@ var _ = Describe("Private tenants server (Tenant API)", func() {
 					Name:   "test-nc",
 					Tenant: "system",
 				}.Build(),
-				IsDefault:              boolPtr(true),
+				IsDefault:              new(true),
 				ImplementationStrategy: "netris",
 				FabricManager:          "netris",
 				Spec: privatev1.NetworkClassSpec_builder{

@@ -76,11 +76,6 @@ func (b *DefaultNetworkingProvisionerBuilder) Build() (result *DefaultNetworking
 		return
 	}
 
-	newDAO := func(t any) error {
-		return nil
-	}
-	_ = newDAO
-
 	networkClassDao, err := dao.NewGenericDAO[*privatev1.NetworkClass]().
 		SetLogger(b.logger).
 		SetTenancyLogic(b.tenancyLogic).
@@ -169,6 +164,10 @@ func (b *DefaultNetworkingProvisionerBuilder) Build() (result *DefaultNetworking
 
 // Provision creates default networking resources for the given tenant. Returns nil if no default
 // NetworkClass exists or if the NetworkClass has no defaults configured.
+//
+// Callers must ensure ctx carries a database transaction — all resources are created within that
+// transaction so a failure rolls back the entire set. The gRPC interceptor provides this when
+// called from an RPC handler.
 func (p *DefaultNetworkingProvisioner) Provision(ctx context.Context, tenantName string) error {
 	nc, err := findDefaultNetworkClass(ctx, p.logger, p.networkClassDao)
 	if err != nil {
@@ -373,17 +372,26 @@ func (p *DefaultNetworkingProvisioner) provisionNATGateway(
 }
 
 func (p *DefaultNetworkingProvisioner) findExternalIPPool(ctx context.Context) (*privatev1.ExternalIPPool, error) {
-	listResponse, err := p.externalIPPoolDao.List().
-		SetFilter("this.status.state == 'EXTERNAL_IP_POOL_STATE_READY' && this.status.available > 0").
-		Do(ctx)
+	listResponse, err := p.externalIPPoolDao.List().Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query ExternalIP pools: %w", err)
 	}
-	items := listResponse.GetItems()
-	if len(items) == 0 {
+	var best *privatev1.ExternalIPPool
+	for _, pool := range listResponse.GetItems() {
+		if pool.GetStatus().GetState() != privatev1.ExternalIPPoolState_EXTERNAL_IP_POOL_STATE_READY {
+			continue
+		}
+		if pool.GetStatus().GetAvailable() <= 0 {
+			continue
+		}
+		if best == nil || pool.GetStatus().GetAvailable() > best.GetStatus().GetAvailable() {
+			best = pool
+		}
+	}
+	if best == nil {
 		return nil, fmt.Errorf("no ExternalIP pool with available capacity found for default NATGateway")
 	}
-	return items[0], nil
+	return best, nil
 }
 
 func (p *DefaultNetworkingProvisioner) createDefaultExternalIP(
