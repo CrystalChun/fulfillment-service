@@ -52,6 +52,7 @@ type PrivateBareMetalInstancesServer struct {
 	generic         *GenericServer[*privatev1.BareMetalInstance]
 	catalogItemsDao *dao.GenericDAO[*privatev1.BareMetalInstanceCatalogItem]
 	templatesDao    *dao.GenericDAO[*privatev1.BareMetalInstanceTemplate]
+	hostTypesDao    *dao.GenericDAO[*privatev1.HostType]
 }
 
 func NewPrivateBareMetalInstancesServer() *PrivateBareMetalInstancesServerBuilder {
@@ -115,6 +116,15 @@ func (b *PrivateBareMetalInstancesServerBuilder) Build() (result *PrivateBareMet
 		return
 	}
 
+	hostTypesDao, err := dao.NewGenericDAO[*privatev1.HostType]().
+		SetLogger(b.logger).
+		SetTenancyLogic(b.tenancyLogic).
+		SetMetricsRegisterer(b.metricsRegisterer).
+		Build()
+	if err != nil {
+		return
+	}
+
 	generic, err := NewGenericServer[*privatev1.BareMetalInstance]().
 		SetLogger(b.logger).
 		SetService(privatev1.BareMetalInstances_ServiceDesc.ServiceName).
@@ -132,6 +142,7 @@ func (b *PrivateBareMetalInstancesServerBuilder) Build() (result *PrivateBareMet
 		generic:         generic,
 		catalogItemsDao: catalogItemsDao,
 		templatesDao:    templatesDao,
+		hostTypesDao:    hostTypesDao,
 	}
 	return
 }

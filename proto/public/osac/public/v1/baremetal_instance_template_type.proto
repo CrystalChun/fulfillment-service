@@ -43,6 +43,9 @@ message BareMetalInstanceTemplate {
   // Note that these are only the *definitions* of the parameters, not the actual values. The actual values are in the
   // `spec.template_parameters` field of the bare metal instance.
   repeated BareMetalInstanceTemplateParameterDefinition parameters = 6;
+
+  // Identifier of the HostType that defines the hardware profile for instances created from this template.
+  string host_type = 7;
 }
 
 // Contains type and documentation of a template parameter.
