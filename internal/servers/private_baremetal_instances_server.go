@@ -167,6 +167,9 @@ func (s *PrivateBareMetalInstancesServer) Create(ctx context.Context,
 	if err = s.validateSpec(request.GetObject()); err != nil {
 		return
 	}
+	if err = s.validateNetworkAttachments(ctx, request.GetObject()); err != nil {
+		return
+	}
 	err = s.generic.Create(ctx, request, &response)
 	return
 }
@@ -392,6 +395,115 @@ func (s *PrivateBareMetalInstancesServer) validateImmutability(ctx context.Conte
 	if updatingAutoExternalIP && existingSpec.GetAutoExternalIpAttachment() != newSpec.GetAutoExternalIpAttachment() {
 		return grpcstatus.Errorf(grpccodes.InvalidArgument,
 			"cannot change spec.auto_external_ip_attachment: auto_external_ip_attachment is immutable after creation")
+	}
+
+	return nil
+}
+
+func (s *PrivateBareMetalInstancesServer) validateNetworkAttachments(ctx context.Context,
+	bmi *privatev1.BareMetalInstance) error {
+	attachments := bmi.GetSpec().GetNetworkAttachments()
+	if len(attachments) == 0 {
+		return nil
+	}
+
+	// Structural validation: duplicates and multi-NIC interface requirement.
+	seenInterfaces := make(map[string]bool)
+	for i, a := range attachments {
+		iface := a.GetInterface()
+		if len(attachments) > 1 && iface == "" {
+			return grpcstatus.Errorf(grpccodes.InvalidArgument,
+				"network_attachments[%d]: interface is required when multiple attachments are specified", i)
+		}
+		if iface != "" {
+			if seenInterfaces[iface] {
+				return grpcstatus.Errorf(grpccodes.InvalidArgument,
+					"network_attachments[%d]: duplicate interface '%s'", i, iface)
+			}
+			seenInterfaces[iface] = true
+		}
+	}
+
+	// Primary validation (defense-in-depth with CEL).
+	if len(attachments) > 1 {
+		primaryCount := 0
+		for _, a := range attachments {
+			if a.GetPrimary() {
+				primaryCount++
+			}
+		}
+		if primaryCount != 1 {
+			return grpcstatus.Errorf(grpccodes.InvalidArgument,
+				"when multiple network attachments are specified, exactly one must have primary set to true")
+		}
+	}
+
+	// Interface-against-HostType validation (only when template has host_type).
+	catalogItemRef := bmi.GetSpec().GetCatalogItem()
+	if catalogItemRef == "" {
+		return nil
+	}
+	catResp, err := s.catalogItemsDao.Get().SetId(catalogItemRef).Do(ctx)
+	if err != nil {
+		return nil
+	}
+	templateID := catResp.GetObject().GetTemplate()
+	if templateID == "" {
+		return nil
+	}
+	tmplResp, err := s.templatesDao.Get().SetId(templateID).Do(ctx)
+	if err != nil {
+		return nil
+	}
+	hostTypeID := tmplResp.GetObject().GetHostType()
+	if hostTypeID == "" {
+		s.logger.WarnContext(ctx, "Template has no host_type, skipping interface validation",
+			slog.String("template_id", templateID))
+		return nil
+	}
+	htResp, err := s.hostTypesDao.Get().SetId(hostTypeID).Do(ctx)
+	if err != nil {
+		var notFoundErr *dao.ErrNotFound
+		if errors.As(err, &notFoundErr) {
+			return grpcstatus.Errorf(grpccodes.InvalidArgument,
+				"host type '%s' referenced by template '%s' not found", hostTypeID, templateID)
+		}
+		s.logger.ErrorContext(ctx, "Failed to lookup host type",
+			slog.String("host_type_id", hostTypeID), slog.Any("error", err))
+		return grpcstatus.Errorf(grpccodes.Internal, "failed to lookup host type")
+	}
+	hostType := htResp.GetObject()
+
+	validInterfaces := make(map[string]bool)
+	for _, ni := range hostType.GetInterfaces() {
+		if strings.EqualFold(ni.GetRole(), "lifecycle") {
+			continue
+		}
+		validInterfaces[ni.GetName()] = true
+	}
+
+	if len(attachments) > len(validInterfaces) {
+		return grpcstatus.Errorf(grpccodes.InvalidArgument,
+			"number of network attachments (%d) exceeds available interfaces (%d) on host type '%s'",
+			len(attachments), len(validInterfaces), hostTypeID)
+	}
+
+	for i, a := range attachments {
+		iface := a.GetInterface()
+		if iface == "" {
+			continue
+		}
+		// Check lifecycle rejection.
+		for _, ni := range hostType.GetInterfaces() {
+			if ni.GetName() == iface && strings.EqualFold(ni.GetRole(), "lifecycle") {
+				return grpcstatus.Errorf(grpccodes.InvalidArgument,
+					"network_attachments[%d]: interface '%s' has role 'lifecycle' and cannot be used for tenant networking", i, iface)
+			}
+		}
+		if !validInterfaces[iface] {
+			return grpcstatus.Errorf(grpccodes.InvalidArgument,
+				"network_attachments[%d]: interface '%s' not found in host type '%s'", i, iface, hostTypeID)
+		}
 	}
 
 	return nil

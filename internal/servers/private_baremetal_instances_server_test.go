@@ -1242,6 +1242,381 @@ var _ = Describe("Private bare metal instances server", func() {
 		})
 	})
 
+	Describe("Network attachment server validation", func() {
+		var (
+			server        *PrivateBareMetalInstancesServer
+			catalogServer *PrivateBareMetalInstanceCatalogItemsServer
+			catIDWithHT   string
+			catIDNoHT     string
+		)
+
+		boolPtr := func(v bool) *bool { return &v }
+		strPtr := func(v string) *string { return &v }
+
+		BeforeEach(func() {
+			var err error
+
+			catalogServer, err = NewPrivateBareMetalInstanceCatalogItemsServer().
+				SetLogger(logger).
+				SetAttributionLogic(attribution).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+
+			server, err = NewPrivateBareMetalInstancesServer().
+				SetLogger(logger).
+				SetAttributionLogic(attribution).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create a HostType with known interfaces.
+			hostTypesDao, err := dao.NewGenericDAO[*privatev1.HostType]().
+				SetLogger(logger).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			_, err = hostTypesDao.Create().SetObject(privatev1.HostType_builder{
+				Id:    "test-host-type",
+				Title: "Test Host Type",
+				Metadata: privatev1.Metadata_builder{
+					Tenant: auth.SharedTenant,
+				}.Build(),
+				Interfaces: []*privatev1.NetworkInterface{
+					privatev1.NetworkInterface_builder{Name: "data-0", Role: "fabric"}.Build(),
+					privatev1.NetworkInterface_builder{Name: "data-1", Role: "fabric"}.Build(),
+					privatev1.NetworkInterface_builder{Name: "mgmt-0", Role: "management"}.Build(),
+					privatev1.NetworkInterface_builder{Name: "bmc-0", Role: "lifecycle"}.Build(),
+				},
+			}.Build()).Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create a template WITH host_type.
+			templatesDao, err := dao.NewGenericDAO[*privatev1.BareMetalInstanceTemplate]().
+				SetLogger(logger).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			_, err = templatesDao.Create().SetObject(privatev1.BareMetalInstanceTemplate_builder{
+				Id:       "template-with-ht",
+				Title:    "Template with HostType",
+				HostType: "test-host-type",
+				Metadata: privatev1.Metadata_builder{
+					Tenant: auth.SharedTenant,
+				}.Build(),
+			}.Build()).Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create a template WITHOUT host_type.
+			_, err = templatesDao.Create().SetObject(privatev1.BareMetalInstanceTemplate_builder{
+				Id:    "template-no-ht",
+				Title: "Template without HostType",
+				Metadata: privatev1.Metadata_builder{
+					Tenant: auth.SharedTenant,
+				}.Build(),
+			}.Build()).Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create catalog items referencing the templates.
+			catResp, err := catalogServer.Create(ctx, privatev1.BareMetalInstanceCatalogItemsCreateRequest_builder{
+				Object: privatev1.BareMetalInstanceCatalogItem_builder{
+					Title:     "Catalog with HT",
+					Template:  "template-with-ht",
+					Published: true,
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			catIDWithHT = catResp.GetObject().GetId()
+
+			catResp2, err := catalogServer.Create(ctx, privatev1.BareMetalInstanceCatalogItemsCreateRequest_builder{
+				Object: privatev1.BareMetalInstanceCatalogItem_builder{
+					Title:     "Catalog no HT",
+					Template:  "template-no-ht",
+					Published: true,
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			catIDNoHT = catResp2.GetObject().GetId()
+		})
+
+		It("Accepts single attachment without interface", func() {
+			_, err := server.Create(ctx, privatev1.BareMetalInstancesCreateRequest_builder{
+				Object: privatev1.BareMetalInstance_builder{
+					Spec: privatev1.BareMetalInstanceSpec_builder{
+						CatalogItem: catIDWithHT,
+						NetworkAttachments: []*privatev1.BareMetalNetworkAttachment{
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet: "subnet-1",
+							}.Build(),
+						},
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("Accepts single attachment with valid interface", func() {
+			_, err := server.Create(ctx, privatev1.BareMetalInstancesCreateRequest_builder{
+				Object: privatev1.BareMetalInstance_builder{
+					Spec: privatev1.BareMetalInstanceSpec_builder{
+						CatalogItem: catIDWithHT,
+						NetworkAttachments: []*privatev1.BareMetalNetworkAttachment{
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet:    "subnet-1",
+								Interface: strPtr("data-0"),
+							}.Build(),
+						},
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("Accepts multiple attachments with distinct valid interfaces and one primary", func() {
+			_, err := server.Create(ctx, privatev1.BareMetalInstancesCreateRequest_builder{
+				Object: privatev1.BareMetalInstance_builder{
+					Spec: privatev1.BareMetalInstanceSpec_builder{
+						CatalogItem: catIDWithHT,
+						NetworkAttachments: []*privatev1.BareMetalNetworkAttachment{
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet:    "subnet-1",
+								Interface: strPtr("data-0"),
+								Primary:   boolPtr(true),
+							}.Build(),
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet:    "subnet-2",
+								Interface: strPtr("data-1"),
+							}.Build(),
+						},
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("Rejects interface not in HostType interfaces list", func() {
+			_, err := server.Create(ctx, privatev1.BareMetalInstancesCreateRequest_builder{
+				Object: privatev1.BareMetalInstance_builder{
+					Spec: privatev1.BareMetalInstanceSpec_builder{
+						CatalogItem: catIDWithHT,
+						NetworkAttachments: []*privatev1.BareMetalNetworkAttachment{
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet:    "subnet-1",
+								Interface: strPtr("nonexistent-port"),
+							}.Build(),
+						},
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			status, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+			Expect(status.Message()).To(ContainSubstring("nonexistent-port"))
+			Expect(status.Message()).To(ContainSubstring("not found in host type"))
+		})
+
+		It("Rejects duplicate interface across attachments", func() {
+			_, err := server.Create(ctx, privatev1.BareMetalInstancesCreateRequest_builder{
+				Object: privatev1.BareMetalInstance_builder{
+					Spec: privatev1.BareMetalInstanceSpec_builder{
+						CatalogItem: catIDWithHT,
+						NetworkAttachments: []*privatev1.BareMetalNetworkAttachment{
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet:    "subnet-1",
+								Interface: strPtr("data-0"),
+								Primary:   boolPtr(true),
+							}.Build(),
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet:    "subnet-2",
+								Interface: strPtr("data-0"),
+							}.Build(),
+						},
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			status, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+			Expect(status.Message()).To(ContainSubstring("duplicate interface"))
+			Expect(status.Message()).To(ContainSubstring("data-0"))
+		})
+
+		It("Rejects interface with lifecycle role", func() {
+			_, err := server.Create(ctx, privatev1.BareMetalInstancesCreateRequest_builder{
+				Object: privatev1.BareMetalInstance_builder{
+					Spec: privatev1.BareMetalInstanceSpec_builder{
+						CatalogItem: catIDWithHT,
+						NetworkAttachments: []*privatev1.BareMetalNetworkAttachment{
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet:    "subnet-1",
+								Interface: strPtr("bmc-0"),
+							}.Build(),
+						},
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			status, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+			Expect(status.Message()).To(ContainSubstring("lifecycle"))
+			Expect(status.Message()).To(ContainSubstring("bmc-0"))
+		})
+
+		It("Rejects multiple attachments without explicit interface", func() {
+			_, err := server.Create(ctx, privatev1.BareMetalInstancesCreateRequest_builder{
+				Object: privatev1.BareMetalInstance_builder{
+					Spec: privatev1.BareMetalInstanceSpec_builder{
+						CatalogItem: catIDWithHT,
+						NetworkAttachments: []*privatev1.BareMetalNetworkAttachment{
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet:  "subnet-1",
+								Primary: boolPtr(true),
+							}.Build(),
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet: "subnet-2",
+							}.Build(),
+						},
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			status, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+			Expect(status.Message()).To(ContainSubstring("interface is required"))
+		})
+
+		It("Rejects attachment count exceeding available interfaces", func() {
+			_, err := server.Create(ctx, privatev1.BareMetalInstancesCreateRequest_builder{
+				Object: privatev1.BareMetalInstance_builder{
+					Spec: privatev1.BareMetalInstanceSpec_builder{
+						CatalogItem: catIDWithHT,
+						NetworkAttachments: []*privatev1.BareMetalNetworkAttachment{
+							privatev1.BareMetalNetworkAttachment_builder{Subnet: "s1", Interface: strPtr("data-0"), Primary: boolPtr(true)}.Build(),
+							privatev1.BareMetalNetworkAttachment_builder{Subnet: "s2", Interface: strPtr("data-1")}.Build(),
+							privatev1.BareMetalNetworkAttachment_builder{Subnet: "s3", Interface: strPtr("mgmt-0")}.Build(),
+							privatev1.BareMetalNetworkAttachment_builder{Subnet: "s4", Interface: strPtr("extra")}.Build(),
+						},
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			status, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+			Expect(status.Message()).To(ContainSubstring("exceeds available interfaces"))
+		})
+
+		It("Rejects multiple attachments with no primary", func() {
+			_, err := server.Create(ctx, privatev1.BareMetalInstancesCreateRequest_builder{
+				Object: privatev1.BareMetalInstance_builder{
+					Spec: privatev1.BareMetalInstanceSpec_builder{
+						CatalogItem: catIDWithHT,
+						NetworkAttachments: []*privatev1.BareMetalNetworkAttachment{
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet:    "subnet-1",
+								Interface: strPtr("data-0"),
+							}.Build(),
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet:    "subnet-2",
+								Interface: strPtr("data-1"),
+							}.Build(),
+						},
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			status, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+			Expect(status.Message()).To(ContainSubstring("primary"))
+		})
+
+		It("Rejects multiple attachments with more than one primary", func() {
+			_, err := server.Create(ctx, privatev1.BareMetalInstancesCreateRequest_builder{
+				Object: privatev1.BareMetalInstance_builder{
+					Spec: privatev1.BareMetalInstanceSpec_builder{
+						CatalogItem: catIDWithHT,
+						NetworkAttachments: []*privatev1.BareMetalNetworkAttachment{
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet:    "subnet-1",
+								Interface: strPtr("data-0"),
+								Primary:   boolPtr(true),
+							}.Build(),
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet:    "subnet-2",
+								Interface: strPtr("data-1"),
+								Primary:   boolPtr(true),
+							}.Build(),
+						},
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			status, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+			Expect(status.Message()).To(ContainSubstring("primary"))
+		})
+
+		It("Skips interface-against-HostType validation when template has no host_type", func() {
+			_, err := server.Create(ctx, privatev1.BareMetalInstancesCreateRequest_builder{
+				Object: privatev1.BareMetalInstance_builder{
+					Spec: privatev1.BareMetalInstanceSpec_builder{
+						CatalogItem: catIDNoHT,
+						NetworkAttachments: []*privatev1.BareMetalNetworkAttachment{
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet:    "subnet-1",
+								Interface: strPtr("any-interface-name"),
+							}.Build(),
+						},
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("Still validates structural rules when template has no host_type", func() {
+			_, err := server.Create(ctx, privatev1.BareMetalInstancesCreateRequest_builder{
+				Object: privatev1.BareMetalInstance_builder{
+					Spec: privatev1.BareMetalInstanceSpec_builder{
+						CatalogItem: catIDNoHT,
+						NetworkAttachments: []*privatev1.BareMetalNetworkAttachment{
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet:    "subnet-1",
+								Interface: strPtr("nic-0"),
+								Primary:   boolPtr(true),
+							}.Build(),
+							privatev1.BareMetalNetworkAttachment_builder{
+								Subnet:    "subnet-2",
+								Interface: strPtr("nic-0"),
+							}.Build(),
+						},
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			status, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+			Expect(status.Message()).To(ContainSubstring("duplicate interface"))
+		})
+
+		It("Accepts no network attachments", func() {
+			_, err := server.Create(ctx, privatev1.BareMetalInstancesCreateRequest_builder{
+				Object: privatev1.BareMetalInstance_builder{
+					Spec: privatev1.BareMetalInstanceSpec_builder{
+						CatalogItem: catIDWithHT,
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
 	Describe("Network attachment primary validation", func() {
 		var validator protovalidate.Validator
 
