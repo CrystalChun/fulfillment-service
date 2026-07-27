@@ -506,8 +506,10 @@ func (s *PrivateBareMetalInstancesServer) validateNetworkAttachments(ctx context
 	}
 	hostType := htResp.GetObject()
 
+	interfaceRoles := make(map[string]string)
 	validInterfaces := make(map[string]bool)
 	for _, ni := range hostType.GetInterfaces() {
+		interfaceRoles[ni.GetName()] = ni.GetRole()
 		if strings.EqualFold(ni.GetRole(), "lifecycle") {
 			continue
 		}
@@ -525,12 +527,9 @@ func (s *PrivateBareMetalInstancesServer) validateNetworkAttachments(ctx context
 		if iface == "" {
 			continue
 		}
-		// Check lifecycle rejection.
-		for _, ni := range hostType.GetInterfaces() {
-			if ni.GetName() == iface && strings.EqualFold(ni.GetRole(), "lifecycle") {
-				return grpcstatus.Errorf(grpccodes.InvalidArgument,
-					"network_attachments[%d]: interface '%s' has role 'lifecycle' and cannot be used for tenant networking", i, iface)
-			}
+		if role, ok := interfaceRoles[iface]; ok && strings.EqualFold(role, "lifecycle") {
+			return grpcstatus.Errorf(grpccodes.InvalidArgument,
+				"network_attachments[%d]: interface '%s' has role 'lifecycle' and cannot be used for tenant networking", i, iface)
 		}
 		if !validInterfaces[iface] {
 			return grpcstatus.Errorf(grpccodes.InvalidArgument,
