@@ -1415,9 +1415,9 @@ func collectRefs(msg protoreflect.Message, path string, refs *[]discoveredRef) {
 				fullName := elemMsg.Descriptor().FullName()
 				if isReferenceType(fullName) {
 					*refs = append(*refs, discoveredRef{FullName: fullName, Path: fieldPath})
-				} else {
-					collectRefs(elemMsg, fieldPath, refs)
+					continue
 				}
+				collectRefs(elemMsg, fieldPath, refs)
 			}
 			return true
 		}
@@ -1426,9 +1426,9 @@ func collectRefs(msg protoreflect.Message, path string, refs *[]discoveredRef) {
 		fullName := subMsg.Descriptor().FullName()
 		if isReferenceType(fullName) {
 			*refs = append(*refs, discoveredRef{FullName: fullName, Path: fieldPath})
-		} else {
-			collectRefs(subMsg, fieldPath, refs)
+			return true
 		}
+		collectRefs(subMsg, fieldPath, refs)
 		return true
 	})
 }
