@@ -427,10 +427,7 @@ func (t *task) deleteProjectMemberships(ctx context.Context) error {
 		_, err := t.r.projectMembershipsClient.Delete(ctx, privatev1.ProjectMembershipsDeleteRequest_builder{
 			Id: membership.GetId(),
 		}.Build())
-		if err != nil {
-			if status.Code(err) == codes.NotFound {
-				continue
-			}
+		if err != nil && status.Code(err) != codes.NotFound {
 			return fmt.Errorf("failed to delete project membership %s: %w", membership.GetId(), err)
 		}
 	}
