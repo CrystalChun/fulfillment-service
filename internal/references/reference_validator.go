@@ -231,12 +231,12 @@ func (v *ReferenceValidator) walkMessage(ctx context.Context, msg protoreflect.M
 						internalErr = err
 						return false
 					}
-				} else {
-					err := v.walkMessage(ctx, elemMsg, indexedPath, violations, tenant, project)
-					if err != nil {
-						internalErr = err
-						return false
-					}
+					continue
+				}
+				err := v.walkMessage(ctx, elemMsg, indexedPath, violations, tenant, project)
+				if err != nil {
+					internalErr = err
+					return false
 				}
 			}
 			return true
@@ -252,12 +252,12 @@ func (v *ReferenceValidator) walkMessage(ctx context.Context, msg protoreflect.M
 				internalErr = err
 				return false
 			}
-		} else {
-			err := v.walkMessage(ctx, subMsg, fieldPath, violations, tenant, project)
-			if err != nil {
-				internalErr = err
-				return false
-			}
+			return true
+		}
+		err := v.walkMessage(ctx, subMsg, fieldPath, violations, tenant, project)
+		if err != nil {
+			internalErr = err
+			return false
 		}
 
 		return true
