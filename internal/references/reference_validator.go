@@ -141,7 +141,7 @@ func (v *ReferenceValidator) Register(fullName protoreflect.FullName, lookupFunc
 // UnaryServer is the unary server interceptor function.
 func (v *ReferenceValidator) UnaryServer(ctx context.Context, request any, info *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler) (response any, err error) {
-	v.sealed.Store(true)
+	v.sealed.CompareAndSwap(false, true)
 	if !isCreateOrUpdate(info.FullMethod) {
 		return handler(ctx, request)
 	}
