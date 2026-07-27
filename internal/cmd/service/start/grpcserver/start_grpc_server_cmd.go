@@ -1304,6 +1304,17 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 	}
 	publicv1.RegisterTenantsServer(grpcServer, publicTenantsServer)
 
+	// Create the default networking provisioner:
+	c.logger.InfoContext(ctx, "Creating default networking provisioner")
+	defaultNetworkingProvisioner, err := servers.NewDefaultNetworkingProvisioner().
+		SetLogger(c.logger).
+		SetTenancyLogic(tenancyLogic).
+		SetMetricsRegisterer(metricsRegisterer).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create default networking provisioner: %w", err)
+	}
+
 	// Create the private tenants server:
 	c.logger.InfoContext(ctx, "Creating private tenants server")
 	privateTenantsServer, err := servers.NewPrivateTenantsServer().
@@ -1312,6 +1323,7 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 		SetAttributionLogic(privateAttributionLogic).
 		SetTenancyLogic(tenancyLogic).
 		SetMetricsRegisterer(metricsRegisterer).
+		SetDefaultNetworkingProvisioner(defaultNetworkingProvisioner).
 		Build()
 	if err != nil {
 		return fmt.Errorf("failed to create private tenants server: %w", err)
