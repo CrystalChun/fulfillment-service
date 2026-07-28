@@ -32,6 +32,7 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/cmd/cli/label"
 	"github.com/osac-project/fulfillment-service/internal/cmd/cli/login"
 	"github.com/osac-project/fulfillment-service/internal/cmd/cli/logout"
+	"github.com/osac-project/fulfillment-service/internal/cmd/cli/scale"
 	"github.com/osac-project/fulfillment-service/internal/cmd/cli/tenant"
 	"github.com/osac-project/fulfillment-service/internal/cmd/cli/version"
 	"github.com/osac-project/fulfillment-service/internal/cmd/cli/whoami"
@@ -105,6 +106,7 @@ func Root() (result *cobra.Command, err error) {
 	result.AddCommand(label.Cmd())
 	result.AddCommand(login.Cmd())
 	result.AddCommand(logout.Cmd())
+	result.AddCommand(scale.Cmd())
 	result.AddCommand(tenant.Cmd())
 	result.AddCommand(version.Cmd())
 	result.AddCommand(whoami.Cmd())
