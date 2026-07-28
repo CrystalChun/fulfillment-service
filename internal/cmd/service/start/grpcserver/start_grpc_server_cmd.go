@@ -50,6 +50,7 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/network"
 	"github.com/osac-project/fulfillment-service/internal/provisioners"
 	"github.com/osac-project/fulfillment-service/internal/recovery"
+	"github.com/osac-project/fulfillment-service/internal/references"
 	"github.com/osac-project/fulfillment-service/internal/servers"
 	shtdwn "github.com/osac-project/fulfillment-service/internal/shutdown"
 	"github.com/osac-project/fulfillment-service/internal/validation"
@@ -430,6 +431,16 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 		return fmt.Errorf("failed to create JIT provisioning interceptor: %w", err)
 	}
 
+	// Prepare the reference validation interceptor:
+	c.logger.InfoContext(ctx, "Creating reference validation interceptor")
+	referenceValidator, err := references.NewReferenceValidator().
+		SetLogger(c.logger).
+		SetMetricsRegisterer(metricsRegisterer).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create reference validation interceptor: %w", err)
+	}
+
 	// Prepare the transactions manager:
 	c.logger.InfoContext(ctx, "Creating transactions manager")
 	txManager, err := database.NewTxManager().
@@ -495,6 +506,7 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 			authnInterceptor.UnaryServer,
 			authzInterceptor.UnaryServer,
 			jitProvisioningInterceptor.UnaryServer,
+			referenceValidator.UnaryServer,
 		),
 		grpc.ChainStreamInterceptor(
 			panicInterceptor.StreamServer,
@@ -504,6 +516,7 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 			authnInterceptor.StreamServer,
 			authzInterceptor.StreamServer,
 			jitProvisioningInterceptor.StreamServer,
+			referenceValidator.StreamServer,
 		),
 	)
 	shutdown.AddGrpcServer(network.GrpcListenerName, 0, grpcServer)
