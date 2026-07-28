@@ -43,6 +43,7 @@ already exists.
 | `simple-ocp-4-17-cluster.yaml` — Simple OpenShift 4.17 (fc430) | `osac.templates.ocp_4_17_small` |
 | `ocp-4-20-nico-baremetal-cluster.yaml` — OCP 4.20 NICo bare metal | `osac.templates.ocp_4_20_small_nico` |
 | `ocp-4-20-ai-maas-cluster.yaml` — OpenShift AI 4.20 with MaaS | `osac.templates.ocp_4_20_ai_maas` |
+| `ocp-4-20-openshift-ai-cluster.yaml` — OpenShift AI 4.20 (RHOAI + GPU) | `osac.templates.ocp_4_20_openshift_ai` |
 | `ocp-ci-cluster.yaml` — CI OpenShift cluster (unpublished) | `osac.templates.ocp_ci_small` |
 
 ### Compute instance (VM) catalog items
