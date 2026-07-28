@@ -36,6 +36,22 @@ for f in examples/catalog-items/*.yaml; do osac create -f "$f"; done
 **Note:** `osac create -f` is **not idempotent** — it will fail if the resource
 already exists.
 
+### Using catalog items
+
+After loading catalog items, use `--catalog-item` to create resources from them:
+
+```bash
+# Create a cluster (CIDR fields have defaults, so no extra flags needed)
+osac create cluster --catalog-item simple-ocp-4-17-cluster
+
+# Create a VM (network attachment is required — depends on your tenant's subnets)
+osac create computeinstance --catalog-item linux-vm --network-attachment subnet=SUBNET_NAME
+```
+
+**Note:** VM catalog items cannot default the `network_attachments` field because
+the valid values depend on the tenant's existing subnets. You must always provide
+at least one `--network-attachment` when creating a compute instance.
+
 ### Cluster catalog items
 
 | Example | Template |

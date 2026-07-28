@@ -9,7 +9,7 @@ description: A Windows Server virtual machine with customizable resources.
 template: osac.templates.ocp_virt_vm
 published: true
 field_definitions:
-  - path: spec.is_windows
+  - path: is_windows
     display_name: Windows
     editable: false
     default: true
