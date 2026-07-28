@@ -293,9 +293,9 @@ func (v *ReferenceValidator) resolveAndMutate(ctx context.Context, refMsg protor
 
 	idField := refMsg.Descriptor().Fields().ByName("id")
 	nameField := refMsg.Descriptor().Fields().ByName("name")
-	if idField == nil || nameField == nil {
+	if !isStringField(idField) || !isStringField(nameField) {
 		return grpcstatus.Errorf(grpccodes.Internal,
-			"reference type %q does not have required id/name fields", fullName)
+			"reference type %q does not have required string id/name fields", fullName)
 	}
 	id := refMsg.Get(idField).String()
 	name := refMsg.Get(nameField).String()
@@ -504,6 +504,10 @@ func identifier(id, name string) string {
 		return id
 	}
 	return "(empty reference)"
+}
+
+func isStringField(fd protoreflect.FieldDescriptor) bool {
+	return fd != nil && fd.Kind() == protoreflect.StringKind
 }
 
 // registerOrReuse registers a Prometheus collector and returns it. If the collector is already
