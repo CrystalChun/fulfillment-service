@@ -45,7 +45,7 @@ After loading catalog items, use `--catalog-item` to create resources from them:
 osac create cluster --catalog-item simple-ocp-4-17-cluster
 
 # Create a VM (network attachment is required — depends on your tenant's subnets)
-osac create computeinstance --catalog-item linux-vm --network-attachment subnet=SUBNET_NAME
+osac create computeinstance --catalog-item linux-vm --network-attachment subnet=SUBNET_ID
 ```
 
 **Note:** VM catalog items cannot default the `network_attachments` field because
