@@ -21,6 +21,8 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/osac-project/fulfillment-service/internal/maputil"
 )
 
 // ApplyFields applies --set KEY=VALUE pairs to a proto.Message via JSON round-trip.
@@ -55,7 +57,7 @@ func ApplyFields(spec proto.Message, fields []string) error {
 			}
 			setTemplateParameter(specMap, paramName, value)
 		} else {
-			setNestedValue(specMap, key, inferValue(value))
+			maputil.SetNestedValue(specMap, key, inferValue(value))
 		}
 	}
 
@@ -124,27 +126,5 @@ func setTemplateParameter(specMap map[string]any, name, rawValue string) {
 	tp[name] = map[string]any{
 		"@type": typeURL,
 		"value": value,
-	}
-}
-
-func setNestedValue(m map[string]any, path string, value any) {
-	parts := strings.Split(path, ".")
-	current := m
-	for i, part := range parts {
-		if i == len(parts)-1 {
-			current[part] = value
-			return
-		}
-		next, ok := current[part]
-		if !ok {
-			next = map[string]any{}
-			current[part] = next
-		}
-		currentMap, ok := next.(map[string]any)
-		if !ok {
-			currentMap = map[string]any{}
-			current[part] = currentMap
-		}
-		current = currentMap
 	}
 }

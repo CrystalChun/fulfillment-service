@@ -32,6 +32,7 @@ import (
 
 	privatev1 "github.com/osac-project/fulfillment-service/internal/api/osac/private/v1"
 	"github.com/osac-project/fulfillment-service/internal/database/dao"
+	"github.com/osac-project/fulfillment-service/internal/maputil"
 )
 
 // catalogItem is implemented by both ClusterCatalogItem and ComputeInstanceCatalogItem.
@@ -117,7 +118,7 @@ func applyFieldDefinitions(
 		}
 
 		defaultVal := fd.GetDefault()
-		userVal, userHasValue := getNestedValue(specMap, path)
+		userVal, userHasValue := maputil.GetNestedValue(specMap, path)
 
 		if !fd.GetEditable() {
 			if userHasValue && userVal != nil {
@@ -191,7 +192,7 @@ func applyDefault(specMap map[string]any, path string, defaultVal *structpb.Valu
 	if strings.HasPrefix(path, "template_parameters.") {
 		parsed = wrapValueAsAny(parsed)
 	}
-	setNestedValue(specMap, path, parsed)
+	maputil.SetNestedValue(specMap, path, parsed)
 	return nil
 }
 
@@ -270,44 +271,6 @@ func validateAgainstSchema(compiler *jsonschema.Compiler, path string, value any
 			"validation failed for field '%s': %v", path, err)
 	}
 	return nil
-}
-
-func getNestedValue(m map[string]any, path string) (any, bool) {
-	parts := strings.Split(path, ".")
-	current := any(m)
-	for _, part := range parts {
-		currentMap, ok := current.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-		current, ok = currentMap[part]
-		if !ok {
-			return nil, false
-		}
-	}
-	return current, true
-}
-
-func setNestedValue(m map[string]any, path string, value any) {
-	parts := strings.Split(path, ".")
-	current := m
-	for i, part := range parts {
-		if i == len(parts)-1 {
-			current[part] = value
-			return
-		}
-		next, ok := current[part]
-		if !ok {
-			next = map[string]any{}
-			current[part] = next
-		}
-		currentMap, ok := next.(map[string]any)
-		if !ok {
-			currentMap = map[string]any{}
-			current[part] = currentMap
-		}
-		current = currentMap
-	}
 }
 
 func collectLeafPaths(m map[string]any, prefix string) []string {
