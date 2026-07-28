@@ -1043,6 +1043,20 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 	}
 	privatev1.RegisterStorageBackendsServer(grpcServer, privateStorageBackendsServer)
 
+	// Create the private secrets server:
+	c.logger.InfoContext(ctx, "Creating private secrets server")
+	privateSecretsServer, err := servers.NewPrivateSecretsServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(privateAttributionLogic).
+		SetTenancyLogic(tenancyLogic).
+		SetMetricsRegisterer(metricsRegisterer).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create private secrets server: %w", err)
+	}
+	privatev1.RegisterSecretsServer(grpcServer, privateSecretsServer)
+
 	// Create the storage backends DAO for cross-resource validation in the storage tiers server:
 	storageBackendsDAO, err := dao.NewGenericDAO[*privatev1.StorageBackend]().
 		SetLogger(c.logger).
@@ -1150,90 +1164,6 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error { //nolint:
 		return fmt.Errorf("failed to create private project memberships server: %w", err)
 	}
 	privatev1.RegisterProjectMembershipsServer(grpcServer, privateProjectMembershipsServer)
-
-	// Create the public IPs server:
-	c.logger.InfoContext(ctx, "Creating public IPs server")
-	publicIPsServer, err := servers.NewPublicIPsServer().
-		SetLogger(c.logger).
-		SetNotifier(notifier).
-		SetAttributionLogic(publicAttributionLogic).
-		SetTenancyLogic(tenancyLogic).
-		SetMetricsRegisterer(metricsRegisterer).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to create public IPs server: %w", err)
-	}
-	publicv1.RegisterPublicIPsServer(grpcServer, publicIPsServer)
-
-	// Create the public IP pools server (read-only: List + Get):
-	c.logger.InfoContext(ctx, "Creating public IP pools server")
-	publicIPPoolsServer, err := servers.NewPublicIPPoolsServer().
-		SetLogger(c.logger).
-		SetNotifier(notifier).
-		SetAttributionLogic(publicAttributionLogic).
-		SetTenancyLogic(tenancyLogic).
-		SetMetricsRegisterer(metricsRegisterer).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to create public IP pools server: %w", err)
-	}
-	publicv1.RegisterPublicIPPoolsServer(grpcServer, publicIPPoolsServer)
-
-	// Create the private public IP pools server:
-	c.logger.InfoContext(ctx, "Creating private public IP pools server")
-	privatePublicIPPoolsServer, err := servers.NewPrivatePublicIPPoolsServer().
-		SetLogger(c.logger).
-		SetNotifier(notifier).
-		SetAttributionLogic(privateAttributionLogic).
-		SetTenancyLogic(tenancyLogic).
-		SetMetricsRegisterer(metricsRegisterer).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to create private public IP pools server: %w", err)
-	}
-	privatev1.RegisterPublicIPPoolsServer(grpcServer, privatePublicIPPoolsServer)
-
-	// Create the private public IPs server:
-	c.logger.InfoContext(ctx, "Creating private public IPs server")
-	privatePublicIPsServer, err := servers.NewPrivatePublicIPsServer().
-		SetLogger(c.logger).
-		SetNotifier(notifier).
-		SetAttributionLogic(privateAttributionLogic).
-		SetTenancyLogic(tenancyLogic).
-		SetMetricsRegisterer(metricsRegisterer).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to create private public IPs server: %w", err)
-	}
-	privatev1.RegisterPublicIPsServer(grpcServer, privatePublicIPsServer)
-
-	// Create the private public IP attachments server:
-	c.logger.InfoContext(ctx, "Creating private public IP attachments server")
-	privatePublicIPAttachmentsServer, err := servers.NewPrivatePublicIPAttachmentsServer().
-		SetLogger(c.logger).
-		SetNotifier(notifier).
-		SetAttributionLogic(privateAttributionLogic).
-		SetTenancyLogic(tenancyLogic).
-		SetMetricsRegisterer(metricsRegisterer).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to create private public IP attachments server: %w", err)
-	}
-	privatev1.RegisterPublicIPAttachmentsServer(grpcServer, privatePublicIPAttachmentsServer)
-
-	// Create the public public IP attachments server:
-	c.logger.InfoContext(ctx, "Creating public public IP attachments server")
-	publicIPAttachmentsServer, err := servers.NewPublicIPAttachmentsServer().
-		SetLogger(c.logger).
-		SetNotifier(notifier).
-		SetAttributionLogic(publicAttributionLogic).
-		SetTenancyLogic(tenancyLogic).
-		SetMetricsRegisterer(metricsRegisterer).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to create public IP attachments server: %w", err)
-	}
-	publicv1.RegisterPublicIPAttachmentsServer(grpcServer, publicIPAttachmentsServer)
 
 	// Create the external IP pools server (read-only: List + Get):
 	c.logger.InfoContext(ctx, "Creating external IP pools server")
