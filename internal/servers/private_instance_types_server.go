@@ -277,6 +277,10 @@ func validateInstanceTypeImmutability(merged, existing *privatev1.InstanceType) 
 			"field 'spec.memory_gib' is immutable and cannot be changed from '%d' to '%d'",
 			existing.GetSpec().GetMemoryGib(), merged.GetSpec().GetMemoryGib())
 	}
+	if !proto.Equal(merged.GetSpec().GetGpu(), existing.GetSpec().GetGpu()) {
+		return grpcstatus.Errorf(grpccodes.InvalidArgument,
+			"field 'spec.gpu' is immutable and cannot be changed after creation")
+	}
 	if merged.GetMetadata().GetName() != existing.GetMetadata().GetName() {
 		return grpcstatus.Errorf(grpccodes.InvalidArgument,
 			"field 'name' is immutable and cannot be changed from '%s' to '%s'",
