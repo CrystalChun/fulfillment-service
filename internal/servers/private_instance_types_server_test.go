@@ -128,19 +128,27 @@ var _ = Describe("Private instance types server", func() {
 		})
 
 		It("List objects", func() {
-			// Create a few objects:
+			// Create a few objects, first with GPU:
 			const count = 10
 			for i := range count {
+				spec := privatev1.InstanceTypeSpec_builder{
+					Cores:       4,
+					MemoryGib:   16,
+					Description: fmt.Sprintf("Type %d.", i),
+				}
+				if i == 0 {
+					spec.Gpu = privatev1.GpuSpec_builder{
+						PciDeviceSelector: "10DE:20B0",
+						ResourceName:      "nvidia.com/A100",
+						Count:             1,
+					}.Build()
+				}
 				_, err := server.Create(ctx, privatev1.InstanceTypesCreateRequest_builder{
 					Object: privatev1.InstanceType_builder{
 						Metadata: privatev1.Metadata_builder{
 							Name: fmt.Sprintf("type-%d", i),
 						}.Build(),
-						Spec: privatev1.InstanceTypeSpec_builder{
-							Cores:       4,
-							MemoryGib:   16,
-							Description: fmt.Sprintf("Type %d.", i),
-						}.Build(),
+						Spec: spec.Build(),
 					}.Build(),
 				}.Build())
 				Expect(err).ToNot(HaveOccurred())
