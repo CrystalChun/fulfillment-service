@@ -27,6 +27,7 @@ import (
 	"github.com/osac-project/fulfillment-service/internal/computeinstancespec"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -261,6 +262,7 @@ func (t *task) setDefaults() {
 	}
 	if t.computeInstance.GetStatus().GetState() == privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_UNSPECIFIED {
 		t.computeInstance.GetStatus().SetState(privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_STARTING)
+		t.computeInstance.GetStatus().SetStateTransitionTime(timestamppb.Now())
 	}
 	for value := range privatev1.ComputeInstanceConditionType_name {
 		if value != 0 {
@@ -532,6 +534,7 @@ func (t *task) setReconciliationFailed(err error) {
 		t.computeInstance.SetStatus(&privatev1.ComputeInstanceStatus{})
 	}
 	t.computeInstance.GetStatus().SetState(privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_FAILED)
+	t.computeInstance.GetStatus().SetStateTransitionTime(timestamppb.Now())
 	t.updateCondition(
 		privatev1.ComputeInstanceConditionType_COMPUTE_INSTANCE_CONDITION_TYPE_PROVISIONED,
 		privatev1.ConditionStatus_CONDITION_STATUS_FALSE,

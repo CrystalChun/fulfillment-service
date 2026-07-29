@@ -1400,6 +1400,8 @@ var _ = Describe("setReconciliationFailed", func() {
 		t.setReconciliationFailed(reconcileErr)
 
 		Expect(ci.GetStatus().GetState()).To(Equal(privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_FAILED))
+		Expect(ci.GetStatus().GetStateTransitionTime()).ToNot(BeNil())
+		Expect(ci.GetStatus().GetStateTransitionTime().AsTime()).To(BeTemporally("~", time.Now(), time.Second))
 
 		var provisionedCondition *privatev1.ComputeInstanceCondition
 		for _, c := range ci.GetStatus().GetConditions() {
@@ -1428,6 +1430,7 @@ var _ = Describe("setReconciliationFailed", func() {
 
 		Expect(ci.HasStatus()).To(BeTrue())
 		Expect(ci.GetStatus().GetState()).To(Equal(privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_FAILED))
+		Expect(ci.GetStatus().GetStateTransitionTime()).ToNot(BeNil())
 	})
 
 	It("should update existing PROVISIONED condition rather than creating duplicate", func() {

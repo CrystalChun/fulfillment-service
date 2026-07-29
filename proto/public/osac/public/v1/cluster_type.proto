@@ -260,6 +260,13 @@ message ClusterStatus {
   //
   // This will be empty until the CaaS template discovers the MetalLB-allocated VIP during cluster provisioning.
   string ingress_endpoint = 7;
+
+  // Records when the cluster entered its current state, as reported by the provisioning backend.
+  // This is the authoritative timestamp of the state transition, suitable for billing interval
+  // calculations.
+  //
+  // This will be empty if no state transition has been reported yet.
+  optional google.protobuf.Timestamp state_transition_time = 8;
 }
 
 // Represents the overall state of a cluster.
