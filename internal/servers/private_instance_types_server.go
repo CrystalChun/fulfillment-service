@@ -145,6 +145,21 @@ func (s *PrivateInstanceTypesServer) Create(ctx context.Context,
 		return
 	}
 
+	if gpu := spec.GetGpu(); gpu != nil {
+		if gpu.GetPciDeviceSelector() == "" {
+			err = grpcstatus.Errorf(grpccodes.InvalidArgument, "field 'spec.gpu.pci_device_selector' must not be empty")
+			return
+		}
+		if gpu.GetResourceName() == "" {
+			err = grpcstatus.Errorf(grpccodes.InvalidArgument, "field 'spec.gpu.resource_name' must not be empty")
+			return
+		}
+		if gpu.GetCount() < 1 || gpu.GetCount() > 16 {
+			err = grpcstatus.Errorf(grpccodes.InvalidArgument, "field 'spec.gpu.count' must be between 1 and 16")
+			return
+		}
+	}
+
 	// Set id from metadata.name (name-as-primary-key per Phase 1 D-01):
 	request.GetObject().SetId(request.GetObject().GetMetadata().GetName())
 
