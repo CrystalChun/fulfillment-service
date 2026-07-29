@@ -17,7 +17,6 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"log/slog"
 
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
@@ -25,7 +24,6 @@ import (
 
 	publicv1 "github.com/osac-project/fulfillment-service/internal/api/osac/public/v1"
 	"github.com/osac-project/fulfillment-service/internal/config"
-	"github.com/osac-project/fulfillment-service/internal/logging"
 	"github.com/osac-project/fulfillment-service/internal/terminal"
 )
 
@@ -50,7 +48,6 @@ type runnerContext struct {
 		nodeSet string
 		size    int32
 	}
-	logger  *slog.Logger
 	console *terminal.Console
 	client  publicv1.ClustersClient
 }
@@ -91,7 +88,6 @@ func (c *runnerContext) run(cmd *cobra.Command, args []string) error {
 
 	ctx := cmd.Context()
 
-	c.logger = logging.LoggerFromContext(ctx)
 	c.console = terminal.ConsoleFromContext(ctx)
 
 	err := c.console.AddTemplates(templatesFS, "templates")
