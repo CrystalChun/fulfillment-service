@@ -118,7 +118,7 @@ The console URL is shown in `get clusters` output or in the cluster's `status.co
 Node set sizes can be changed with either the dedicated `osac scale` command or
 the generic `osac edit` command.
 
-### Using osac scale (recommended for scripting)
+### Using osac scale (recommended)
 
 `osac scale cluster` sets the absolute target size of a node set non-interactively:
 

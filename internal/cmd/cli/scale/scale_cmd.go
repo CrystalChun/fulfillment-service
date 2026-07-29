@@ -140,7 +140,7 @@ func scaleCluster(
 
 	nodeSets := cluster.GetSpec().GetNodeSets()
 	if len(nodeSets) == 0 {
-		console.Render(ctx, "empty_node_sets.txt", map[string]any{
+		console.Render(ctx, "no_node_sets.txt", map[string]any{
 			"ClusterId": cluster.GetId(),
 		})
 		return fmt.Errorf("cluster %q has no node sets; the scale command only supports CaaS clusters", cluster.GetId())

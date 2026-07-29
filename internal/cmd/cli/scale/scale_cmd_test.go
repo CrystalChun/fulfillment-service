@@ -189,7 +189,7 @@ var _ = Describe("scaleCluster", func() {
 			Expect(err.Error()).To(ContainSubstring("missing"))
 		})
 
-		It("returns an error and renders the empty_node_sets template when the cluster has no node sets", func() {
+		It("returns an error and renders the no_node_sets template when the cluster has no node sets", func() {
 			cluster := publicv1.Cluster_builder{Id: "abc-123"}.Build()
 			client.EXPECT().List(ctx, gomock.Any()).Return(listResp(cluster), nil)
 
