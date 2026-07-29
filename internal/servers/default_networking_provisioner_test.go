@@ -321,8 +321,15 @@ var _ = Describe("Default networking provisioner", func() {
 				Do(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(ngList.GetItems()).To(HaveLen(1))
+			vnList, err := provisioner.virtualNetworkDao.List().
+				SetFilter("this.metadata.tenant == 'nat-tenant'").
+				Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			vnID := vnList.GetItems()[0].GetId()
+
 			ng := ngList.GetItems()[0]
 			Expect(ng.GetMetadata().GetLabels()).To(HaveKeyWithValue("osac.openshift.io/default", "true"))
+			Expect(ng.GetMetadata().GetAnnotations()).To(HaveKeyWithValue("osac.openshift.io/owner-reference", vnID))
 			Expect(ng.GetSpec().GetExternalIp()).To(Equal(eip.GetId()))
 			Expect(ng.GetStatus().GetState()).To(Equal(privatev1.NATGatewayState_NAT_GATEWAY_STATE_PENDING))
 

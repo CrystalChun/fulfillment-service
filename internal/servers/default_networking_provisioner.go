@@ -433,6 +433,9 @@ func (p *DefaultNetworkingProvisioner) createDefaultNATGateway(
 			Labels: map[string]string{
 				defaultLabel: "true",
 			},
+			Annotations: map[string]string{
+				ownerReferenceAnnotation: vnID,
+			},
 			Creator: "system",
 		}.Build(),
 		Spec: privatev1.NATGatewaySpec_builder{

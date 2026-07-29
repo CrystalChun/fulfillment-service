@@ -216,7 +216,7 @@ func (s *PrivateTenantsServer) Create(ctx context.Context,
 				slog.String("tenant", name),
 				slog.Any("error", provisionErr))
 			err = grpcstatus.Errorf(grpccodes.Internal,
-				"failed to provision default networking resources: %v", provisionErr)
+				"failed to provision default networking resources")
 			return
 		}
 	}
