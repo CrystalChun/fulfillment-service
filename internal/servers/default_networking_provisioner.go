@@ -464,8 +464,13 @@ func (p *DefaultNetworkingProvisioner) updatePoolCapacity(ctx context.Context, p
 	}
 
 	pool := getResponse.GetObject()
-	pool.GetStatus().SetAllocated(pool.GetStatus().GetAllocated() + delta)
-	pool.GetStatus().SetAvailable(pool.GetStatus().GetAvailable() - delta)
+	newAllocated := pool.GetStatus().GetAllocated() + delta
+	newAvailable := pool.GetStatus().GetAvailable() - delta
+	if newAvailable < 0 {
+		return fmt.Errorf("ExternalIP pool '%s' has no available capacity", poolID)
+	}
+	pool.GetStatus().SetAllocated(newAllocated)
+	pool.GetStatus().SetAvailable(newAvailable)
 
 	_, err = p.externalIPPoolDao.Update().SetObject(pool).Do(ctx)
 	if err != nil {
