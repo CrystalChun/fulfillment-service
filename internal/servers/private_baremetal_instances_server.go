@@ -477,7 +477,13 @@ func (s *PrivateBareMetalInstancesServer) validateNetworkAttachments(ctx context
 	}
 	catResp, err := s.catalogItemsDao.Get().SetId(catalogItemRef).Do(ctx)
 	if err != nil {
-		return nil
+		var notFoundErr *dao.ErrNotFound
+		if errors.As(err, &notFoundErr) {
+			return nil
+		}
+		s.logger.ErrorContext(ctx, "Failed to lookup catalog item for interface validation",
+			slog.String("catalog_item", catalogItemRef), slog.Any("error", err))
+		return grpcstatus.Errorf(grpccodes.Internal, "failed to validate network attachments")
 	}
 	templateID := catResp.GetObject().GetTemplate()
 	if templateID == "" {
@@ -485,7 +491,13 @@ func (s *PrivateBareMetalInstancesServer) validateNetworkAttachments(ctx context
 	}
 	tmplResp, err := s.templatesDao.Get().SetId(templateID).Do(ctx)
 	if err != nil {
-		return nil
+		var notFoundErr *dao.ErrNotFound
+		if errors.As(err, &notFoundErr) {
+			return nil
+		}
+		s.logger.ErrorContext(ctx, "Failed to lookup template for interface validation",
+			slog.String("template_id", templateID), slog.Any("error", err))
+		return grpcstatus.Errorf(grpccodes.Internal, "failed to validate network attachments")
 	}
 	hostTypeID := tmplResp.GetObject().GetHostType()
 	if hostTypeID == "" {
