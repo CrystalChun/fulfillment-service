@@ -61,6 +61,12 @@ message BareMetalLabelSelector {
 
 // Describes the hardware specifications of a bare metal instance type.
 message BareMetalHardwareSpec {
+  option (buf.validate.message).cel = {
+    id: "hardware_spec.network_ports_unique_names"
+    message: "network port names must be unique"
+    expression: "this.network_ports.map(p, p.name).unique()"
+  };
+
   // CPU specifications.
   BareMetalCPUSpec cpu = 1 [(buf.validate.field).required = true];
 
