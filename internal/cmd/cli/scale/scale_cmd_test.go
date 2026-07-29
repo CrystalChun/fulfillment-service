@@ -147,8 +147,20 @@ var _ = Describe("scaleCluster", func() {
 			)
 
 			Expect(scaleCluster(ctx, client, console, "abc-123", "workers", 5)).To(Succeed())
-			Expect(out.String()).To(ContainSubstring("2"))
-			Expect(out.String()).To(ContainSubstring("5"))
+			Expect(out.String()).To(ContainSubstring("2 → 5"))
+		})
+
+		It("succeeds when scaling a node set to zero", func() {
+			cluster := clusterWith("abc-123", map[string]int32{"workers": 2})
+
+			client.EXPECT().List(ctx, gomock.Any()).Return(listResp(cluster), nil)
+			client.EXPECT().Update(ctx, gomock.Any()).
+				DoAndReturn(func(_ context.Context, req *publicv1.ClustersUpdateRequest, _ ...grpc.CallOption) (*publicv1.ClustersUpdateResponse, error) {
+					Expect(req.GetObject().GetSpec().GetNodeSets()["workers"].GetSize()).To(Equal(int32(0)))
+					return publicv1.ClustersUpdateResponse_builder{Object: req.GetObject()}.Build(), nil
+				})
+
+			Expect(scaleCluster(ctx, client, console, "abc-123", "workers", 0)).To(Succeed())
 		})
 
 		It("uses a CEL filter to resolve the cluster by name", func() {
