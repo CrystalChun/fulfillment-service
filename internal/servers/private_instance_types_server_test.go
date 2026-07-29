@@ -189,6 +189,11 @@ var _ = Describe("Private instance types server", func() {
 						Cores:       4,
 						MemoryGib:   16,
 						Description: "Standard 4 cores, 16 GiB RAM.",
+						Gpu: privatev1.GpuSpec_builder{
+							PciDeviceSelector: "10DE:20B0",
+							ResourceName:      "nvidia.com/A100",
+							Count:             1,
+						}.Build(),
 					}.Build(),
 				}.Build(),
 			}.Build())
@@ -228,6 +233,11 @@ var _ = Describe("Private instance types server", func() {
 						Cores:       4,
 						MemoryGib:   16,
 						Description: "Standard 4 cores, 16 GiB RAM.",
+						Gpu: privatev1.GpuSpec_builder{
+							PciDeviceSelector: "10DE:20B0",
+							ResourceName:      "nvidia.com/A100",
+							Count:             1,
+						}.Build(),
 					}.Build(),
 				}.Build(),
 			}.Build())
