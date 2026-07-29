@@ -115,39 +115,46 @@ The console URL is shown in `get clusters` output or in the cluster's `status.co
 
 ## Scale Nodes
 
-Use `osac scale cluster` to set the absolute target size of a node set:
+Node set sizes can be changed with either the dedicated `osac scale` command or
+the generic `osac edit` command.
+
+### Using osac scale (recommended for scripting)
+
+`osac scale cluster` sets the absolute target size of a node set non-interactively:
 
 ```bash
 osac scale cluster <cluster-id> --node-set workers --size 3
 ```
 
-The command is non-interactive and suitable for scripting. To scale relative to
-the current size, read the current value first:
+To scale relative to the current size, read the current value first:
 
 ```bash
 current=$(osac get clusters <cluster-id> -o yaml | yq '.spec.node_sets.workers.size')
 osac scale cluster <cluster-id> --node-set workers --size $((current + 1))
 ```
 
-**Constraints:**
+### Using osac edit (interactive)
+
+`osac edit clusters` opens the full cluster resource in your `$EDITOR`. Modify the
+`size` field under `spec.node_sets.<node-set-name>` and save:
+
+```bash
+osac edit clusters <cluster-id>
+```
+
+Use this when you want to review or change multiple fields at once.
+
+### Constraints
 
 - The `host_type` of an existing node set cannot be changed (immutable after creation)
 - At least one node set must remain; node sets can be scaled to zero (the control
   plane continues to run on the hub)
-- Only CaaS clusters support the scale command
 
-After the command completes, the cluster transitions to `PROGRESSING` until the new
-node configuration is applied. Monitor progress with:
+After either command, the cluster transitions to `PROGRESSING` until the new node
+configuration is applied. Monitor progress with:
 
 ```bash
 osac describe cluster <cluster-id>
-```
-
-For advanced use cases (editing multiple fields at once), the generic edit command
-remains available:
-
-```bash
-osac edit clusters <cluster-id>
 ```
 
 ## Delete a Cluster
