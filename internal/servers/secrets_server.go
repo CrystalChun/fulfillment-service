@@ -129,6 +129,15 @@ func (b *SecretsServerBuilder) Build() (result *SecretsServer, err error) {
 	return
 }
 
+func (s *SecretsServer) redactPublicSecret(secret *publicv1.Secret) {
+	if spec := secret.GetSpec(); spec != nil {
+		spec.SetData(nil)
+	}
+	if status := secret.GetStatus(); status != nil {
+		status.SetResolvedData(nil)
+	}
+}
+
 func (s *SecretsServer) Create(ctx context.Context,
 	request *publicv1.SecretsCreateRequest) (response *publicv1.SecretsCreateResponse, err error) {
 	privateObject := &privatev1.Secret{}
@@ -157,6 +166,7 @@ func (s *SecretsServer) Create(ctx context.Context,
 		s.logger.ErrorContext(ctx, "Failed to map private secret to public", slog.Any("error", err))
 		return nil, err
 	}
+	s.redactPublicSecret(publicObject)
 
 	response = &publicv1.SecretsCreateResponse{}
 	response.SetObject(publicObject)
@@ -185,12 +195,7 @@ func (s *SecretsServer) List(ctx context.Context,
 			s.logger.ErrorContext(ctx, "Failed to map private secret to public", slog.Any("error", err))
 			return nil, err
 		}
-		if spec := publicItem.GetSpec(); spec != nil {
-			spec.SetData(nil)
-		}
-		if status := publicItem.GetStatus(); status != nil {
-			status.SetResolvedData(nil)
-		}
+		s.redactPublicSecret(publicItem)
 		publicItems[i] = publicItem
 	}
 
@@ -248,6 +253,14 @@ func (s *SecretsServer) Update(ctx context.Context,
 		return nil, err
 	}
 
+	// Preserve the existing backend (public API has no backend field).
+	spec := privateObject.GetSpec()
+	if spec == nil {
+		privateObject.SetSpec(privatev1.SecretSpec_builder{}.Build())
+		spec = privateObject.GetSpec()
+	}
+	spec.SetBackend(existing.GetSpec().GetBackend())
+
 	privateRequest := &privatev1.SecretsUpdateRequest{}
 	privateRequest.SetObject(privateObject)
 	privateRequest.SetUpdateMask(request.GetUpdateMask())
@@ -264,6 +277,7 @@ func (s *SecretsServer) Update(ctx context.Context,
 		s.logger.ErrorContext(ctx, "Failed to map private secret to public", slog.Any("error", err))
 		return nil, err
 	}
+	s.redactPublicSecret(publicObject)
 
 	response = &publicv1.SecretsUpdateResponse{}
 	response.SetObject(publicObject)

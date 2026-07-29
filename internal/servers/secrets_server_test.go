@@ -189,7 +189,7 @@ var _ = Describe("Secrets Server", func() {
 				To(Equal(privatev1.SecretBackend_SECRET_BACKEND_VAULT))
 		})
 
-		It("strips backend and coordinates from response", func() {
+		It("redacts data from response", func() {
 			mock := &mockPrivateSecretsServer{
 				createFunc: func(_ context.Context,
 					_ *privatev1.SecretsCreateRequest) (*privatev1.SecretsCreateResponse, error) {
@@ -200,8 +200,12 @@ var _ = Describe("Secrets Server", func() {
 							Name: "my-secret",
 						}.Build(),
 						Spec: privatev1.SecretSpec_builder{
+							Data:        map[string][]byte{"key": []byte("value")},
 							Backend:     privatev1.SecretBackend_SECRET_BACKEND_VAULT,
 							Coordinates: map[string]string{"path": "/secret/data/test"},
+						}.Build(),
+						Status: privatev1.SecretStatus_builder{
+							ResolvedData: map[string][]byte{"key": []byte("resolved")},
 						}.Build(),
 					}.Build())
 					return resp, nil
@@ -223,6 +227,7 @@ var _ = Describe("Secrets Server", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(resp.GetObject().GetId()).To(Equal("secret-1"))
 			Expect(resp.GetObject().GetSpec().GetData()).To(BeEmpty())
+			Expect(resp.GetObject().GetStatus().GetResolvedData()).To(BeEmpty())
 		})
 	})
 
@@ -301,7 +306,7 @@ var _ = Describe("Secrets Server", func() {
 	})
 
 	Describe("Get", func() {
-		It("returns status.resolved_data in response", func() {
+		It("returns data and resolved_data in response", func() {
 			mock := &mockPrivateSecretsServer{
 				getFunc: func(_ context.Context,
 					_ *privatev1.SecretsGetRequest) (*privatev1.SecretsGetResponse, error) {
@@ -312,6 +317,7 @@ var _ = Describe("Secrets Server", func() {
 							Name: "my-secret",
 						}.Build(),
 						Spec: privatev1.SecretSpec_builder{
+							Data:    map[string][]byte{"key": []byte("value")},
 							Backend: privatev1.SecretBackend_SECRET_BACKEND_VAULT,
 						}.Build(),
 						Status: privatev1.SecretStatus_builder{
@@ -331,6 +337,7 @@ var _ = Describe("Secrets Server", func() {
 			}.Build())
 
 			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.GetObject().GetSpec().GetData()).To(HaveKeyWithValue("key", []byte("value")))
 			Expect(resp.GetObject().GetStatus().GetResolvedData()).To(HaveLen(2))
 			Expect(resp.GetObject().GetStatus().GetResolvedData()).To(HaveKeyWithValue("tls.crt", []byte("cert-data")))
 			Expect(resp.GetObject().GetStatus().GetResolvedData()).To(HaveKeyWithValue("tls.key", []byte("key-data")))
@@ -370,7 +377,9 @@ var _ = Describe("Secrets Server", func() {
 			Expect(st.Message()).To(ContainSubstring("hub-backed"))
 		})
 
-		It("allows update of hub-backed secret with empty data", func() {
+		It("preserves backend for hub-backed secret with empty data", func() {
+			var capturedRequest *privatev1.SecretsUpdateRequest
+
 			mock := &mockPrivateSecretsServer{
 				getFunc: func(_ context.Context,
 					_ *privatev1.SecretsGetRequest) (*privatev1.SecretsGetResponse, error) {
@@ -387,7 +396,8 @@ var _ = Describe("Secrets Server", func() {
 					return resp, nil
 				},
 				updateFunc: func(_ context.Context,
-					_ *privatev1.SecretsUpdateRequest) (*privatev1.SecretsUpdateResponse, error) {
+					req *privatev1.SecretsUpdateRequest) (*privatev1.SecretsUpdateResponse, error) {
+					capturedRequest = req
 					resp := &privatev1.SecretsUpdateResponse{}
 					resp.SetObject(privatev1.Secret_builder{
 						Id: "hub-secret",
@@ -414,9 +424,14 @@ var _ = Describe("Secrets Server", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(resp.GetObject().GetMetadata().GetName()).To(Equal("hub-secret-updated"))
+			Expect(capturedRequest).ToNot(BeNil())
+			Expect(capturedRequest.GetObject().GetSpec().GetBackend()).
+				To(Equal(privatev1.SecretBackend_SECRET_BACKEND_HUB))
 		})
 
-		It("delegates to private server for vault-backed secret", func() {
+		It("preserves backend and redacts response for vault-backed secret", func() {
+			var capturedRequest *privatev1.SecretsUpdateRequest
+
 			mock := &mockPrivateSecretsServer{
 				getFunc: func(_ context.Context,
 					_ *privatev1.SecretsGetRequest) (*privatev1.SecretsGetResponse, error) {
@@ -430,12 +445,17 @@ var _ = Describe("Secrets Server", func() {
 					return resp, nil
 				},
 				updateFunc: func(_ context.Context,
-					_ *privatev1.SecretsUpdateRequest) (*privatev1.SecretsUpdateResponse, error) {
+					req *privatev1.SecretsUpdateRequest) (*privatev1.SecretsUpdateResponse, error) {
+					capturedRequest = req
 					resp := &privatev1.SecretsUpdateResponse{}
 					resp.SetObject(privatev1.Secret_builder{
 						Id: "vault-secret",
 						Spec: privatev1.SecretSpec_builder{
+							Data:    map[string][]byte{"key": []byte("new-value")},
 							Backend: privatev1.SecretBackend_SECRET_BACKEND_VAULT,
+						}.Build(),
+						Status: privatev1.SecretStatus_builder{
+							ResolvedData: map[string][]byte{"key": []byte("resolved")},
 						}.Build(),
 					}.Build())
 					return resp, nil
@@ -454,6 +474,11 @@ var _ = Describe("Secrets Server", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(resp.GetObject().GetId()).To(Equal("vault-secret"))
+			Expect(capturedRequest).ToNot(BeNil())
+			Expect(capturedRequest.GetObject().GetSpec().GetBackend()).
+				To(Equal(privatev1.SecretBackend_SECRET_BACKEND_VAULT))
+			Expect(resp.GetObject().GetSpec().GetData()).To(BeEmpty())
+			Expect(resp.GetObject().GetStatus().GetResolvedData()).To(BeEmpty())
 		})
 	})
 
