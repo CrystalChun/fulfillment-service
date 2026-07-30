@@ -533,7 +533,8 @@ func (t *task) setReconciliationFailed(err error) {
 	if !t.computeInstance.HasStatus() {
 		t.computeInstance.SetStatus(&privatev1.ComputeInstanceStatus{})
 	}
-	if t.computeInstance.GetStatus().GetState() != privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_FAILED {
+	if t.computeInstance.GetStatus().GetState() != privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_FAILED ||
+		t.computeInstance.GetStatus().GetStateTransitionTime() == nil {
 		t.computeInstance.GetStatus().SetStateTransitionTime(timestamppb.Now())
 	}
 	t.computeInstance.GetStatus().SetState(privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_FAILED)
