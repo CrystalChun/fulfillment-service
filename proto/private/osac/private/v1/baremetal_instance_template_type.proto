@@ -44,6 +44,9 @@ message BareMetalInstanceTemplate {
   BareMetalInstanceTemplateSpecDefaults spec_defaults = 5;
 
   repeated BareMetalInstanceTemplateParameterDefinition parameters = 6;
+
+  // Identifier of the HostType that defines the hardware profile for instances created from this template.
+  string host_type = 7;
 }
 
 message BareMetalInstanceTemplateParameterDefinition {
