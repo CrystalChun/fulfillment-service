@@ -1400,6 +1400,8 @@ var _ = Describe("setReconciliationFailed", func() {
 		t.setReconciliationFailed(reconcileErr)
 
 		Expect(ci.GetStatus().GetState()).To(Equal(privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_FAILED))
+		Expect(ci.GetStatus().GetStateTransitionTime()).ToNot(BeNil())
+		Expect(ci.GetStatus().GetStateTransitionTime().AsTime()).To(BeTemporally("~", time.Now(), time.Second))
 
 		var provisionedCondition *privatev1.ComputeInstanceCondition
 		for _, c := range ci.GetStatus().GetConditions() {
@@ -1428,6 +1430,48 @@ var _ = Describe("setReconciliationFailed", func() {
 
 		Expect(ci.HasStatus()).To(BeTrue())
 		Expect(ci.GetStatus().GetState()).To(Equal(privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_FAILED))
+		Expect(ci.GetStatus().GetStateTransitionTime()).ToNot(BeNil())
+	})
+
+	It("should preserve state_transition_time on repeated failures", func() {
+		originalTime := timestamppb.New(time.Now().Add(-10 * time.Minute))
+		ci := privatev1.ComputeInstance_builder{
+			Id: "test-ci-repeated-fail",
+			Status: privatev1.ComputeInstanceStatus_builder{
+				State:               privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_FAILED,
+				StateTransitionTime: originalTime,
+			}.Build(),
+		}.Build()
+
+		t := &task{
+			r:               &function{logger: logger},
+			computeInstance: ci,
+		}
+
+		t.setReconciliationFailed(errors.New("still failing"))
+
+		Expect(ci.GetStatus().GetState()).To(Equal(privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_FAILED))
+		Expect(ci.GetStatus().GetStateTransitionTime().AsTime()).To(Equal(originalTime.AsTime()))
+	})
+
+	It("should backfill state_transition_time when FAILED status has nil timestamp", func() {
+		ci := privatev1.ComputeInstance_builder{
+			Id: "test-ci-failed-nil-timestamp",
+			Status: privatev1.ComputeInstanceStatus_builder{
+				State: privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_FAILED,
+			}.Build(),
+		}.Build()
+
+		t := &task{
+			r:               &function{logger: logger},
+			computeInstance: ci,
+		}
+
+		t.setReconciliationFailed(errors.New("failing again"))
+
+		Expect(ci.GetStatus().GetState()).To(Equal(privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_FAILED))
+		Expect(ci.GetStatus().GetStateTransitionTime()).ToNot(BeNil())
+		Expect(ci.GetStatus().GetStateTransitionTime().AsTime()).To(BeTemporally("~", time.Now(), time.Second))
 	})
 
 	It("should update existing PROVISIONED condition rather than creating duplicate", func() {
