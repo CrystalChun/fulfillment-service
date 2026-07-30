@@ -215,7 +215,7 @@ var _ = Describe("scaleCluster", func() {
 
 			err := scaleCluster(ctx, client, console, "workers", "workers", 3)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("matches more than one"))
+			Expect(err.Error()).To(ContainSubstring("use the ID instead"))
 		})
 
 		It("wraps server Update errors with context", func() {

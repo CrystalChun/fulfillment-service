@@ -23,6 +23,7 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	publicv1 "github.com/osac-project/fulfillment-service/internal/api/osac/public/v1"
+	"github.com/osac-project/fulfillment-service/internal/cmd/cli/lookup"
 	"github.com/osac-project/fulfillment-service/internal/config"
 	"github.com/osac-project/fulfillment-service/internal/terminal"
 )
@@ -119,24 +120,19 @@ func scaleCluster(
 	nodeSetName string,
 	newSize int32,
 ) error {
-	filter := fmt.Sprintf(`this.id == %q || this.metadata.name == %q`, clusterRef, clusterRef)
-	limit := int32(2)
-	listResp, err := client.List(ctx, publicv1.ClustersListRequest_builder{
-		Filter: &filter,
-		Limit:  &limit,
-	}.Build())
+	cluster, err := lookup.Find(clusterRef, "cluster", func(filter string, limit int32) ([]*publicv1.Cluster, error) {
+		resp, err := client.List(ctx, publicv1.ClustersListRequest_builder{
+			Filter: proto.String(filter),
+			Limit:  proto.Int32(limit),
+		}.Build())
+		if err != nil {
+			return nil, fmt.Errorf("failed to list clusters: %w", err)
+		}
+		return resp.GetItems(), nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to list clusters: %w", err)
+		return err
 	}
-
-	items := listResp.GetItems()
-	switch {
-	case len(items) == 0:
-		return fmt.Errorf("cluster %q not found", clusterRef)
-	case len(items) > 1:
-		return fmt.Errorf("cluster %q matches more than one cluster; use the cluster ID to disambiguate", clusterRef)
-	}
-	cluster := items[0]
 
 	nodeSets := cluster.GetSpec().GetNodeSets()
 	if len(nodeSets) == 0 {
