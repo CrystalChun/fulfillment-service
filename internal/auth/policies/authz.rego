@@ -258,7 +258,7 @@ allow if {
   }
 }
 
-# Tenant admins can manage bare metal catalog items, users, identity providers,
+# Tenant admins can manage catalog items, users, identity providers,
 # projects, and project memberships within their tenant. The application layer
 # (generic server) enforces resource-level authorization via tenant field validation.
 allow if {
@@ -267,6 +267,12 @@ allow if {
     "/osac.public.v1.BareMetalInstanceCatalogItems/Create",
     "/osac.public.v1.BareMetalInstanceCatalogItems/Update",
     "/osac.public.v1.BareMetalInstanceCatalogItems/Delete",
+    "/osac.public.v1.ClusterCatalogItems/Create",
+    "/osac.public.v1.ClusterCatalogItems/Update",
+    "/osac.public.v1.ClusterCatalogItems/Delete",
+    "/osac.public.v1.ComputeInstanceCatalogItems/Create",
+    "/osac.public.v1.ComputeInstanceCatalogItems/Update",
+    "/osac.public.v1.ComputeInstanceCatalogItems/Delete",
     "/osac.public.v1.IdentityProviders/Create",
     "/osac.public.v1.IdentityProviders/Get",
     "/osac.public.v1.IdentityProviders/List",
