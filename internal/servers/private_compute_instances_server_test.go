@@ -46,6 +46,7 @@ var _ = Describe("Private compute instances server", func() {
 		vn := privatev1.VirtualNetwork_builder{
 			Id: "test-vnet",
 			Metadata: privatev1.Metadata_builder{
+				Name:   "test-vnet",
 				Tenant: auth.SharedTenant,
 			}.Build(),
 		}.Build()
@@ -62,6 +63,7 @@ var _ = Describe("Private compute instances server", func() {
 		subnet := privatev1.Subnet_builder{
 			Id: "test-subnet",
 			Metadata: privatev1.Metadata_builder{
+				Name:   "test-subnet-default",
 				Tenant: auth.SharedTenant,
 			}.Build(),
 			Spec: privatev1.SubnetSpec_builder{
@@ -88,6 +90,7 @@ var _ = Describe("Private compute instances server", func() {
 		nc := privatev1.NetworkClass_builder{
 			ImplementationStrategy: "test-strategy",
 			Metadata: privatev1.Metadata_builder{
+				Name:   "test-network-class",
 				Tenant: auth.SharedTenant,
 			}.Build(),
 			Capabilities: privatev1.NetworkClassCapabilities_builder{
@@ -106,7 +109,9 @@ var _ = Describe("Private compute instances server", func() {
 	}
 
 	// Helper function to create a VirtualNetwork for test setup
+	var vnNameSeq int
 	createTestVirtualNetwork := func(ctx context.Context, networkClassID string) *privatev1.VirtualNetwork {
+		vnNameSeq++
 		vnDao, err := dao.NewGenericDAO[*privatev1.VirtualNetwork]().
 			SetLogger(logger).
 			SetTenancyLogic(tenancy).
@@ -115,6 +120,7 @@ var _ = Describe("Private compute instances server", func() {
 
 		vn := privatev1.VirtualNetwork_builder{
 			Metadata: privatev1.Metadata_builder{
+				Name:   fmt.Sprintf("test-vn-%d", vnNameSeq),
 				Tenant: auth.SharedTenant,
 			}.Build(),
 			Spec: privatev1.VirtualNetworkSpec_builder{
@@ -132,7 +138,9 @@ var _ = Describe("Private compute instances server", func() {
 	}
 
 	// Helper function to create a Subnet with specified state
+	var subnetNameSeq int
 	createTestSubnet := func(ctx context.Context, vnID string, state privatev1.SubnetState) *privatev1.Subnet {
+		subnetNameSeq++
 		subnetDao, err := dao.NewGenericDAO[*privatev1.Subnet]().
 			SetLogger(logger).
 			SetTenancyLogic(tenancy).
@@ -141,6 +149,7 @@ var _ = Describe("Private compute instances server", func() {
 
 		subnet := privatev1.Subnet_builder{
 			Metadata: privatev1.Metadata_builder{
+				Name:   fmt.Sprintf("test-sn-%d", subnetNameSeq),
 				Tenant: auth.SharedTenant,
 			}.Build(),
 			Spec: privatev1.SubnetSpec_builder{
@@ -158,7 +167,9 @@ var _ = Describe("Private compute instances server", func() {
 	}
 
 	// Helper function to create a SecurityGroup with specified state
+	var sgNameSeq int
 	createTestSecurityGroup := func(ctx context.Context, vnID string, state privatev1.SecurityGroupState) *privatev1.SecurityGroup {
+		sgNameSeq++
 		sgDao, err := dao.NewGenericDAO[*privatev1.SecurityGroup]().
 			SetLogger(logger).
 			SetTenancyLogic(tenancy).
@@ -167,6 +178,7 @@ var _ = Describe("Private compute instances server", func() {
 
 		sg := privatev1.SecurityGroup_builder{
 			Metadata: privatev1.Metadata_builder{
+				Name:   fmt.Sprintf("test-sg-%d", sgNameSeq),
 				Tenant: auth.SharedTenant,
 			}.Build(),
 			Spec: privatev1.SecurityGroupSpec_builder{
@@ -279,6 +291,7 @@ var _ = Describe("Private compute instances server", func() {
 				Title:       "Test Template",
 				Description: "Test template for validation",
 				Metadata: privatev1.Metadata_builder{
+					Name:   templateID,
 					Tenant: auth.SharedTenant,
 				}.Build(),
 				Parameters: []*privatev1.ComputeInstanceTemplateParameterDefinition{
@@ -505,6 +518,9 @@ var _ = Describe("Private compute instances server", func() {
 			// Create an object:
 			createResponse, err := server.Create(ctx, privatev1.ComputeInstancesCreateRequest_builder{
 				Object: privatev1.ComputeInstance_builder{
+					Metadata: privatev1.Metadata_builder{
+						Name: "test-compute-instance",
+					}.Build(),
 					Spec: privatev1.ComputeInstanceSpec_builder{
 						Template: "general.small",
 						NetworkAttachments: []*privatev1.NetworkAttachment{
@@ -646,6 +662,9 @@ var _ = Describe("Private compute instances server", func() {
 
 			createResponse, err := server.Create(ctx, privatev1.ComputeInstancesCreateRequest_builder{
 				Object: privatev1.ComputeInstance_builder{
+					Metadata: privatev1.Metadata_builder{
+						Name: "test-compute-instance",
+					}.Build(),
 					Spec: privatev1.ComputeInstanceSpec_builder{
 						Template: "existing-template",
 						NetworkAttachments: []*privatev1.NetworkAttachment{
@@ -693,6 +712,9 @@ var _ = Describe("Private compute instances server", func() {
 
 			createResponse, err := server.Create(ctx, privatev1.ComputeInstancesCreateRequest_builder{
 				Object: privatev1.ComputeInstance_builder{
+					Metadata: privatev1.Metadata_builder{
+						Name: "test-compute-instance",
+					}.Build(),
 					Spec: privatev1.ComputeInstanceSpec_builder{
 						Template:           "params-template",
 						TemplateParameters: map[string]*anypb.Any{"cpu_count": cpuParam},
@@ -738,6 +760,9 @@ var _ = Describe("Private compute instances server", func() {
 
 			createResponse, err := server.Create(ctx, privatev1.ComputeInstancesCreateRequest_builder{
 				Object: privatev1.ComputeInstance_builder{
+					Metadata: privatev1.Metadata_builder{
+						Name: "test-compute-instance",
+					}.Build(),
 					Spec: privatev1.ComputeInstanceSpec_builder{
 						Template: "same-template",
 						NetworkAttachments: []*privatev1.NetworkAttachment{
@@ -867,6 +892,7 @@ var _ = Describe("Private compute instances server", func() {
 				Title:       "No Defaults Template",
 				Description: "Template without spec defaults",
 				Metadata: privatev1.Metadata_builder{
+					Name:   "no-defaults-template",
 					Tenant: auth.SharedTenant,
 				}.Build(),
 			}.Build()
@@ -911,6 +937,7 @@ var _ = Describe("Private compute instances server", func() {
 				Title:       "Bare Template",
 				Description: "Template without defaults",
 				Metadata: privatev1.Metadata_builder{
+					Name:   "bare-template",
 					Tenant: auth.SharedTenant,
 				}.Build(),
 			}.Build()
@@ -957,6 +984,7 @@ var _ = Describe("Private compute instances server", func() {
 				Title:       "Partial Defaults Template",
 				Description: "Template with partial spec defaults",
 				Metadata: privatev1.Metadata_builder{
+					Name:   "partial-defaults-template",
 					Tenant: auth.SharedTenant,
 				}.Build(),
 				SpecDefaults: privatev1.ComputeInstanceTemplateSpecDefaults_builder{
@@ -1292,6 +1320,9 @@ var _ = Describe("Private compute instances server", func() {
 
 				createResponse, err := server.Create(ctx, privatev1.ComputeInstancesCreateRequest_builder{
 					Object: privatev1.ComputeInstance_builder{
+						Metadata: privatev1.Metadata_builder{
+							Name: "test-compute-instance",
+						}.Build(),
 						Spec: privatev1.ComputeInstanceSpec_builder{
 							CatalogItem: "ci-cat-immut",
 							NetworkAttachments: []*privatev1.NetworkAttachment{
@@ -1337,6 +1368,7 @@ var _ = Describe("Private compute instances server", func() {
 						Id:    "ci-template-no-defaults",
 						Title: "Template without spec defaults",
 						Metadata: privatev1.Metadata_builder{
+							Name:   "ci-template-no-defaults",
 							Tenant: auth.SharedTenant,
 						}.Build(),
 					}.Build(),
@@ -1392,6 +1424,7 @@ var _ = Describe("Private compute instances server", func() {
 						Id:    "ci-template-with-it",
 						Title: "Template with instance type",
 						Metadata: privatev1.Metadata_builder{
+							Name:   "ci-template-with-it",
 							Tenant: auth.SharedTenant,
 						}.Build(),
 						SpecDefaults: privatev1.ComputeInstanceTemplateSpecDefaults_builder{
@@ -1458,6 +1491,7 @@ var _ = Describe("Private compute instances server", func() {
 						Id:    "ci-template-valid-it",
 						Title: "Template with valid instance type",
 						Metadata: privatev1.Metadata_builder{
+							Name:   "ci-template-valid-it",
 							Tenant: auth.SharedTenant,
 						}.Build(),
 						SpecDefaults: privatev1.ComputeInstanceTemplateSpecDefaults_builder{
@@ -1568,6 +1602,7 @@ var _ = Describe("Private compute instances server", func() {
 				Title:       "Test Template",
 				Description: "Test template for network validation",
 				Metadata: privatev1.Metadata_builder{
+					Name:   "test-template",
 					Tenant: auth.SharedTenant,
 				}.Build(),
 				Parameters: []*privatev1.ComputeInstanceTemplateParameterDefinition{
@@ -1673,6 +1708,7 @@ var _ = Describe("Private compute instances server", func() {
 				podNetworkVM := privatev1.ComputeInstance_builder{
 					Id: "pod-network-vm",
 					Metadata: privatev1.Metadata_builder{
+						Name:   "pod-network-vm",
 						Tenant: auth.SharedTenant,
 					}.Build(),
 					Spec: privatev1.ComputeInstanceSpec_builder{
@@ -1881,6 +1917,9 @@ var _ = Describe("Private compute instances server", func() {
 
 				createResponse, err := server.Create(ctx, privatev1.ComputeInstancesCreateRequest_builder{
 					Object: privatev1.ComputeInstance_builder{
+						Metadata: privatev1.Metadata_builder{
+							Name: "test-compute-instance",
+						}.Build(),
 						Spec: privatev1.ComputeInstanceSpec_builder{
 							Template: template.GetId(),
 							NetworkAttachments: []*privatev1.NetworkAttachment{
@@ -1946,6 +1985,9 @@ var _ = Describe("Private compute instances server", func() {
 				// Create a ComputeInstance with networkAttachments
 				createResponse, err := server.Create(ctx, privatev1.ComputeInstancesCreateRequest_builder{
 					Object: privatev1.ComputeInstance_builder{
+						Metadata: privatev1.Metadata_builder{
+							Name: "test-compute-instance",
+						}.Build(),
 						Spec: privatev1.ComputeInstanceSpec_builder{
 							Template: template.GetId(),
 							NetworkAttachments: []*privatev1.NetworkAttachment{
@@ -1992,6 +2034,9 @@ var _ = Describe("Private compute instances server", func() {
 				// Create a ComputeInstance with networkAttachments
 				createResponse, err := server.Create(ctx, privatev1.ComputeInstancesCreateRequest_builder{
 					Object: privatev1.ComputeInstance_builder{
+						Metadata: privatev1.Metadata_builder{
+							Name: "test-compute-instance",
+						}.Build(),
 						Spec: privatev1.ComputeInstanceSpec_builder{
 							Template: template.GetId(),
 							NetworkAttachments: []*privatev1.NetworkAttachment{
@@ -2037,6 +2082,9 @@ var _ = Describe("Private compute instances server", func() {
 				// Create with 1 attachment
 				createResponse, err := server.Create(ctx, privatev1.ComputeInstancesCreateRequest_builder{
 					Object: privatev1.ComputeInstance_builder{
+						Metadata: privatev1.Metadata_builder{
+							Name: "test-compute-instance",
+						}.Build(),
 						Spec: privatev1.ComputeInstanceSpec_builder{
 							Template: template.GetId(),
 							NetworkAttachments: []*privatev1.NetworkAttachment{
@@ -2084,6 +2132,9 @@ var _ = Describe("Private compute instances server", func() {
 				// Create with 2 attachments
 				createResponse, err := server.Create(ctx, privatev1.ComputeInstancesCreateRequest_builder{
 					Object: privatev1.ComputeInstance_builder{
+						Metadata: privatev1.Metadata_builder{
+							Name: "test-compute-instance",
+						}.Build(),
 						Spec: privatev1.ComputeInstanceSpec_builder{
 							Template: template.GetId(),
 							NetworkAttachments: []*privatev1.NetworkAttachment{
@@ -2171,6 +2222,7 @@ var _ = Describe("Private compute instances server", func() {
 						Title:       "Bare Template",
 						Description: "Template without defaults",
 						Metadata: privatev1.Metadata_builder{
+							Name:   templateID,
 							Tenant: auth.SharedTenant,
 						}.Build(),
 					}.Build(),

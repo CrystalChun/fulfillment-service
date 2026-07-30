@@ -165,6 +165,7 @@ var _ = Describe("Private clusters server", func() {
 			_, err = vnDao.Create().SetObject(privatev1.VirtualNetwork_builder{
 				Id: "test-vnet",
 				Metadata: privatev1.Metadata_builder{
+					Name:   "test-vnet",
 					Tenant: auth.SharedTenant,
 				}.Build(),
 			}.Build()).Do(ctx)
@@ -179,6 +180,7 @@ var _ = Describe("Private clusters server", func() {
 				_, err = subnetsDao.Create().SetObject(privatev1.Subnet_builder{
 					Id: subnetID,
 					Metadata: privatev1.Metadata_builder{
+						Name:   subnetID,
 						Tenant: auth.SharedTenant,
 					}.Build(),
 					Spec: privatev1.SubnetSpec_builder{
@@ -201,6 +203,7 @@ var _ = Describe("Private clusters server", func() {
 							Title:       fmt.Sprintf("My template %d", i),
 							Description: fmt.Sprintf("My template %d", i),
 							Metadata: privatev1.Metadata_builder{
+								Name:   fmt.Sprintf("my-template-name-%d", i),
 								Tenant: auth.SharedTenant,
 							}.Build(),
 							NodeSets: map[string]*privatev1.ClusterTemplateNodeSet{
@@ -615,6 +618,7 @@ var _ = Describe("Private clusters server", func() {
 		It("Canonicalizes network CIDRs on Update", func() {
 			createResponse, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 				Object: privatev1.Cluster_builder{
+					Metadata: privatev1.Metadata_builder{Name: "test-cluster"}.Build(),
 					Spec: privatev1.ClusterSpec_builder{
 						Template: "my-template-id",
 					}.Build(),
@@ -659,6 +663,7 @@ var _ = Describe("Private clusters server", func() {
 			// Create the object:
 			createResponse, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 				Object: privatev1.Cluster_builder{
+					Metadata: privatev1.Metadata_builder{Name: "test-cluster"}.Build(),
 					Spec: privatev1.ClusterSpec_builder{
 						Template: "my-template-id",
 					}.Build(),
@@ -700,6 +705,7 @@ var _ = Describe("Private clusters server", func() {
 			createResponse, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 				Object: privatev1.Cluster_builder{
 					Metadata: privatev1.Metadata_builder{
+						Name:       "test-cluster",
 						Finalizers: []string{"a"},
 					}.Build(),
 					Spec: privatev1.ClusterSpec_builder{
@@ -756,6 +762,7 @@ var _ = Describe("Private clusters server", func() {
 		It("Rejects update with duplicate condition", func() {
 			_, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 				Object: privatev1.Cluster_builder{
+					Metadata: privatev1.Metadata_builder{Name: "test-cluster"}.Build(),
 					Spec: privatev1.ClusterSpec_builder{
 						Template: "my-template-id",
 					}.Build(),
@@ -794,6 +801,7 @@ var _ = Describe("Private clusters server", func() {
 			// Create a cluster with the default node sets from the template
 			createResponse, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 				Object: privatev1.Cluster_builder{
+					Metadata: privatev1.Metadata_builder{Name: "test-cluster"}.Build(),
 					Spec: privatev1.ClusterSpec_builder{
 						Template: "my-template-id",
 					}.Build(),
@@ -835,6 +843,7 @@ var _ = Describe("Private clusters server", func() {
 			// Create a cluster with the default node sets from the template
 			createResponse, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 				Object: privatev1.Cluster_builder{
+					Metadata: privatev1.Metadata_builder{Name: "test-cluster"}.Build(),
 					Spec: privatev1.ClusterSpec_builder{
 						Template: "my-template-id",
 					}.Build(),
@@ -868,6 +877,7 @@ var _ = Describe("Private clusters server", func() {
 			// Create a cluster with a template that has only one node set
 			createResponse, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 				Object: privatev1.Cluster_builder{
+					Metadata: privatev1.Metadata_builder{Name: "test-cluster"}.Build(),
 					Spec: privatev1.ClusterSpec_builder{
 						Template: "my-template-id-0",
 					}.Build(),
@@ -900,6 +910,7 @@ var _ = Describe("Private clusters server", func() {
 			// Create a cluster with the default node sets from the template
 			createResponse, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 				Object: privatev1.Cluster_builder{
+					Metadata: privatev1.Metadata_builder{Name: "test-cluster"}.Build(),
 					Spec: privatev1.ClusterSpec_builder{
 						Template: "my-template-id",
 					}.Build(),
@@ -940,6 +951,7 @@ var _ = Describe("Private clusters server", func() {
 			// Create a cluster with the default node sets from the template
 			createResponse, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 				Object: privatev1.Cluster_builder{
+					Metadata: privatev1.Metadata_builder{Name: "test-cluster"}.Build(),
 					Spec: privatev1.ClusterSpec_builder{
 						Template: "my-template-id",
 					}.Build(),
@@ -978,6 +990,7 @@ var _ = Describe("Private clusters server", func() {
 			// Create a cluster with the default node sets from the template
 			createResponse, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 				Object: privatev1.Cluster_builder{
+					Metadata: privatev1.Metadata_builder{Name: "test-cluster"}.Build(),
 					Spec: privatev1.ClusterSpec_builder{
 						Template: "my-template-id",
 					}.Build(),
@@ -1018,6 +1031,7 @@ var _ = Describe("Private clusters server", func() {
 			// Create a cluster
 			createResponse, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 				Object: privatev1.Cluster_builder{
+					Metadata: privatev1.Metadata_builder{Name: "test-cluster"}.Build(),
 					Spec: privatev1.ClusterSpec_builder{
 						Template: oldTemplate,
 					}.Build(),
@@ -1052,6 +1066,7 @@ var _ = Describe("Private clusters server", func() {
 			// Create a cluster with template parameters
 			createResponse, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 				Object: privatev1.Cluster_builder{
+					Metadata: privatev1.Metadata_builder{Name: "test-cluster"}.Build(),
 					Spec: privatev1.ClusterSpec_builder{
 						Template: "my-template-id",
 					}.Build(),
@@ -1084,6 +1099,7 @@ var _ = Describe("Private clusters server", func() {
 			createClusterWithNetworkAttachment := func(subnet string, securityGroups []string) *privatev1.Cluster {
 				createResponse, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 					Object: privatev1.Cluster_builder{
+						Metadata: privatev1.Metadata_builder{Name: "test-cluster"}.Build(),
 						Spec: privatev1.ClusterSpec_builder{
 							Template: "my-template-id",
 							NetworkAttachment: privatev1.ClusterNetworkAttachment_builder{
@@ -1147,6 +1163,7 @@ var _ = Describe("Private clusters server", func() {
 			It("Rejects adding network_attachment when none existed", func() {
 				createResponse, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 					Object: privatev1.Cluster_builder{
+						Metadata: privatev1.Metadata_builder{Name: "test-cluster"}.Build(),
 						Spec: privatev1.ClusterSpec_builder{
 							Template: "my-template-id",
 						}.Build(),
@@ -1577,6 +1594,7 @@ var _ = Describe("Private clusters server", func() {
 
 				createResponse, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 					Object: privatev1.Cluster_builder{
+						Metadata: privatev1.Metadata_builder{Name: "test-cluster"}.Build(),
 						Spec: privatev1.ClusterSpec_builder{
 							CatalogItem: "cat-immut",
 						}.Build(),
@@ -1613,6 +1631,7 @@ var _ = Describe("Private clusters server", func() {
 			createCluster := func() *privatev1.Cluster {
 				response, err := server.Create(ctx, privatev1.ClustersCreateRequest_builder{
 					Object: privatev1.Cluster_builder{
+						Metadata: privatev1.Metadata_builder{Name: "test-cluster"}.Build(),
 						Spec: privatev1.ClusterSpec_builder{
 							Template: "my-template-id",
 						}.Build(),
