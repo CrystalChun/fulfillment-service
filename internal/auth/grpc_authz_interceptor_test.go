@@ -911,6 +911,104 @@ var _ = Describe("Rego authorization interceptor", func() {
 			Expect(handled).To(BeTrue())
 		})
 
+		DescribeTable(
+			"Allows tenant admin to manage catalog items",
+			func(ctx context.Context, method string) {
+				token := createKeycloakUserToken("my-tenant", "my-user", jwt.MapClaims{
+					"realm_access": map[string]any{
+						"roles": []any{
+							"tenant-admin",
+						},
+					},
+				})
+				ctx = ContextWithToken(ctx, token)
+				handled := false
+				_, err := interceptor.UnaryServer(
+					ctx,
+					nil,
+					&grpc.UnaryServerInfo{
+						FullMethod: method,
+					},
+					func(ctx context.Context, req any) (any, error) {
+						subject := SubjectFromContext(ctx)
+						Expect(subject.User).To(Equal("my-user"))
+						Expect(subject.Tenants.Finite()).To(BeTrue())
+						Expect(subject.Tenants.Inclusions()).To(ConsistOf("my-tenant"))
+						handled = true
+						return nil, nil
+					},
+				)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(handled).To(BeTrue())
+			},
+			Entry("BareMetalInstanceCatalogItems/Create",
+				"/osac.public.v1.BareMetalInstanceCatalogItems/Create"),
+			Entry("BareMetalInstanceCatalogItems/Update",
+				"/osac.public.v1.BareMetalInstanceCatalogItems/Update"),
+			Entry("BareMetalInstanceCatalogItems/Delete",
+				"/osac.public.v1.BareMetalInstanceCatalogItems/Delete"),
+			Entry("ClusterCatalogItems/Create",
+				"/osac.public.v1.ClusterCatalogItems/Create"),
+			Entry("ClusterCatalogItems/Update",
+				"/osac.public.v1.ClusterCatalogItems/Update"),
+			Entry("ClusterCatalogItems/Delete",
+				"/osac.public.v1.ClusterCatalogItems/Delete"),
+			Entry("ComputeInstanceCatalogItems/Create",
+				"/osac.public.v1.ComputeInstanceCatalogItems/Create"),
+			Entry("ComputeInstanceCatalogItems/Update",
+				"/osac.public.v1.ComputeInstanceCatalogItems/Update"),
+			Entry("ComputeInstanceCatalogItems/Delete",
+				"/osac.public.v1.ComputeInstanceCatalogItems/Delete"),
+		)
+
+		DescribeTable(
+			"Denies regular user from managing catalog items",
+			func(ctx context.Context, method string) {
+				token := createKeycloakUserToken("my-tenant", "my-user", jwt.MapClaims{
+					"realm_access": map[string]any{
+						"roles": []any{},
+					},
+				})
+				ctx = ContextWithToken(ctx, token)
+				handled := false
+				_, err := interceptor.UnaryServer(
+					ctx,
+					nil,
+					&grpc.UnaryServerInfo{
+						FullMethod: method,
+					},
+					func(ctx context.Context, req any) (any, error) {
+						handled = true
+						return nil, nil
+					},
+				)
+				Expect(err).To(HaveOccurred())
+				status, ok := grpcstatus.FromError(err)
+				Expect(ok).To(BeTrue())
+				Expect(status.Code()).To(Equal(grpccodes.PermissionDenied))
+				Expect(status.Message()).To(Equal("permission denied"))
+				Expect(handled).To(BeFalse())
+			},
+			Entry("BareMetalInstanceCatalogItems/Create",
+				"/osac.public.v1.BareMetalInstanceCatalogItems/Create"),
+			Entry("BareMetalInstanceCatalogItems/Update",
+				"/osac.public.v1.BareMetalInstanceCatalogItems/Update"),
+			Entry("BareMetalInstanceCatalogItems/Delete",
+				"/osac.public.v1.BareMetalInstanceCatalogItems/Delete"),
+			Entry("ClusterCatalogItems/Create",
+				"/osac.public.v1.ClusterCatalogItems/Create"),
+			Entry("ClusterCatalogItems/Update",
+				"/osac.public.v1.ClusterCatalogItems/Update"),
+			Entry("ClusterCatalogItems/Delete",
+				"/osac.public.v1.ClusterCatalogItems/Delete"),
+			Entry("ComputeInstanceCatalogItems/Create",
+				"/osac.public.v1.ComputeInstanceCatalogItems/Create"),
+			Entry("ComputeInstanceCatalogItems/Update",
+				"/osac.public.v1.ComputeInstanceCatalogItems/Update"),
+			Entry("ComputeInstanceCatalogItems/Delete",
+				"/osac.public.v1.ComputeInstanceCatalogItems/Delete"),
+		)
+
 		It("Grants admin via groups access to private API", func(ctx context.Context) {
 			token := createKeycloakUserToken("", "my-user", jwt.MapClaims{
 				"organization": nil,
