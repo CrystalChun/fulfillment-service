@@ -1433,6 +1433,27 @@ var _ = Describe("setReconciliationFailed", func() {
 		Expect(ci.GetStatus().GetStateTransitionTime()).ToNot(BeNil())
 	})
 
+	It("should preserve state_transition_time on repeated failures", func() {
+		originalTime := timestamppb.New(time.Now().Add(-10 * time.Minute))
+		ci := privatev1.ComputeInstance_builder{
+			Id: "test-ci-repeated-fail",
+			Status: privatev1.ComputeInstanceStatus_builder{
+				State:               privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_FAILED,
+				StateTransitionTime: originalTime,
+			}.Build(),
+		}.Build()
+
+		t := &task{
+			r:               &function{logger: logger},
+			computeInstance: ci,
+		}
+
+		t.setReconciliationFailed(errors.New("still failing"))
+
+		Expect(ci.GetStatus().GetState()).To(Equal(privatev1.ComputeInstanceState_COMPUTE_INSTANCE_STATE_FAILED))
+		Expect(ci.GetStatus().GetStateTransitionTime().AsTime()).To(Equal(originalTime.AsTime()))
+	})
+
 	It("should update existing PROVISIONED condition rather than creating duplicate", func() {
 		reason := "WaitingForVM"
 		message := "initial state"
