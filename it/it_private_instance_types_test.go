@@ -17,7 +17,7 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/onsi/ginkgo/v2/dsl/core"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	grpccodes "google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
@@ -469,6 +469,40 @@ var _ = Describe("Private instance types", func() {
 		Expect(status.Message()).To(ContainSubstring("spec.memory_gib"))
 		Expect(status.Message()).To(ContainSubstring("immutable"))
 	})
+
+	DescribeTable(
+		"Rejects create with invalid GPU fields",
+		func(gpu *privatev1.GpuSpec) {
+			_, err := client.Create(ctx, privatev1.InstanceTypesCreateRequest_builder{
+				Object: privatev1.InstanceType_builder{
+					Metadata: privatev1.Metadata_builder{
+						Name: fmt.Sprintf("it-val-%s", uuid.New()),
+					}.Build(),
+					Spec: privatev1.InstanceTypeSpec_builder{
+						Cores:     4,
+						MemoryGib: 16,
+						Gpu:       gpu,
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			status, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+		},
+		Entry("Empty pci_device_selector", privatev1.GpuSpec_builder{
+			PciDeviceSelector: "", ResourceName: "nvidia.com/A100", Count: 1,
+		}.Build()),
+		Entry("Empty resource_name", privatev1.GpuSpec_builder{
+			PciDeviceSelector: "10DE:20B0", ResourceName: "", Count: 1,
+		}.Build()),
+		Entry("Count less than 1", privatev1.GpuSpec_builder{
+			PciDeviceSelector: "10DE:20B0", ResourceName: "nvidia.com/A100", Count: 0,
+		}.Build()),
+		Entry("Count greater than 16", privatev1.GpuSpec_builder{
+			PciDeviceSelector: "10DE:20B0", ResourceName: "nvidia.com/A100", Count: 17,
+		}.Build()),
+	)
 
 	// Deletion protection: ComputeInstance does not have spec.instance_type field until Phase 4 (COMP-01).
 	// The reference checker query matches zero rows because the field does not exist in the JSONB data.

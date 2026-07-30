@@ -425,36 +425,6 @@ var _ = Describe("Private instance types server", func() {
 			),
 		)
 
-		DescribeTable(
-			"Rejects invalid GPU fields on create",
-			func(pciDeviceSelector string, resourceName string, count int32) {
-				_, err := server.Create(ctx, privatev1.InstanceTypesCreateRequest_builder{
-					Object: privatev1.InstanceType_builder{
-						Metadata: privatev1.Metadata_builder{
-							Name: "gpu-invalid",
-						}.Build(),
-						Spec: privatev1.InstanceTypeSpec_builder{
-							Cores:     8,
-							MemoryGib: 64,
-							Gpu: privatev1.GpuSpec_builder{
-								PciDeviceSelector: pciDeviceSelector,
-								ResourceName:      resourceName,
-								Count:             count,
-							}.Build(),
-						}.Build(),
-					}.Build(),
-				}.Build())
-				Expect(err).To(HaveOccurred())
-				status, ok := grpcstatus.FromError(err)
-				Expect(ok).To(BeTrue())
-				Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
-			},
-			Entry("Empty pci_device_selector", "", "nvidia.com/A100", int32(1)),
-			Entry("Empty resource_name", "10DE:20B0", "", int32(1)),
-			Entry("Count less than 1", "10DE:20B0", "nvidia.com/A100", int32(0)),
-			Entry("Count greater than 16", "10DE:20B0", "nvidia.com/A100", int32(17)),
-		)
-
 		// State transition tests (TEST-02)
 		Describe("State transitions", func() {
 			// Helper to create an instance type and transition it to the given starting state.
