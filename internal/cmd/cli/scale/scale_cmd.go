@@ -30,7 +30,7 @@ import (
 //go:embed templates
 var templatesFS embed.FS
 
-//go:generate mockgen -source=../../api/osac/public/v1/clusters_service_grpc.pb.go -destination=clusters_client_mock.go -package=scale ClustersClient
+//go:generate mockgen -source=../../../api/osac/public/v1/clusters_service_grpc.pb.go -destination=clusters_client_mock.go -package=scale ClustersClient
 
 func Cmd() *cobra.Command {
 	result := &cobra.Command{

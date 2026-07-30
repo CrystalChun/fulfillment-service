@@ -123,14 +123,14 @@ the generic `osac edit` command.
 `osac scale cluster` sets the absolute target size of a node set non-interactively:
 
 ```bash
-osac scale cluster <cluster-id> --node-set workers --size 3
+osac scale cluster <cluster-id-or-name> --node-set workers --size 3
 ```
 
 To scale relative to the current size, read the current value first:
 
 ```bash
-current=$(osac get clusters <cluster-id> -o yaml | yq '.spec.node_sets.workers.size')
-osac scale cluster <cluster-id> --node-set workers --size $((current + 1))
+current=$(osac get clusters <cluster-id-or-name> -o yaml | yq '.spec.node_sets.workers.size')
+osac scale cluster <cluster-id-or-name> --node-set workers --size $((current + 1))
 ```
 
 ### Using osac edit (interactive)
