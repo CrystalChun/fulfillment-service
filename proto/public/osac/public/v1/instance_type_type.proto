@@ -15,6 +15,7 @@ syntax = "proto3";
 
 package osac.public.v1;
 
+import "buf/validate/validate.proto";
 import "google/protobuf/timestamp.proto";
 import "osac/public/v1/metadata_type.proto";
 
@@ -77,6 +78,18 @@ message InstanceType {
   InstanceTypeStatus status = 4;
 }
 
+// Hardware specification for GPU devices attached to compute instances provisioned with this instance type.
+message GpuSpec {
+  // PCI device selector identifying the GPU hardware (e.g., "10DE:20B0").
+  string pci_device_selector = 1 [(buf.validate.field).string.min_len = 1];
+
+  // Kubernetes device plugin resource name (e.g., "nvidia.com/A100").
+  string resource_name = 2 [(buf.validate.field).string.min_len = 1];
+
+  // Number of GPU devices of this type.
+  int32 count = 3 [(buf.validate.field).int32 = {gte: 1, lte: 16}];
+}
+
 // Defines the desired configuration for an InstanceType.
 //
 // The spec contains admin-specified parameters that define the compute bundle. The `cores` and `memory_gib`
@@ -97,6 +110,9 @@ message InstanceTypeSpec {
 
   // Deprecation details. Only meaningful when state is DEPRECATED or OBSOLETE.
   InstanceTypeDeprecation deprecation = 5;
+
+  // GPU configuration. Omit for non-GPU instance types. Immutable after creation.
+  optional GpuSpec gpu = 6;
 }
 
 // Contains the system-provided status of an InstanceType.

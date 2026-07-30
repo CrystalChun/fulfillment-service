@@ -76,7 +76,7 @@ var _ = Describe("Private instance types server", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("Creates object", func() {
+		It("Creates object without GPU", func() {
 			response, err := server.Create(ctx, privatev1.InstanceTypesCreateRequest_builder{
 				Object: privatev1.InstanceType_builder{
 					Metadata: privatev1.Metadata_builder{
@@ -100,20 +100,55 @@ var _ = Describe("Private instance types server", func() {
 			Expect(object.GetSpec().GetMemoryGib()).To(Equal(int32(16)))
 		})
 
+		It("Creates object with GPU", func() {
+			response, err := server.Create(ctx, privatev1.InstanceTypesCreateRequest_builder{
+				Object: privatev1.InstanceType_builder{
+					Metadata: privatev1.Metadata_builder{
+						Name: "gpu-a100-8core",
+					}.Build(),
+					Spec: privatev1.InstanceTypeSpec_builder{
+						Cores:       8,
+						MemoryGib:   64,
+						Description: "8 vCPU, 64 GiB, 1x A100 GPU.",
+						Gpu: privatev1.GpuSpec_builder{
+							PciDeviceSelector: "10DE:20B0",
+							ResourceName:      "nvidia.com/A100",
+							Count:             1,
+						}.Build(),
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(response).ToNot(BeNil())
+			gpu := response.GetObject().GetSpec().GetGpu()
+			Expect(gpu).ToNot(BeNil())
+			Expect(gpu.GetPciDeviceSelector()).To(Equal("10DE:20B0"))
+			Expect(gpu.GetResourceName()).To(Equal("nvidia.com/A100"))
+			Expect(gpu.GetCount()).To(Equal(int32(1)))
+		})
+
 		It("List objects", func() {
-			// Create a few objects:
+			// Create a few objects, first with GPU:
 			const count = 10
 			for i := range count {
+				spec := privatev1.InstanceTypeSpec_builder{
+					Cores:       4,
+					MemoryGib:   16,
+					Description: fmt.Sprintf("Type %d.", i),
+				}
+				if i == 0 {
+					spec.Gpu = privatev1.GpuSpec_builder{
+						PciDeviceSelector: "10DE:20B0",
+						ResourceName:      "nvidia.com/A100",
+						Count:             1,
+					}.Build()
+				}
 				_, err := server.Create(ctx, privatev1.InstanceTypesCreateRequest_builder{
 					Object: privatev1.InstanceType_builder{
 						Metadata: privatev1.Metadata_builder{
 							Name: fmt.Sprintf("type-%d", i),
 						}.Build(),
-						Spec: privatev1.InstanceTypeSpec_builder{
-							Cores:       4,
-							MemoryGib:   16,
-							Description: fmt.Sprintf("Type %d.", i),
-						}.Build(),
+						Spec: spec.Build(),
 					}.Build(),
 				}.Build())
 				Expect(err).ToNot(HaveOccurred())
@@ -162,6 +197,11 @@ var _ = Describe("Private instance types server", func() {
 						Cores:       4,
 						MemoryGib:   16,
 						Description: "Standard 4 cores, 16 GiB RAM.",
+						Gpu: privatev1.GpuSpec_builder{
+							PciDeviceSelector: "10DE:20B0",
+							ResourceName:      "nvidia.com/A100",
+							Count:             1,
+						}.Build(),
 					}.Build(),
 				}.Build(),
 			}.Build())
@@ -201,6 +241,11 @@ var _ = Describe("Private instance types server", func() {
 						Cores:       4,
 						MemoryGib:   16,
 						Description: "Standard 4 cores, 16 GiB RAM.",
+						Gpu: privatev1.GpuSpec_builder{
+							PciDeviceSelector: "10DE:20B0",
+							ResourceName:      "nvidia.com/A100",
+							Count:             1,
+						}.Build(),
 					}.Build(),
 				}.Build(),
 			}.Build())
@@ -737,6 +782,47 @@ var _ = Describe("Private instance types server", func() {
 				Expect(status.Message()).To(ContainSubstring("name"))
 				Expect(status.Message()).To(ContainSubstring("immutable"))
 			})
+
+			It("Rejects update of gpu", func() {
+				createResponse, err := server.Create(ctx, privatev1.InstanceTypesCreateRequest_builder{
+					Object: privatev1.InstanceType_builder{
+						Metadata: privatev1.Metadata_builder{
+							Name: "immutable-gpu",
+						}.Build(),
+						Spec: privatev1.InstanceTypeSpec_builder{
+							Cores:     8,
+							MemoryGib: 64,
+							Gpu: privatev1.GpuSpec_builder{
+								PciDeviceSelector: "10DE:20B0",
+								ResourceName:      "nvidia.com/A100",
+								Count:             1,
+							}.Build(),
+						}.Build(),
+					}.Build(),
+				}.Build())
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = server.Update(ctx, privatev1.InstanceTypesUpdateRequest_builder{
+					Object: privatev1.InstanceType_builder{
+						Id: createResponse.GetObject().GetId(),
+						Spec: privatev1.InstanceTypeSpec_builder{
+							Cores:     8,
+							MemoryGib: 64,
+							Gpu: privatev1.GpuSpec_builder{
+								PciDeviceSelector: "10DE:20B0",
+								ResourceName:      "nvidia.com/A100",
+								Count:             2,
+							}.Build(),
+						}.Build(),
+					}.Build(),
+				}.Build())
+				Expect(err).To(HaveOccurred())
+				status, ok := grpcstatus.FromError(err)
+				Expect(ok).To(BeTrue())
+				Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
+				Expect(status.Message()).To(ContainSubstring("spec.gpu"))
+				Expect(status.Message()).To(ContainSubstring("immutable"))
+			})
 		})
 
 		// Deletion protection tests (TEST-02)
@@ -821,6 +907,93 @@ var _ = Describe("Private instance types server", func() {
 				}.Build())
 				Expect(err).ToNot(HaveOccurred())
 				Expect(getResponse.GetObject().GetMetadata().GetDeletionTimestamp()).ToNot(BeNil())
+			})
+		})
+
+		Describe("GPU CEL filters", func() {
+			It("Filters GPU-enabled types with has(this.spec.gpu)", func() {
+				_, err := server.Create(ctx, privatev1.InstanceTypesCreateRequest_builder{
+					Object: privatev1.InstanceType_builder{
+						Metadata: privatev1.Metadata_builder{
+							Name: "with-gpu",
+						}.Build(),
+						Spec: privatev1.InstanceTypeSpec_builder{
+							Cores:     8,
+							MemoryGib: 64,
+							Gpu: privatev1.GpuSpec_builder{
+								PciDeviceSelector: "10DE:20B0",
+								ResourceName:      "nvidia.com/A100",
+								Count:             1,
+							}.Build(),
+						}.Build(),
+					}.Build(),
+				}.Build())
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = server.Create(ctx, privatev1.InstanceTypesCreateRequest_builder{
+					Object: privatev1.InstanceType_builder{
+						Metadata: privatev1.Metadata_builder{
+							Name: "without-gpu",
+						}.Build(),
+						Spec: privatev1.InstanceTypeSpec_builder{
+							Cores:     4,
+							MemoryGib: 16,
+						}.Build(),
+					}.Build(),
+				}.Build())
+				Expect(err).ToNot(HaveOccurred())
+
+				response, err := server.List(ctx, privatev1.InstanceTypesListRequest_builder{
+					Filter: new("has(this.spec.gpu)"),
+				}.Build())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(response.GetItems()).To(HaveLen(1))
+				Expect(response.GetItems()[0].GetId()).To(Equal("with-gpu"))
+			})
+
+			It("Filters by GPU resource name", func() {
+				_, err := server.Create(ctx, privatev1.InstanceTypesCreateRequest_builder{
+					Object: privatev1.InstanceType_builder{
+						Metadata: privatev1.Metadata_builder{
+							Name: "gpu-a100",
+						}.Build(),
+						Spec: privatev1.InstanceTypeSpec_builder{
+							Cores:     8,
+							MemoryGib: 64,
+							Gpu: privatev1.GpuSpec_builder{
+								PciDeviceSelector: "10DE:20B0",
+								ResourceName:      "nvidia.com/A100",
+								Count:             1,
+							}.Build(),
+						}.Build(),
+					}.Build(),
+				}.Build())
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = server.Create(ctx, privatev1.InstanceTypesCreateRequest_builder{
+					Object: privatev1.InstanceType_builder{
+						Metadata: privatev1.Metadata_builder{
+							Name: "gpu-h100",
+						}.Build(),
+						Spec: privatev1.InstanceTypeSpec_builder{
+							Cores:     16,
+							MemoryGib: 128,
+							Gpu: privatev1.GpuSpec_builder{
+								PciDeviceSelector: "10DE:2330",
+								ResourceName:      "nvidia.com/H100",
+								Count:             2,
+							}.Build(),
+						}.Build(),
+					}.Build(),
+				}.Build())
+				Expect(err).ToNot(HaveOccurred())
+
+				response, err := server.List(ctx, privatev1.InstanceTypesListRequest_builder{
+					Filter: new("this.spec.gpu.resource_name == 'nvidia.com/H100'"),
+				}.Build())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(response.GetItems()).To(HaveLen(1))
+				Expect(response.GetItems()[0].GetId()).To(Equal("gpu-h100"))
 			})
 		})
 	})
